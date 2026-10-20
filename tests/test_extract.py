@@ -239,3 +239,34 @@ class TestJsonLd:
     def test_page_without_jsonld(self, fixtures):
         html = (fixtures / "myjobmag-detail.html").read_text()
         assert extract_jobpostings(html) == []
+
+
+class TestOrgDomain:
+    """Host extraction is identity evidence: a mangled host merges two employers."""
+
+    def _domain(self, same_as):
+        from kazikasi.extract import _org_domain
+
+        return _org_domain({"hiringOrganization": {"name": "X", "sameAs": same_as}})
+
+    def test_strips_a_www_prefix(self):
+        assert self._domain("https://www.brightermonday.co.ke/jobs") == "brightermonday.co.ke"
+
+    def test_does_not_mangle_hosts_that_start_with_w(self):
+        # `lstrip("www.")` turned this into "ebmail.acme.co.ke".
+        assert self._domain("https://webmail.acme.co.ke") == "webmail.acme.co.ke"
+        assert self._domain("https://www2.example.com") == "www2.example.com"
+
+    def test_does_not_strip_a_dot_out_of_the_host(self):
+        assert self._domain("https://wow.co.ke") == "wow.co.ke"
+
+    def test_handles_a_trailing_dot_and_case(self):
+        assert self._domain("HTTPS://Example.CO.KE.") == "example.co.ke"
+
+    def test_reads_a_list_and_takes_the_first(self):
+        assert self._domain(["https://a.co.ke", "https://b.co.ke"]) == "a.co.ke"
+
+    def test_nothing_to_read_is_none(self):
+        assert self._domain(None) is None
+        assert self._domain([]) is None
+        assert self._domain("not a url") is None

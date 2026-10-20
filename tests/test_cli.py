@@ -219,3 +219,63 @@ def test_outbox_refuses_to_pretend_it_sent_without_credentials(tmp_path, capsys,
     with pytest.raises(SystemExit) as error:
         main(["outbox", "--db", db_path, "--send"])
     assert "WHATSAPP_TOKEN" in str(error.value)
+
+
+def test_digest_all_targets_subscribers_not_profiles(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    main(["digest", "--db", db_path, "--profile", "demo-fresher", "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["digest", "--db", db_path, "--all", "--preview"]) == 0
+    out = capsys.readouterr().out
+    assert "demo-fresher:" in out
+    assert "demo-two-years" not in out        # no number, so no digest
+
+    # With nobody subscribed, --all is an error, not a silent no-op.
+    empty = str(tmp_path / "empty.db")
+    main(["load", "--db", empty, "--demo"])
+    capsys.readouterr()
+    assert main(["digest", "--db", empty, "--all", "--preview"]) == 1
+
+
+def test_digest_window_and_cadence_are_validated(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+
+    assert main(
+        ["digest", "--db", db_path, "--subscribe", "0712345678",
+         "--cadence", "weekly", "--window", "07:00-08:00", "--max-items", "3"]
+    ) == 0
+    payload = json.loads(capsys.readouterr().out)["subscribed"]
+    assert payload["cadence"] == "weekly"
+    assert payload["window"] == "07:00–08:00"
+    assert payload["max_items"] == 3
+
+    with pytest.raises(SystemExit):
+        main(["digest", "--db", db_path, "--subscribe", "0712345679", "--window", "18:00"])
+
+
+def test_run_explains_why_nobody_is_due(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    main(["digest", "--db", db_path, "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["run", "--db", db_path, "--explain"]) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert rows[0]["profile_id"] == "demo-fresher"
+    assert rows[0]["reason"] in ("outside_window", "waiting_for_jitter", "due", "already_served")
+
+
+def test_run_once_sends_nothing_without_send(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    main(["digest", "--db", db_path, "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["run", "--db", db_path, "--once"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["sent"] is None              # composing only, no transport
+    assert "waiting" in report

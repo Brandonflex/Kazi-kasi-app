@@ -12,6 +12,11 @@ The outbox exists because sending is the part that breaks in ways users notice:
   not a fallback.
 * **Consent is checked at send time, not at compose time.** Someone who replies
   STOP between composition and delivery must not receive the message.
+* **Consent has to be revocable through the channel that took it.** Replying
+  STOP works, and every change — including one from a number we cannot match to
+  a profile — lands in ``consent_events``.
+* **"Sent" is not "delivered".** Provider receipts are recorded as events and
+  move a message forward, never backwards.
 """
 
 from __future__ import annotations
@@ -28,6 +33,21 @@ from .profile import load_profile
 MAX_ATTEMPTS = 3
 #: Backoff between retries, in minutes, indexed by attempt number.
 BACKOFF_MINUTES = (0, 5, 30)
+
+#: Cadences the scheduler understands. Anything else is a bug, not a default.
+CADENCES = ("daily", "weekly")
+
+#: Commands a person can text us. Everything else is a person, not a command,
+#: and gets HELP rather than silence.
+STOP_WORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "END", "CANCEL", "QUIT"}
+START_WORDS = {"START", "YES", "RESUME", "SUBSCRIBE", "UNSTOP"}
+HELP_WORDS = {"HELP", "INFO", "SAIDIA"}
+
+#: What we text back. Short, because it is one segment and it is a phone.
+HELP_TEXT = (
+    "Kazi-Kasi sends one message a day with jobs near you. "
+    "Reply STOP to stop. Reply START to start again."
+)
 
 
 # --------------------------------------------------------------------------
@@ -79,6 +99,7 @@ def subscribe(
     cadence: str = "daily",
     fallback_channel: str | None = "sms",
     max_items: int = digest_module.DEFAULT_MAX_ITEMS,
+    window: tuple[str, str] = ("18:00", "20:00"),
     now: datetime | None = None,
 ) -> Subscription:
     """Record consent. Re-subscribing clears a previous opt-out and re-dates it."""
@@ -87,6 +108,11 @@ def subscribe(
         raise ValueError(f"unknown profile {profile_id!r}; run `kazikasi profiles --seed`")
     if channel not in ("whatsapp", "sms"):
         raise ValueError(f"unsupported channel {channel!r}")
+    if cadence not in CADENCES:
+        raise ValueError(f"unsupported cadence {cadence!r}; choose one of {', '.join(CADENCES)}")
+    window_start, window_end = _validated_window(window)
+    if not 1 <= int(max_items) <= 10:
+        raise ValueError("max_items must be between 1 and 10")
 
     at = _now_iso(now)
     conn.execute(
@@ -114,15 +140,31 @@ def subscribe(
             at,
             source,
             cadence,
-            "18:00",
-            "20:00",
+            window_start,
+            window_end,
             max_items,
             fallback_channel,
             at,
         ),
     )
     conn.commit()
+    record_consent_event(
+        conn, number, "subscribed", source=source, profile_id=profile_id, now=now
+    )
     return load_subscription(conn, profile_id)  # type: ignore[return-value]
+
+
+def _validated_window(window: tuple[str, str]) -> tuple[str, str]:
+    """HH:MM, both ends, and not a zero-length window."""
+    import re as _re
+
+    start, end = window
+    for value in (start, end):
+        if not _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(value)):
+            raise ValueError(f"window must be HH:MM (24h, EAT); got {value!r}")
+    if start == end:
+        raise ValueError("window start and end are the same; that is never open")
+    return start, end
 
 
 def unsubscribe(conn, profile_id: str, *, now: datetime | None = None, reason: str | None = None) -> bool:
@@ -132,7 +174,18 @@ def unsubscribe(conn, profile_id: str, *, now: datetime | None = None, reason: s
         (_now_iso(now), _now_iso(now), profile_id),
     )
     conn.commit()
-    return cursor.rowcount > 0
+    changed = cursor.rowcount > 0
+    if changed:
+        subscription = load_subscription(conn, profile_id)
+        record_consent_event(
+            conn,
+            subscription.msisdn,
+            "unsubscribed",
+            source=reason or "cli",
+            profile_id=profile_id,
+            now=now,
+        )
+    return changed
 
 
 def load_subscription(conn, profile_id: str) -> Subscription | None:
@@ -160,6 +213,100 @@ def active_subscriptions(conn) -> list[Subscription]:
         "SELECT profile_id FROM subscriptions WHERE unsubscribed_at IS NULL ORDER BY profile_id"
     ).fetchall()
     return [load_subscription(conn, row["profile_id"]) for row in rows]  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------
+# Consent audit
+# --------------------------------------------------------------------------
+
+
+def record_consent_event(
+    conn,
+    msisdn: str,
+    action: str,
+    *,
+    source: str,
+    profile_id: str | None = None,
+    detail: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Append to the consent log. Never raises on an unknown number: that is the
+    case it exists for."""
+    try:
+        number = digest_module.normalise_msisdn(msisdn)
+        number_hash = digest_module.hash_msisdn(number)
+    except ValueError:
+        number_hash = "invalid:" + (msisdn or "")[:32]
+
+    conn.execute(
+        """INSERT INTO consent_events (profile_id, msisdn_hash, action, source, detail, at)
+           VALUES (?,?,?,?,?,?)""",
+        (profile_id, number_hash, action, source, detail, _now_iso(now)),
+    )
+    conn.commit()
+
+
+def consent_events_for(conn, profile_id: str, limit: int = 20) -> list[dict]:
+    return [
+        dict(row)
+        for row in conn.execute(
+            "SELECT * FROM consent_events WHERE profile_id = ? ORDER BY id DESC LIMIT ?",
+            (profile_id, limit),
+        )
+    ]
+
+
+def find_subscription_by_msisdn(conn, msisdn: str) -> Subscription | None:
+    """Which profile owns this number? Matched on the number itself, because the
+    hash can be re-keyed and a STOP must still find its owner."""
+    try:
+        number = digest_module.normalise_msisdn(msisdn)
+    except ValueError:
+        return None
+    row = conn.execute(
+        "SELECT profile_id FROM subscriptions WHERE msisdn = ? ORDER BY updated_at DESC LIMIT 1",
+        (number,),
+    ).fetchone()
+    return load_subscription(conn, row["profile_id"]) if row else None
+
+
+def opt_out_by_msisdn(conn, msisdn: str, *, source: str, now: datetime | None = None) -> str | None:
+    """STOP arriving from a phone. Returns the profile, or None if we never met
+    this number — the opt-out is logged either way."""
+    subscription = find_subscription_by_msisdn(conn, msisdn)
+    if subscription is None:
+        record_consent_event(
+            conn, msisdn, "unsubscribed", source=source, detail="unknown number"
+        )
+        return None
+    # unsubscribe() writes the consent event itself; writing it again here
+    # would log every STOP twice.
+    unsubscribe(conn, subscription.profile_id, now=now, reason=source)
+    return subscription.profile_id
+
+
+def resume_by_msisdn(conn, msisdn: str, *, source: str, now: datetime | None = None) -> str | None:
+    """START arriving from a phone. Consent to restart, recorded as a new consent."""
+    subscription = find_subscription_by_msisdn(conn, msisdn)
+    if subscription is None:
+        record_consent_event(conn, msisdn, "resumed", source=source, detail="unknown number")
+        return None
+    subscribe(
+        conn,
+        subscription.profile_id,
+        subscription.msisdn,
+        channel=subscription.channel,
+        source=source,
+        cadence=subscription.cadence,
+        fallback_channel=subscription.fallback_channel,
+        max_items=subscription.max_items,
+        window=(
+            subscription.window_start,
+            subscription.window_end,
+        ),
+        now=now,
+    )
+    return subscription.profile_id
 
 
 # --------------------------------------------------------------------------
@@ -251,7 +398,13 @@ def set_run_state(conn, run_id: int, state: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def enqueue(conn, outgoing: digest_module.Outgoing, *, now: datetime | None = None) -> bool:
+def enqueue(
+    conn,
+    outgoing: digest_module.Outgoing,
+    *,
+    run_id: int | None = None,
+    now: datetime | None = None,
+) -> bool:
     """Put a message in the outbox. Returns False if it was already there.
 
     The unique idempotency key is the whole safety story: a re-run, a crash and
@@ -260,8 +413,9 @@ def enqueue(conn, outgoing: digest_module.Outgoing, *, now: datetime | None = No
     at = _now_iso(now)
     cursor = conn.execute(
         """INSERT OR IGNORE INTO messages
-           (idempotency, profile_id, channel, to_msisdn, body, kind, state, created_at, updated_at)
-           VALUES (?,?,?,?,?,?, 'queued', ?, ?)""",
+           (idempotency, profile_id, channel, to_msisdn, body, kind, state, run_id,
+            created_at, updated_at)
+           VALUES (?,?,?,?,?,?, 'queued', ?, ?, ?)""",
         (
             outgoing.idempotency,
             outgoing.profile_id,
@@ -269,6 +423,7 @@ def enqueue(conn, outgoing: digest_module.Outgoing, *, now: datetime | None = No
             outgoing.msisdn,
             outgoing.body,
             outgoing.kind,
+            run_id,
             at,
             at,
         ),
@@ -293,14 +448,25 @@ def queue_digest(
         return {"profile_id": profile_id, "state": "unsubscribed", "queued": 0}
 
     digest = compose(conn, profile_id, now=now)
+    prior = conn.execute(
+        "SELECT id, state, item_count FROM digest_runs WHERE profile_id = ? AND run_date = ? AND channel = ?",
+        (profile_id, digest.for_date.isoformat(), subscription.channel),
+    ).fetchone()
     run_id = persist_run(conn, digest, channel=subscription.channel, now=now)
 
     if digest.is_empty:
-        set_run_state(conn, run_id, "empty")
+        # A day that already went out must not be rewritten to "empty" just
+        # because nothing is left to say this afternoon.
+        already_spoke = prior is not None and (
+            prior["item_count"] > 0 or prior["state"] in ("queued", "sent")
+        )
+        if not already_spoke:
+            set_run_state(conn, run_id, "empty")
+        state = prior["state"] if already_spoke else "empty"
         return {
             "profile_id": profile_id,
             "run_id": run_id,
-            "state": "empty",
+            "state": state,
             "queued": 0,
             "messages": [],
             "digest": digest.to_dict(),
@@ -314,7 +480,7 @@ def queue_digest(
     for message in messages:
         if dry_run:
             continue
-        if enqueue(conn, message, now=now):
+        if enqueue(conn, message, run_id=run_id, now=now):
             queued += 1
 
     if not dry_run and queued:
@@ -420,10 +586,33 @@ def send_due(
             report.suppressed += 1
             continue
 
-        if respect_window and not digest_module.in_window(
+        # A digest that has already started leaving (part 1 sent inside the
+        # window) must finish: holding part 2 until tomorrow strands half a
+        # message in the queue forever.
+        run_started = bool(
+            row["run_id"]
+            and conn.execute(
+                """SELECT 1 FROM messages
+                   WHERE run_id = ? AND channel = ? AND state IN ('sent', 'delivered')
+                   LIMIT 1""",
+                (row["run_id"], row["channel"]),
+            ).fetchone()
+        )
+        if respect_window and not run_started and not digest_module.in_window(
             now, subscription.window_start, subscription.window_end
         ):
             report.skipped_out_of_window += 1
+            continue
+
+        # If consent moved to another channel after this was queued, the queued
+        # message is stale — do not deliver a digest to a channel they left. A
+        # fallback is exempt: it is deliberately a different channel.
+        if row["kind"] != "fallback" and row["channel"] != subscription.channel:
+            apply(
+                "UPDATE messages SET state = 'suppressed', last_error = ?, updated_at = ? WHERE id = ?",
+                (f"channel changed to {subscription.channel}", _now_iso(now), row["id"]),
+            )
+            report.suppressed += 1
             continue
 
         if not _backoff_due(row, now):
@@ -483,7 +672,7 @@ def send_due(
                             "SELECT 1 FROM messages WHERE idempotency = ?", (message.idempotency,)
                         ).fetchone()):
                             report.fell_back += 1
-                    elif enqueue(conn, message, now=now):
+                    elif enqueue(conn, message, run_id=row["run_id"], now=now):
                         report.fell_back += 1
     if not dry_run:
         conn.commit()
@@ -525,6 +714,110 @@ def _digest_from_run(conn, run_row) -> digest_module.Digest | None:
         for_date=date.fromisoformat(run_row["run_date"]),
         items=items,
     )
+
+
+def record_receipt(
+    conn,
+    *,
+    status: str,
+    provider_id: str | None = None,
+    message_id: int | None = None,
+    to_msisdn: str | None = None,
+    error: str | None = None,
+    now: datetime | None = None,
+) -> int | None:
+    """Apply a provider receipt. Returns the message id it landed on.
+
+    A receipt never moves a message backwards: a late "sent" after "delivered"
+    must not un-deliver it. Bookkeeping is append-only in ``message_receipts``;
+    only the message row is folded forward.
+    """
+    if message_id is None and provider_id:
+        row = conn.execute(
+            "SELECT id FROM messages WHERE provider_id = ? ORDER BY id DESC LIMIT 1",
+            (provider_id,),
+        ).fetchone()
+        message_id = int(row["id"]) if row else None
+    if message_id is None and to_msisdn:
+        try:
+            number = digest_module.normalise_msisdn(to_msisdn)
+        except ValueError:
+            number = None
+        if number:
+            row = conn.execute(
+                """SELECT id FROM messages WHERE to_msisdn = ?
+                   AND state IN ('queued', 'sent') ORDER BY id DESC LIMIT 1""",
+                (number,),
+            ).fetchone()
+            message_id = int(row["id"]) if row else None
+
+    conn.execute(
+        """INSERT INTO message_receipts (message_id, provider_id, status, error, at)
+           VALUES (?,?,?,?,?)""",
+        (message_id, provider_id, status, error, _now_iso(now)),
+    )
+    if message_id is not None:
+        _fold_receipt(conn, message_id, status, error, now)
+    conn.commit()
+    return message_id
+
+
+DELIVERED_STATES = ("delivered", "read")
+
+
+def _fold_receipt(conn, message_id: int, status: str, error: str | None, now) -> None:
+    row = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+    if row is None:
+        return
+    current = row["state"]
+    if status in DELIVERED_STATES:
+        if current == "failed":
+            return  # a failed send cannot become delivered later
+        conn.execute(
+            """UPDATE messages SET state = 'delivered', delivered_at = COALESCE(delivered_at, ?),
+               last_error = NULL, updated_at = ? WHERE id = ?""",
+            (_now_iso(now), _now_iso(now), message_id),
+        )
+        _mark_run_delivered(conn, row["run_id"], row["channel"])
+        return
+    if status == "failed":
+        if current in DELIVERED_STATES:
+            return  # a late failure after delivery is noise, not a state change
+        conn.execute(
+            "UPDATE messages SET state = 'failed', last_error = ?, updated_at = ? WHERE id = ?",
+            (error or "delivery failed", _now_iso(now), message_id),
+        )
+        return
+    # "sent" — only meaningful if we had not already recorded it.
+    if current == "queued":
+        conn.execute(
+            "UPDATE messages SET state = 'sent', updated_at = ? WHERE id = ?",
+            (_now_iso(now), message_id),
+        )
+
+
+def _mark_run_delivered(conn, run_id: int | None, channel: str) -> None:
+    if not run_id:
+        return
+    outstanding = conn.execute(
+        """SELECT COUNT(*) AS c FROM messages
+           WHERE run_id = ? AND channel = ? AND state IN ('queued', 'sent')""",
+        (run_id, channel),
+    ).fetchone()["c"]
+    if outstanding == 0:
+        conn.execute(
+            "UPDATE digest_runs SET state = 'sent' WHERE id = ? AND state IN ('queued', 'sent')",
+            (run_id,),
+        )
+
+
+def receipts_for(conn, message_id: int) -> list[dict]:
+    return [
+        dict(row)
+        for row in conn.execute(
+            "SELECT * FROM message_receipts WHERE message_id = ? ORDER BY id", (message_id,)
+        )
+    ]
 
 
 def messages_for(conn, profile_id: str, limit: int = 20) -> list[dict]:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -230,6 +230,44 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_queue ON messages (state, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_profile ON messages (profile_id, created_at);
+
+-- ---------------------------------------------------------------------------
+-- v5: the other half of the conversation.
+--
+-- Sending was only half of consent. A person who replies STOP has to be able to
+-- stop, and "sent" is not "arrived": receipts are the difference between a
+-- provider accepting a message and a phone showing it.
+-- ---------------------------------------------------------------------------
+
+-- Append-only audit of every consent change, including ones that arrive from a
+-- channel we cannot attribute to a profile yet. `msisdn_hash` is the join key,
+-- so an opt-out is on record even when the number is unknown to us.
+CREATE TABLE IF NOT EXISTS consent_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id  TEXT REFERENCES profiles(id),
+    msisdn_hash TEXT NOT NULL,
+    action      TEXT NOT NULL,   -- subscribed | unsubscribed | resumed | help | unrecognised
+    source      TEXT NOT NULL,   -- web | cli | whatsapp | sms
+    detail      TEXT,
+    at          TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_consent_events_number ON consent_events (msisdn_hash, at);
+CREATE INDEX IF NOT EXISTS idx_consent_events_profile ON consent_events (profile_id, at);
+
+-- Delivery receipts, kept as events rather than overwriting a column: a message
+-- can be accepted, then delivered, then read, and the history is the evidence.
+CREATE TABLE IF NOT EXISTS message_receipts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER REFERENCES messages(id),
+    provider_id TEXT,
+    status     TEXT NOT NULL,   -- sent | delivered | read | failed
+    error      TEXT,
+    at         TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipts_message ON message_receipts (message_id, at);
+CREATE INDEX IF NOT EXISTS idx_receipts_provider ON message_receipts (provider_id);
 """
 
 
@@ -264,18 +302,24 @@ def migrate(conn: sqlite3.Connection) -> None:
     from datetime import datetime, timezone
 
     conn.executescript(SCHEMA)
-    current = _current_version(conn)
-    if current == 0:
-        conn.execute(
-            "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-            (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
-        )
-    elif current < SCHEMA_VERSION:
+    _add_column(conn, "messages", "run_id", "INTEGER REFERENCES digest_runs(id)")
+    _add_column(conn, "messages", "delivered_at", "TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_run ON messages (run_id, channel, state)"
+    )
+    if _current_version(conn) < SCHEMA_VERSION:
         conn.execute(
             "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
             (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
         )
     conn.commit()
+
+
+def _add_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    """Additive migration. SQLite has no ``ADD COLUMN IF NOT EXISTS``."""
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 def _now_iso(now=None) -> str:
@@ -305,5 +349,7 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "digest_runs",
         "digest_items",
         "messages",
+        "consent_events",
+        "message_receipts",
     )
     return {name: conn.execute(f"SELECT COUNT(*) AS c FROM {name}").fetchone()["c"] for name in names}

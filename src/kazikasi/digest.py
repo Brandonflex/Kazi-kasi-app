@@ -21,6 +21,8 @@ and is tested offline. No WhatsApp credentials are required to prove the logic.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -49,14 +51,12 @@ def normalise_msisdn(value: str) -> str:
     ``0712345678``. Refusing to guess is the point: a digest sent to a typo is
     a message about someone's job search delivered to a stranger.
     """
-    digits = re.sub(r"[^\d+]", "", (value or "").strip())
-    if digits.startswith("+"):
-        digits = digits[1:]
+    digits = re.sub(r"[^\d]", "", (value or "").strip())
     if digits.startswith("254"):
         national = digits[3:]
     elif digits.startswith("0"):
         national = digits[1:]
-    elif digits.startswith("7") or digits.startswith("1"):
+    elif digits.startswith(("7", "1")):
         national = digits
     else:
         raise ValueError(f"not a Kenyan mobile number: {value!r}")
@@ -73,9 +73,35 @@ def mask_msisdn(msisdn: str) -> str:
     return f"{msisdn[:5]}•••{msisdn[-4:]}"
 
 
+#: Key for the MSISDN hash. Set ``KAZIKASI_HASH_KEY`` in production.
+HASH_KEY_ENV = "KAZIKASI_HASH_KEY"
+_DEVELOPMENT_PEPPER = b"kazikasi-development-pepper-v1"
+
+MASKED_SALT_WARNING = (
+    "KAZIKASI_HASH_KEY is not set: numbers are hashed with the development "
+    "pepper, which is public. Set it before storing real phone numbers."
+)
+
+
+def _hash_key() -> bytes:
+    configured = os.environ.get(HASH_KEY_ENV)
+    return configured.encode("utf-8") if configured else _DEVELOPMENT_PEPPER
+
+
+def hash_is_keyed() -> bool:
+    """Whether the number hash is keyed with a deployment secret."""
+    return bool(os.environ.get(HASH_KEY_ENV))
+
+
 def hash_msisdn(msisdn: str) -> str:
-    """A stable, non-reversible handle for a number (dedupe, logs, analytics)."""
-    return hashlib.sha256(msisdn.encode("utf-8")).hexdigest()[:32]
+    """A stable handle for a number that cannot be brute-forced back to it.
+
+    A plain SHA-256 of a Kenyan mobile number is not a privacy measure: the whole
+    space is roughly 2×10⁸ candidates, which a laptop walks through in minutes.
+    Keying it with a deployment secret (HMAC) is what makes it one — and the
+    unkeyed fallback says so out loud rather than pretending.
+    """
+    return hmac.new(_hash_key(), msisdn.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
 # --------------------------------------------------------------------------

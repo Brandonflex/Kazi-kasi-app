@@ -353,3 +353,161 @@ class TestHttpServer:
         with pytest.raises(urllib.error.HTTPError) as error:
             self._get(f"{server}/job/does-not-exist")
         assert error.value.code == 404
+
+
+@pytest.fixture
+def live_server(tmp_path):
+    path = tmp_path / "kazi.db"
+    connection = db.connect(path)
+    load_corpus(connection, now=NOW)
+    seed_profiles(connection)
+    connection.close()
+
+    httpd = make_server(path, host="127.0.0.1", port=0, demo=True)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+class TestWebhooksOverHttp:
+    """The inbound routes, over a real socket, with real signature checks."""
+
+    def _get(self, url):
+        with urllib.request.urlopen(url, timeout=5) as response:
+            return response.status, response.read().decode()
+
+    def _post(self, url, payload, headers=None):
+        body = json.dumps(payload).encode() if isinstance(payload, dict) else payload
+        request = urllib.request.Request(
+            url, data=body, method="POST", headers=headers or {"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read() or b"{}")
+
+    def _stop_payload(self, sender="254712345678"):
+        return {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "messages": [
+                                    {
+                                        "id": "wamid.in.9",
+                                        "from": sender,
+                                        "type": "text",
+                                        "text": {"body": "STOP"},
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+    def _subscribe(self, base):
+        data = urllib.parse.urlencode({"profile": "demo-fresher", "msisdn": "0712 345 678"}).encode()
+        urllib.request.urlopen(
+            urllib.request.Request(f"{base}/digest/subscribe", data=data, method="POST"), timeout=5
+        ).close()
+
+    def test_the_verification_handshake(self, live_server, monkeypatch):
+        monkeypatch.setenv("WHATSAPP_VERIFY_TOKEN", "verify-me")
+        status, _ = self._get(
+            f"{live_server}/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=verify-me&hub.challenge=1234"
+        )
+        assert status == 200
+
+    def test_a_wrong_verify_token_is_403(self, live_server, monkeypatch):
+        monkeypatch.setenv("WHATSAPP_VERIFY_TOKEN", "verify-me")
+        with pytest.raises(urllib.error.HTTPError) as error:
+            self._get(f"{live_server}/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=1")
+        assert error.value.code == 403
+
+    def test_an_unsigned_webhook_is_refused_when_a_secret_is_set(self, live_server, monkeypatch):
+        monkeypatch.setenv("WHATSAPP_APP_SECRET", "app-secret")
+        with pytest.raises(urllib.error.HTTPError) as error:
+            self._post(f"{live_server}/webhooks/whatsapp", self._stop_payload())
+        assert error.value.code == 403
+
+    def test_a_signed_stop_opts_out(self, live_server, monkeypatch):
+        from kazikasi import webhooks
+
+        monkeypatch.setenv("WHATSAPP_APP_SECRET", "app-secret")
+        self._subscribe(live_server)
+        body = json.dumps(self._stop_payload()).encode()
+        signature = webhooks.sign(body, "app-secret")
+        status, payload = self._post(
+            f"{live_server}/webhooks/whatsapp",
+            body,
+            {"Content-Type": "application/json", webhooks.SIGNATURE_HEADER: signature},
+        )
+        assert status == 200
+        assert payload["actions"] == {"unsubscribed": 1}
+
+        _, page = self._get(f"{live_server}/digest?profile=demo-fresher")
+        assert "Opted out on" in page
+
+    def test_a_sms_stop_without_the_configured_token_is_refused(self, live_server, monkeypatch):
+        monkeypatch.setenv("AT_WEBHOOK_TOKEN", "sms-token")
+        with pytest.raises(urllib.error.HTTPError) as error:
+            self._post(f"{live_server}/webhooks/sms?token=wrong", b"from=%2B254712345678&text=STOP")
+        assert error.value.code == 403
+
+    def test_a_sms_stop_with_the_token_opts_out(self, live_server, monkeypatch):
+        monkeypatch.setenv("AT_WEBHOOK_TOKEN", "sms-token")
+        self._subscribe(live_server)
+        status, payload = self._post(
+            f"{live_server}/webhooks/sms?token=sms-token",
+            b"from=%2B254712345678&text=STOP&id=AT1",
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert status == 200
+        assert payload["actions"] == {"unsubscribed": 1}
+
+    def test_a_webhook_is_refused_outright_when_unconfigured_and_not_a_demo(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("WHATSAPP_APP_SECRET", raising=False)
+        path = tmp_path / "kazi.db"
+        connection = db.connect(path)
+        load_corpus(connection, now=NOW)
+        seed_profiles(connection)
+        connection.close()
+
+        httpd = make_server(path, host="127.0.0.1", port=0, demo=False)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        try:
+            body = json.dumps(self._stop_payload()).encode()
+            with pytest.raises(urllib.error.HTTPError) as error:
+                self._post(f"{base}/webhooks/whatsapp", body)
+            assert error.value.code == 503
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    def test_responses_are_not_sniffed(self, live_server):
+        with urllib.request.urlopen(f"{live_server}/digest", timeout=5) as response:
+            assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+    def test_the_consent_form_is_rate_limited(self, live_server):
+        data = urllib.parse.urlencode({"profile": "demo-fresher", "msisdn": "0712345678"}).encode()
+        codes = []
+        for _ in range(same_origin_limit := 40):
+            try:
+                with urllib.request.urlopen(
+                    urllib.request.Request(f"{live_server}/digest/subscribe", data=data, method="POST"),
+                    timeout=5,
+                ) as response:
+                    codes.append(response.status)
+            except urllib.error.HTTPError as error:
+                codes.append(error.code)
+        assert same_origin_limit == 40
+        assert 429 in codes

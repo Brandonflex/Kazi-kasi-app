@@ -340,3 +340,90 @@ class TestReporting:
     def test_an_empty_outbox_is_a_no_op(self, conn):
         report = outbox.send_due(conn, transports(), now=NOW)
         assert (report.sent, report.failed, report.retried) == (0, 0, 0)
+
+
+class TestHardening:
+    """The bugs that would only show up in production, one per test."""
+
+    def test_a_number_cannot_be_brute_forced_from_its_hash(self, monkeypatch):
+        monkeypatch.delenv("KAZIKASI_HASH_KEY", raising=False)
+        development = dg.hash_msisdn("+254712345678")
+        monkeypatch.setenv("KAZIKASI_HASH_KEY", "a-real-deployment-secret")
+        assert dg.hash_msisdn("+254712345678") != development
+        assert dg.hash_is_keyed() is True
+
+    def test_the_hash_is_stable_within_one_deployment(self, monkeypatch):
+        monkeypatch.setenv("KAZIKASI_HASH_KEY", "secret")
+        assert dg.hash_msisdn("+254712345678") == dg.hash_msisdn("+254712345678")
+
+    def test_a_window_that_never_opens_is_refused(self, conn):
+        with pytest.raises(ValueError):
+            outbox.subscribe(conn, "demo-fresher", "0712345678", window=("18:00", "18:00"), now=NOW)
+        with pytest.raises(ValueError):
+            outbox.subscribe(conn, "demo-fresher", "0712345678", window=("6pm", "8pm"), now=NOW)
+
+    def test_max_items_is_bounded(self, conn):
+        with pytest.raises(ValueError):
+            outbox.subscribe(conn, "demo-fresher", "0712345678", max_items=0, now=NOW)
+        with pytest.raises(ValueError):
+            outbox.subscribe(conn, "demo-fresher", "0712345678", max_items=50, now=NOW)
+
+    def test_a_subscription_records_its_max_items_in_the_message(self, conn):
+        outbox.subscribe(conn, "demo-fresher", "0712345678", max_items=2, now=NOW)
+        result = outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        assert len(result["digest"]["items"]) == 2
+
+    def test_every_message_knows_its_run(self, conn, subscribed):
+        outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        run_id = conn.execute("SELECT id FROM digest_runs").fetchone()["id"]
+        assert conn.execute("SELECT run_id FROM messages").fetchone()["run_id"] == run_id
+
+    def test_a_second_part_still_leaves_after_the_window_closes(self, conn, subscribed):
+        """Part 1 at 19:58, part 2 at 20:01: the person gets the whole message."""
+        digest = outbox.compose(conn, "demo-fresher", now=NOW)
+        run_id = outbox.persist_run(conn, digest, channel="whatsapp", now=NOW)
+        outbox.set_run_state(conn, run_id, "queued")
+        outbox.enqueue(
+            conn,
+            dg.Outgoing("demo-fresher", "whatsapp", "+254712345678", "part one", "k:1"),
+            run_id=run_id,
+            now=NOW,
+        )
+        outbox.enqueue(
+            conn,
+            dg.Outgoing("demo-fresher", "whatsapp", "+254712345678", "part two", "k:2"),
+            run_id=run_id,
+            now=NOW,
+        )
+        late = datetime(2026, 10, 20, 16, 58, tzinfo=timezone.utc)   # 19:58 EAT
+        outbox.send_due(conn, transports(), now=late)
+        assert conn.execute("SELECT state FROM messages WHERE idempotency = 'k:1'").fetchone()["state"] == "sent"
+
+        after_window = datetime(2026, 10, 20, 17, 5, tzinfo=timezone.utc)  # 20:05 EAT
+        report = outbox.send_due(conn, transports(), now=after_window)
+        assert report.skipped_out_of_window == 0
+        assert conn.execute("SELECT state FROM messages WHERE idempotency = 'k:2'").fetchone()["state"] == "sent"
+
+    def test_an_empty_afternoon_does_not_rewrite_a_sent_morning(self, conn, subscribed):
+        outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        outbox.send_due(conn, transports(), now=NOW)
+        for job in conn.execute("SELECT id FROM jobs").fetchall():
+            tracking.record(conn, "demo-fresher", job["id"], "dismissed")
+
+        result = outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        assert result["state"] == "sent"
+        assert conn.execute("SELECT state FROM digest_runs").fetchone()["state"] == "sent"
+
+    def test_changing_channel_suppresses_the_stale_message(self, conn, subscribed):
+        outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        outbox.subscribe(conn, "demo-fresher", "0712345678", channel="sms", now=NOW)
+        report = outbox.send_due(conn, transports(), now=NOW)
+        assert report.suppressed == 1
+        assert conn.execute("SELECT state FROM messages").fetchone()["state"] == "suppressed"
+
+    def test_the_consent_log_records_every_change(self, conn):
+        outbox.subscribe(conn, "demo-fresher", "0712345678", source="web", now=NOW)
+        outbox.unsubscribe(conn, "demo-fresher", now=NOW, reason="web")
+        actions = [event["action"] for event in outbox.consent_events_for(conn, "demo-fresher")]
+        assert actions == ["unsubscribed", "subscribed"]
+        assert outbox.consent_events_for(conn, "demo-fresher")[0]["source"] == "web"

@@ -12,6 +12,8 @@ Routes:
     /slo              the freshness promise, measured per source (D8)
     /review           the duplicate pairs a human should decide
     /digest           the WhatsApp digest, exactly as it would arrive (D5)
+    /webhooks/whatsapp  inbound replies and delivery receipts (Meta Cloud API)
+    /webhooks/sms       inbound SMS and delivery reports (Africa's Talking)
     /api/jobs         the same ranked feed as JSON
     /healthz          liveness of the process, not of the data
 """
@@ -20,13 +22,16 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import hmac as _hmac
 from urllib.parse import parse_qs, quote, urlparse
 
-from . import db, digest as digest_module, graph, metrics, outbox, ranking, slo, tracking
+from . import db, digest as digest_module, graph, metrics, outbox, ranking, slo, tracking, webhooks
 from .profile import DEMO_PROFILES, list_profiles, seed_profiles
 
 ENTRY_FIT_LABEL = ranking.ENTRY_FIT_LABEL
@@ -117,6 +122,10 @@ dd{margin:0}
 footer{padding:28px 0 40px;font-size:13px;color:var(--muted)}
 @media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dt{margin-top:10px}}
 """
+
+
+def _constant_time_equal(left: str, right: str) -> bool:
+    return _hmac.compare_digest((left or "").encode(), (right or "").encode())
 
 
 def _e(value) -> str:
@@ -218,10 +227,9 @@ def render_feed(
     cards = []
     for match in matches:
         row = match.row or {}
-        badges = [
-            f'<span class="badge {ENTRY_FIT_TONE.get(row.get("entry_fit"), "muted")}">'
-            f'{_e(ENTRY_FIT_LABEL.get(row.get("entry_fit"), "eligibility unstated"))}</span>'
-        ]
+        entry_tone = ENTRY_FIT_TONE.get(row.get("entry_fit"), "muted")
+        entry_label = ENTRY_FIT_LABEL.get(row.get("entry_fit"), "eligibility unstated")
+        badges = [f'<span class="badge {entry_tone}">{_e(entry_label)}</span>']
         place = row.get("county") if not row.get("sub_county") else f'{row["sub_county"]}, {row["county"]}'
         badges.append(f'<span class="badge">{_e(place or "Location unstated")}</span>')
         if row.get("work_mode") in ("remote", "hybrid"):
@@ -575,10 +583,40 @@ def render_review(conn: sqlite3.Connection, *, now: datetime | None = None, demo
 # --------------------------------------------------------------------------
 
 
+#: Requests per window per client, for the endpoints that change consent.
+RATE_LIMIT = 30
+RATE_WINDOW_SECONDS = 60
+
+
+class _RateLimiter:
+    """A tiny in-process token bucket.
+
+    Not a replacement for a real edge limiter — it exists so a loop cannot
+    enumerate numbers through the subscribe form on a single node. It is
+    deliberately forgiving and per-process.
+    """
+
+    def __init__(self, limit: int = RATE_LIMIT, window: int = RATE_WINDOW_SECONDS) -> None:
+        self.limit = limit
+        self.window = window
+        self.hits: dict[str, list[float]] = {}
+
+    def allow(self, key: str, now: float | None = None) -> bool:
+        moment = now if now is not None else time.monotonic()
+        recent = [hit for hit in self.hits.get(key, []) if moment - hit < self.window]
+        recent.append(moment)
+        self.hits[key] = recent
+        return len(recent) <= self.limit
+
+    def reset(self) -> None:
+        self.hits.clear()
+
+
 class _Handler(BaseHTTPRequestHandler):
     db_path = ":memory:"
     demo = False
-    server_version = "kazikasi-feed/0.2"
+    limiter = _RateLimiter()
+    server_version = "kazikasi-feed/0.5"
 
     def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8", headers=None) -> None:
         payload = body.encode("utf-8")
@@ -586,6 +624,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         for key, value in (headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -629,6 +668,16 @@ class _Handler(BaseHTTPRequestHandler):
             if parsed.path == "/review":
                 self._send(200, render_review(conn, now=now, demo=self.demo))
                 return
+            if parsed.path == "/webhooks/whatsapp":
+                challenge = webhooks.verify_challenge(
+                    {key: (values or [""])[0] for key, values in query.items()},
+                    os.environ.get("WHATSAPP_VERIFY_TOKEN"),
+                )
+                if challenge is None:
+                    self._send(403, "verification failed", "text/plain; charset=utf-8")
+                else:
+                    self._send(200, challenge, "text/plain; charset=utf-8")
+                return
             if parsed.path == "/digest":
                 self._send(
                     200,
@@ -671,6 +720,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming
         parsed = urlparse(self.path)
+        if parsed.path in ("/webhooks/whatsapp", "/webhooks/sms"):
+            self._webhook(parsed)
+            return
         if parsed.path in ("/digest/subscribe", "/digest/unsubscribe"):
             self._consent(parsed.path)
             return
@@ -699,8 +751,60 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._redirect(f"/?profile={quote(profile_id)}" if profile_id else "/")
 
+    def _client_key(self) -> str:
+        return str(self.client_address[0] if self.client_address else "unknown")
+
+    def _limited(self) -> bool:
+        if self.limiter.allow(self._client_key()):
+            return False
+        self._send(429, "too many requests", "text/plain; charset=utf-8")
+        return True
+
+    def _webhook(self, parsed) -> None:
+        """Inbound replies and receipts. Fails closed on an unverified sender."""
+        if self._limited():
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(min(length, 512 * 1024))
+
+        conn = db.connect(self.db_path)
+        try:
+            if parsed.path == "/webhooks/whatsapp":
+                secret = os.environ.get("WHATSAPP_APP_SECRET")
+                signature = self.headers.get(webhooks.SIGNATURE_HEADER)
+                if secret:
+                    if not webhooks.verify_signature(raw, signature, secret):
+                        self._send(403, "bad signature", "text/plain; charset=utf-8")
+                        return
+                elif not self.demo:
+                    # No secret and not a demo: we cannot tell Meta from anyone.
+                    self._send(503, "webhook not configured", "text/plain; charset=utf-8")
+                    return
+                payload = webhooks.parse_json(raw)
+                result = webhooks.handle_meta(conn, payload)
+            else:
+                token = (parse_qs(parsed.query).get("token") or [""])[0]
+                expected = os.environ.get("AT_WEBHOOK_TOKEN")
+                if expected and not _constant_time_equal(token, expected):
+                    self._send(403, "bad token", "text/plain; charset=utf-8")
+                    return
+                if not expected and not self.demo:
+                    self._send(503, "webhook not configured", "text/plain; charset=utf-8")
+                    return
+                form = {
+                    key: (values or [""])[0]
+                    for key, values in parse_qs(raw.decode("utf-8", errors="replace")).items()
+                }
+                result = webhooks.handle_africas_talking(conn, form)
+        finally:
+            conn.close()
+
+        self._send(200, json.dumps(result, default=str), "application/json; charset=utf-8")
+
     def _consent(self, path: str) -> None:
         """Subscribe or opt out from the digest page. Always redirects back."""
+        if self._limited():
+            return
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         form = parse_qs(body)
@@ -737,7 +841,11 @@ def make_server(
     port: int = 8765,
     demo: bool = False,
 ) -> ThreadingHTTPServer:
-    handler = type("KazikasiHandler", (_Handler,), {"db_path": str(db_path), "demo": demo})
+    handler = type(
+        "KazikasiHandler",
+        (_Handler,),
+        {"db_path": str(db_path), "demo": demo, "limiter": _RateLimiter()},
+    )
     return ThreadingHTTPServer((host, port), handler)
 
 

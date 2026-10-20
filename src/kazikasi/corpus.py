@@ -17,7 +17,7 @@ Anything generated here is labelled ``synthetic`` in the feed.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from .models import JobCandidate, JobPay
 

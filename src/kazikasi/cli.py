@@ -44,7 +44,15 @@ from .ranking import explain, rank
 from . import slo as slo_module
 from . import tracking
 from . import outbox as outbox_module
+from . import scheduler
 from .channels import FakeTransport, transport_for
+
+
+def _now():
+    """The clock, in one place, so ``--now`` can exist later without a hunt."""
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc)
 from .models import JobCandidate
 from .pipeline import HttpFetcher, ingest, write_jsonl
 from .rawstore import FileRawStore
@@ -341,10 +349,18 @@ def cmd_digest(args: argparse.Namespace) -> int:
         seed_profiles(conn)
 
         if args.subscribe:
+            window = ("18:00", "20:00")
+            if args.window:
+                parts = args.window.split("-")
+                if len(parts) != 2:
+                    raise SystemExit("--window wants HH:MM-HH:MM, e.g. 18:00-20:00")
+                window = (parts[0].strip(), parts[1].strip())
             try:
                 subscription = outbox_module.subscribe(
                     conn, args.profile, args.subscribe, source=args.source,
-                    channel=args.channel, fallback_channel=None if args.no_fallback else "sms",
+                    channel=args.channel, cadence=args.cadence,
+                    fallback_channel=None if args.no_fallback else "sms",
+                    max_items=args.max_items, window=window, now=_now(),
                 )
             except ValueError as error:
                 raise SystemExit(str(error)) from error
@@ -353,16 +369,28 @@ def cmd_digest(args: argparse.Namespace) -> int:
                 return 0
 
         if args.unsubscribe:
-            changed = outbox_module.unsubscribe(conn, args.profile)
+            changed = outbox_module.unsubscribe(conn, args.profile, now=_now(), reason=args.source)
             print(json.dumps({"profile_id": args.profile, "unsubscribed": changed}, indent=2))
             return 0
 
-        profiles = [p.id for p in list_profiles(conn)] if args.all else [args.profile]
+        if args.all:
+            # "Every subscriber", not "every profile": a profile without a
+            # number has nowhere to send a digest to.
+            profiles = [s.profile_id for s in outbox_module.active_subscriptions(conn)]
+            if not profiles:
+                print("no active subscribers", file=sys.stderr)
+                return 1
+        else:
+            profiles = [args.profile]
         results = []
         for profile_id in profiles:
             try:
                 result = outbox_module.queue_digest(
-                    conn, profile_id, dry_run=args.dry_run or args.preview, link_base=args.link_base
+                    conn,
+                    profile_id,
+                    dry_run=args.dry_run or args.preview,
+                    link_base=args.link_base,
+                    now=_now(),
                 )
             except ValueError as error:
                 results.append({"profile_id": profile_id, "error": str(error)})
@@ -420,6 +448,49 @@ def cmd_outbox(args: argparse.Namespace) -> int:
         else:
             counts = summary["counts"] or {}
             print("outbox: " + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "empty"))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """One scheduler tick, or a loop of them."""
+    conn = database.connect(args.db)
+    try:
+        seed_profiles(conn)
+        if args.explain:
+            print(json.dumps(scheduler.explain(conn, now=_now()), indent=2, default=str))
+            return 0
+
+        def once() -> dict:
+            transports = None
+            if args.send or args.dry_run:
+                if args.dry_run:
+                    transports = {"whatsapp": FakeTransport(), "sms": FakeTransport()}
+                else:
+                    try:
+                        transports = {
+                            channel: transport_for(channel) for channel in ("whatsapp", "sms")
+                        }
+                    except RuntimeError as error:
+                        raise SystemExit(f"cannot send: {error}") from error
+            return scheduler.run_due(
+                conn, transports, now=_now(), link_base=args.link_base, dry_run=args.dry_run
+            )
+
+        if not args.loop:
+            report = once()
+            print(json.dumps(report, indent=2, default=str))
+            return 0
+
+        import time
+
+        while True:
+            report = once()
+            if report["due"] or (report.get("sent") or {}).get("sent"):
+                print(json.dumps(report, default=str), flush=True)
+            time.sleep(max(5, args.interval))
+    except KeyboardInterrupt:
         return 0
     finally:
         conn.close()
@@ -528,6 +599,9 @@ def main(argv: list[str] | None = None) -> int:
     p_digest.add_argument("--subscribe", metavar="MSISDN", default=None, help="record consent for this number")
     p_digest.add_argument("--unsubscribe", action="store_true")
     p_digest.add_argument("--channel", default="whatsapp", choices=["whatsapp", "sms"])
+    p_digest.add_argument("--cadence", default="daily", choices=["daily", "weekly"])
+    p_digest.add_argument("--window", default=None, metavar="HH:MM-HH:MM")
+    p_digest.add_argument("--max-items", type=int, default=5)
     p_digest.add_argument("--source", default="cli", help="how consent was given")
     p_digest.add_argument("--no-fallback", action="store_true")
     p_digest.add_argument("--preview", action="store_true", help="print the message, queue nothing")
@@ -545,6 +619,17 @@ def main(argv: list[str] | None = None) -> int:
     p_outbox.add_argument("--messages", action="store_true")
     p_outbox.add_argument("--json", action="store_true")
     p_outbox.set_defaults(func=cmd_outbox)
+
+    p_run = sub.add_parser("run", help="the scheduler: compose and send what is due")
+    p_run.add_argument("--db", default="./data/kazi.db")
+    p_run.add_argument("--once", action="store_true", help="one tick (default)")
+    p_run.add_argument("--loop", action="store_true", help="keep ticking")
+    p_run.add_argument("--interval", type=int, default=60, help="seconds between ticks")
+    p_run.add_argument("--send", action="store_true", help="really deliver")
+    p_run.add_argument("--dry-run", action="store_true", help="fake transports, no writes to state")
+    p_run.add_argument("--explain", action="store_true", help="why each subscriber is or is not due")
+    p_run.add_argument("--link-base", default="https://kazikasi.app")
+    p_run.set_defaults(func=cmd_run)
 
     p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
     p_serve.add_argument("--db", default="./data/kazi.db")

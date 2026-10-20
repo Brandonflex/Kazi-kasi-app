@@ -27,6 +27,8 @@ def test_connect_creates_the_schema_and_records_a_version(tmp_path):
             "digest_runs",
             "digest_items",
             "messages",
+            "consent_events",
+            "message_receipts",
         }
         assert all(value == 0 for value in counts.values())
     finally:
@@ -62,6 +64,47 @@ def test_an_older_database_upgrades_in_place(tmp_path):
         versions = [row["version"] for row in conn.execute("SELECT version FROM schema_version ORDER BY version")]
         assert versions == [2, db.SCHEMA_VERSION]
         assert db.table_counts(conn)["profiles"] == 0
+    finally:
+        conn.close()
+
+
+def test_a_v4_database_gains_the_v5_columns_and_tables(tmp_path):
+    """The upgrade path Phase 5 databases will actually take."""
+    path = tmp_path / "v4.db"
+    legacy = sqlite3.connect(path)
+    legacy.executescript(
+        """
+        CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+        INSERT INTO schema_version VALUES (4, '2026-10-20T00:00:00+00:00');
+        CREATE TABLE messages (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            idempotency TEXT NOT NULL UNIQUE,
+            profile_id  TEXT NOT NULL,
+            channel     TEXT NOT NULL,
+            to_msisdn   TEXT NOT NULL,
+            body        TEXT NOT NULL,
+            kind        TEXT NOT NULL DEFAULT 'digest',
+            state       TEXT NOT NULL DEFAULT 'queued',
+            attempts    INTEGER NOT NULL DEFAULT 0,
+            provider_id TEXT,
+            last_error  TEXT,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            sent_at     TEXT
+        );
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    conn = db.connect(path)
+    try:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(messages)")}
+        assert {"run_id", "delivered_at"} <= columns
+        assert db.table_counts(conn)["message_receipts"] == 0
+        assert db.table_counts(conn)["consent_events"] == 0
+        versions = [row["version"] for row in conn.execute("SELECT version FROM schema_version")]
+        assert versions == [4, 5]
     finally:
         conn.close()
 

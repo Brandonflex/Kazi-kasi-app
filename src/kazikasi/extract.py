@@ -12,7 +12,7 @@ from __future__ import annotations
 import html as html_lib
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -670,9 +670,12 @@ def _org_domain(posting: dict) -> str | None:
         elif isinstance(same_as, list):
             candidates.extend(str(s) for s in same_as)
     for url in candidates:
-        m = re.match(r"https?://([^/]+)", url)
+        m = re.match(r"https?://([^/]+)", url, re.IGNORECASE)
         if m:
-            return m.group(1).lower().lstrip("www.")
+            host = m.group(1).lower().rstrip(".")
+            # `lstrip("www.")` would eat any leading w or dot: `webmail.x.com`
+            # would become `ebmail.x.com`. Strip the prefix, not a character set.
+            return host[4:] if host.startswith("www.") else host
     return None
 
 

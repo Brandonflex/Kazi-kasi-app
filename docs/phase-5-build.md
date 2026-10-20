@@ -161,13 +161,12 @@ Two smaller database changes came out of this phase:
 - **No template messages, no buttons.** Plain text only. Templates are the right
   long-term answer for opt-in broadcasts, but they are a Meta approval process,
   not a code change, and building against an unapproved template is guessing.
-- **No inbound webhook.** "Reply STOP" is in the copy and the model supports it,
-  but nothing parses replies yet — the CLI and `/digest` are how consent changes
-  today. This is the largest known gap in the phase.
-- **No delivery receipts.** `sent` means the provider accepted it, not that the
-  phone showed it. `delivered` exists in the state machine and nothing sets it.
-- **No scheduling loop.** `outbox --send` is a cron-shaped command; there is no
-  daemon, no queue worker, no jitter.
+- **No inbound webhook** — closed in [Phase 6](./phase-6-hardening.md): STOP,
+  START and HELP are parsed from both providers, with signatures verified.
+- **No delivery receipts** — closed in [Phase 6](./phase-6-hardening.md): receipts
+  are events, and the state machine is monotonic.
+- **No scheduling loop** — closed in [Phase 6](./phase-6-hardening.md): cadence,
+  windows and deterministic jitter, with `kazikasi run`.
 - **No per-message costing.** Segments are counted (Africa's Talking bills per
   segment); unit economics are not modelled.
 - **No live send.** This sandbox has credentials for nothing and a route to
@@ -178,10 +177,12 @@ Two smaller database changes came out of this phase:
 ## 9. Next
 
 1. **The STOP webhook**, because consent you cannot revoke in the channel you
-   were contacted in is consent on paper only.
+   were contacted in is consent on paper only. → [Phase 6](./phase-6-hardening.md)
 2. **Templates**, once there is a sender identity and something to submit.
 3. **Delivery receipts**, to make `sent` mean "arrived" rather than "accepted".
+   → [Phase 6](./phase-6-hardening.md)
 4. **A scheduler with jitter**, so thousands of digests do not leave at 18:00:00.
+   → [Phase 6](./phase-6-hardening.md)
 5. **Measure the only metric that matters here:** how many people who receive a
    digest open a job, and how many of those apply. A digest nobody taps is
    messaging, not a product.
