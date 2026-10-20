@@ -1,247 +1,278 @@
-# Source Landscape, Market Map & Legal Posture
+# Kenya Source Landscape, Market Map & Legal Posture
 
-**Companion to:** [`00-executive-brief.md`](./00-executive-brief.md) · research draft v0.1 · 2026-10-20
+**Companion to:** [`00-executive-brief.md`](./00-executive-brief.md) · draft v0.2 · 2026-10-20
 
-This document answers three questions: *what exists*, *what can we legally and technically take*, and *what does it cost*.
+Answers three questions: *what exists in Kenya*, *what can we legally and technically take*, and *what does it cost*.
 
 ---
 
 ## 1. Method and confidence
 
-Desk research across vendor documentation, regulatory summaries, industry benchmarks, and public technical write-ups, October 2026. Three confidence levels are used throughout:
+Desk research across public board snapshots, vendor documentation, regulator guidance, KNBS/CA statistics, and practitioner sources, October 2026.
 
-- **Verified** — documented by the vendor/regulator, or reproduced by multiple independent technical sources.
-- **Reported** — stated by one credible source; treat as a hypothesis to test.
-- **Inferred** — our reasoning. Not a fact.
+- **Verified (V)** — documented by a regulator, vendor, or multiple independent sources.
+- **Reported (R)** — one credible source; hypothesis to test.
+- **Inferred (I)** — our reasoning.
 
-Every quantitative claim in the tables is tagged. Anything marked *Reported* gets validated in Phase 1 before it drives a design decision.
+Board inventory numbers are **snapshots**, not stable facts. BrighterMonday showed 1,104 live listings on the day of research; that number moves daily and is used here only to establish order of magnitude.
 
 ---
 
 ## 2. The market, mapped
 
-### 2.1 Legacy aggregators
+### 2.1 The number that reframes the product
 
-| Player | Model | What we can take | What hurts |
+| Board | Live vacancies (snapshot) | Monthly visits | Notes |
 |---|---|---|---|
-| **Indeed / LinkedIn** | Direct employer + syndicated | Nothing directly. LinkedIn: link-out only, no profile scraping | ToS prohibits scraping; LinkedIn is the most-litigated target in the category |
-| **Jooble** | Feed + crawl, 60–70 countries | Free API key on request; snippet + source name + link | Snippets only, no source attribution you can query, no lifecycle, no firehose |
-| **Careerjet** | Crawl, 90 countries, ~58k sites scanned | Documented search API | Key per publisher site; every call must carry the *end user's* IP and user agent; paging ceiling ~1,100 per query — structurally unusable for dataset building |
-| **Adzuna** | Feed-driven aggregator, 16–20 countries | Free tier (2,500 calls/month, 250/day), salary histogram/geodata endpoints, institutional credibility (UK ONS uses it) | Thin per-job records; commercial use needs a licence after a 14-day trial; prohibits redistribution of derived aggregates |
-| **Talent.com / SimplyHired** | Aggregators | Little | Partner-only access |
-| **eJobs (RO)** | Largest RO board, ~15k live ads *Reported* | Public JSON endpoint, no key *Reported*; rich fields (company verified flag, positions, counties, expiry) | No published API terms; must confirm permission or use a licensed data provider |
-| **BestJobs (RO)** | General + IT board, ~1.45M monthly views *Reported* | Salary ranges, estimated salary, remote/hybrid flags, apply URLs | Publishes no posting dates *Reported*; no API; scraping terms unclear |
-| **Hipo (RO)** | IT / graduate / internship | Structured categories, cities, seniority | Niche; no API |
-| **ANOFM / mediere (RO)** | **Public employment service** | The authoritative registry: employers must legally declare vacancies. COR occupation code, RON salary (gross/net), county, employer CIF, contact details, EURES flag, start/expiry dates | No official API; portal UX is poor; scraping must be gentle and permitted |
+| **BrighterMonday** | ~1,104 nationwide; 695 Nairobi; 294 entry-level; 26 internship/graduate | ~437k | Kenya's largest generalist board; Ringier / African Talent Company; ~40,000 employers, ~800,000 seekers, ~1,600 placements/month (company figures) |
+| **MyJobMag** | Hundreds, heavily PSC/county/NGO | ~756k — **the largest by traffic** | Aggregates public-sector and county notices; this is where the volume of *government* hiring surfaces |
+| **Fuzu** | ~1,300 reported historically; IT category showing ~115 | ~184k | 3M talent pool, 7.5M lifetime users, $3.86M Series A; repositioning toward AI data operations (Fuzu Atlas) |
+| **Careerjet KE** | Mirror of other sources | ~94k | Pure aggregator |
+| **PSC / psckjobs.go.ke** | Bursts of 100–1,000+ per drive | n/a | Authoritative national government vacancies |
+| **47 county public service boards** | Tens to hundreds per county, bursty | n/a | e.g. Mombasa advertised ~3,000 posts in one September 2026 round |
+| **ReliefWeb (Kenya filter)** | Dozens at a time | n/a | Free API; Nairobi is a global humanitarian hub |
+| **Employer career pages** | Unknown; likely 1,000–3,000 | n/a | Fragmented; some publish `schema.org/JobPosting` |
 
-**Verdict:** aggregator APIs are coverage *rental*. They are useful for benchmarking our own coverage and for filling gaps early, but never as the foundation. The foundation is employer-direct.
+**Order of magnitude: the entire formal advertised job market in Kenya is a few thousand live roles at any moment — small enough to enumerate exhaustively.**
 
-### 2.2 AI-native job search
+That is the single most important fact in this document. It inverts the usual product strategy:
 
-| Product | Position | Evidence | Gap we exploit |
+- You do **not** need to choose which jobs to show.
+- You **do** need to prove that you are complete.
+- Verification is affordable at this scale, because a human can review the entire day's new postings.
+- A competitor with 8M rows cannot claim completeness in Nairobi. You can.
+
+### 2.2 The labour-market context
+
+| Indicator | Value | Source |
+|---|---|---|
+| Total recorded employment (2025) | 21.6M | KNBS Economic Survey 2026 |
+| Informal employment | **18.1M (83.8%)** | KNBS 2026 |
+| Wage (modern-sector) employment | 3.32M | KNBS 2026 |
+| New jobs created 2025 | 822,100 — **87.2% informal** | KNBS 2026 |
+| Modern-sector jobs added 2025 | ~105,300 | KNBS 2026 |
+| New labour-market entrants per year | ~1M youth; >80% land informal | AFIDEP / World Bank |
+| Youth NEET | ~1 in 3 | ILO SDG 8.6.1 |
+| Youth unemployment, by county | 9% (Nandi, Nyeri) → 35% (Wajir); Mombasa 27% | CDI report, 2026 |
+| Graduate unemployment | ~18% mid-2026 (down from 26% in 2022) | Reported, KNBS-derived |
+| Applications per entry-level role | 200–500 | Industry reporting |
+| Statutory minimum wage (general labourer) | KES 16,113.75/month | KNBS 2026 |
+
+**What this means for the product:** the user's competition is the binding constraint, not the number of listings. A 24-year-old in Nairobi is not short of openings to look at; they are short of *timing, signal, safety, and a credible reason to believe they qualify.* Those are all product problems we can solve, and none of them require indexing the informal economy.
+
+### 2.3 The competing products, honestly
+
+| Product | What it is | Strength | Weakness we exploit |
 |---|---|---|---|
-| **HiringCafe** | Search engine over employer career pages; claims ~5.7M live jobs, up to 4× legacy boards; aggressive ghost-job filtering; raised $6.8M | Reported (company + press, Sep 2026) | US-centric; not geo-reasoning; no Romania |
-| **Jobright** | ~8M listings, ~400K added daily; match scoring, tailoring, referral discovery, autofill | Reported (vendor + reviews) | US-only per its own FAQ; no pay-vs-local-cost or commute logic; "apply more" optimisation |
-| **Simplify** | Autofill + tracker + matches; free core, ~$39.99/mo premium | Reported (reviews) | Utility layer, not a discovery product |
-| **Teal** | Tracker + resume + match score; generous free tier | Reported | Organises what you already found |
-| **Welcome to the Jungle (ex-Otta)** | Curated tech roles, salary up front, 6–7k vetted companies | Reported | Curated by humans, limited scale, no commute model |
-| **LoopCV / LazyApply / JobCopilot** | Auto-apply volume | Reported | Optimises applications sent, which is the metric that produces ghost-job fatigue |
+| **BrighterMonday** | Generalist board, Ringier-owned | Brand, 40k employers, employer-side revenue, publishes JSON-LD on detail pages | No liveness verification, re-dated listings, no commute model, generic matching |
+| **Fuzu** | Career platform → AI data-ops company | 7.5M users, 3M talent pool, GIZ partnerships, AI narrative | Attention pivoting away from the board; the entry-level segment is under-served |
+| **MyJobMag** | Aggregator, public-sector heavy | Highest traffic; government/county coverage | Duplication, no quality signal, PDF/notice dumps, deadline-only lifecycle |
+| **PSC / county boards** | Official portals | Authoritative; free; huge bursts | Fragmented across 48+ portals; scanned adverts; no alerts; no cross-portal search |
+| **ReliefWeb / Devex / UN** | Sector-specific | Structured, deadline-bearing | Siloed from private sector; no local context |
+| **SwiftKazi / KaziChat / KaziKit / KaziNest** | "AI job search Kenya" | Already marketing the category | Thin scrapers, no verification layer, no geography, no scam screening |
 
-**The pattern:** the category has converged on *matching + tailoring + autofill*. Those are now commodities with many vendors and falling prices. What is not commoditised is **verified liveness** and **geographic realism**. That is where a new entrant can win without out-spending anyone.
-
-### 2.3 B2B labour-market data (the "sell the pipe" alternative)
-
-Firms such as Lightcast, LinkUp, JobsPikr, Coresignal and Revelio sell normalised job-posting feeds and labour-market analytics to enterprises, universities and investors. *Inferred:* this is a real business with real margins, and it is the natural monetisation if the consumer product stalls. It also implies a strategic option worth keeping open — **the same pipeline can serve both**, if the canonical schema is designed properly from day one (which is why provenance and confidence fields are non-negotiable in §4).
-
-### 2.4 Public employment infrastructure (the underrated asset)
-
-- **ANOFM / mediere.anofm.ro** — in Romania, employers are legally required to declare vacancies to the public employment service. That makes it the **most complete single registry of formal openings in the country**, with COR codes and RON salaries. *Reported* by EURES and by practitioners who scrape it.
-- **EURES** — EU cross-border portal, publishes labour-market information per country and carries EURES-flagged RO vacancies. API availability to be verified in Phase 1.
-- **INS / TEMPO** — earnings by county, activity, sex; monthly averages; vacancy series. *Verified* (INS releases): national average net earnings RON 5,734 in June 2026; IT/programming sector average net RON 13,474; Bucharest above RON 7,000; lowest counties below RON 4,100.
-
-**Why this matters for the product:** it gives us a free, defensible **local pay baseline**. "RON 9,000 for this role in Iași" is meaningless without the county median; with it, it becomes a decision.
+**The gap is not "AI." It is trust infrastructure.** In a market where a fake vacancy can cost a jobseeker their rent money, "verified open, last checked 8 minutes ago, no fee requested, employer confirmed" is a stronger promise than any match score.
 
 ---
 
-## 3. Source inventory — the buildable list
+## 3. Source inventory
 
-Scored on: **access** (1 = hard, 5 = trivial), **data quality**, **freshness**, **cost**, **legal risk** (5 = low risk), **effort**. Priority = whether it belongs in the first 90 days.
+Scored on access (1 hard → 5 trivial), quality, freshness, cost, legal risk (5 = low), effort, and whether it belongs in the first 90 days.
 
-### Lane A — Public ATS APIs (the spine)
+### Lane A — Kenyan job boards (the spine)
 
-All unauthenticated, JSON, documented by the vendor or by the endpoint the vendor's own career site uses.
-
-| ATS | Endpoint | Coverage / quirks | Priority |
-|---|---|---|---|
-| **Greenhouse** | `GET boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true` | Whole board in one call; HTML description (double-encoded); departments, offices, `updated_at`, `absolute_url`. ~7,500 companies use Greenhouse *Reported* | **P0** |
-| **Lever** | `GET api.lever.co/v0/postings/{site}?mode=json` (EU: `api.eu.lever.co`) | Bare array; `descriptionPlain`, `lists[]`, `categories{team,department,location,commitment,allLocations}`, `workplaceType`, `country`, `createdAt` (ms), `hostedUrl`, `salaryRange?`. `mode=json` must be explicit | **P0** |
-| **Ashby** | `GET api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true` | Structured compensation for the large majority of postings *Reported*; `isRemote`, `employmentType`, `descriptionPlain` | **P0** |
-| **Workday** | `POST {tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs` | Paginated, max 20/page; list is thin (`locationsText` can be the literal `"2 Locations"`); real location/date/description require one detail call per job; `postedOn` is human text ("Posted 3 Days Ago"). No derivable slug — must be discovered from career URLs | **P1** (expensive, but many large RO employers) |
-| **SmartRecruiters** | `careers.smartrecruiters.com/{company}` public postings API | Uses **microdata**, not JSON-LD — needs a second extractor | **P1** |
-| **Workable** | `apply.workable.com/api/v1/widget/accounts/{slug}?details=true` | Simple, low volume | P1 |
-| **Recruitee / Personio / Breezy / Teamtailor / Rippling** | Various public board endpoints | Long tail; implement when a target employer uses them | P2 |
-
-**The board-discovery problem** — the real work in this lane:
-
-1. Start from a seed list of employers (Romanian company registry, ANOFM employer CIFs, VC portfolios, top-employer lists).
-2. For each domain, fetch `/careers`, `/jobs`, `/cariere`, `/locuri-de-munca`, follow redirects.
-3. Detect ATS from URL patterns (`boards.greenhouse.io`, `jobs.lever.co`, `jobs.ashbyhq.com`, `*.myworkdayjobs.com`, `apply.workable.com`).
-4. Fall back to search-engine queries (`site:boards.greenhouse.io "Romania"`) and to sitemap harvesting.
-5. Cache the resolved `(provider, tenant, site)` triple — it does not change often.
-6. Re-run discovery weekly; ATS migrations are common and silent.
-
-*Inferred but strongly supported by practitioner write-ups:* this discovery index is the single most valuable proprietary asset in the whole system. It is tedious, unglamorous, and hard to copy.
-
-### Lane B — Structured web (`schema.org/JobPosting`)
-
-- **Scale:** schema.org reports `JobPosting` usage in the 100K–1M domains range *Reported*.
-- **Format:** JSON-LD preferred by Google; microdata and RDFa also valid. Parse `script[type="application/ld+json"]`, handle both a single object and an array, and recurse into `@graph`.
-- **Core fields:** `title`, `description`, `datePosted`, `validThrough`, `hiringOrganization`, `jobLocation`, `baseSalary`, `employmentType`, `identifier`, `directApply`, `jobLocationType`, `applicantLocationRequirements`, `experienceRequirements`, `educationRequirements`.
-- **Why it's high value:** full descriptions, employer-direct apply URLs, stable `identifier`, and — critically — `validThrough`, which gives us a free close signal.
-- **Failure modes:** markup that does not match visible content; one-JobPosting-per-URL violations on listing pages; silent schema drift; pages that render the JSON-LD only via JavaScript (needs a headless fallback, used sparingly).
-- **Crawl politeness:** `robots.txt`, `Crawl-delay`, sitemaps, conditional requests (`If-Modified-Since`, `ETag`), a truthful user agent with a contact URL.
-
-### Lane C — Aggregator APIs (borrow, verify, don't depend)
-
-| Source | Free tier | Countries | Record depth | Lifecycle | Legal note |
-|---|---|---|---|---|---|
-| Adzuna | 2,500 calls/mo (250/day) | 16–20, strongest UK/EU | Snippets; strong aggregate/salary endpoints | Created date only | Commercial licence required after trial; no redistribution of aggregates |
-| Jooble | Free key on request | 60–70 | Snippet + source name + link | None | No published limits or pricing; attribution terms |
-| Careerjet | Free, publisher key | 90 | Fragments | None | Must pass end-user IP/UA → not usable for a dataset |
-| JSearch (RapidAPI) | 200 req/mo; $25/mo for 10k | Global-ish, US-weighted | Google for Jobs SERP copy; duplicates per board | None | Wrapper-of-a-wrapper; freshness lag 24–48h *Reported* |
-| JobsPipe-class unified APIs | Free credits, ~$49/mo | NA/EU/India | Full record, `status`, `closed_at`, `ghost_score`, webhooks | Yes | Best "buy" option — worth a paid benchmark month to calibrate our own dedupe against theirs |
-
-**Decision rule:** use aggregators to (a) measure our coverage gap, (b) backfill thin geographies during beta, and (c) sanity-check our dedupe. Do not let them into the canonical graph as a primary source of truth.
-
-### Lane D — Social and informal signals (handle with tongs)
-
-| Source | Access | Signal value | Status | Verdict |
+| Source | Access | What you get | Quirks | Priority |
 |---|---|---|---|---|
-| **Bluesky / AT Protocol** | Free public firehose (Jetstream), 5,000 points/hour *Reported* | Early chatter, "we're hiring" posts, layoffs | Open and stable | **Only social source in scope for v1 research** |
-| **Reddit** | New public API requests stop **31 Oct 2026**; RSS ends **13 Nov 2026**; public API ends **March 2027** | Strong for local/industry chatter | Actively closing | **Do not build a dependency.** If needed, license via a provider |
-| **X / Twitter** | Paid, restrictive | Same as above | Closed | Out of scope |
-| **LinkedIn** | ToS prohibits scraping; logged-in collection is the pattern that loses in court | Job posts, "we're hiring" | Hostile | **Link-out only. No profile collection. No logged-in access.** |
-| **Telegram (public channels)** | MTProto / bot API on public channels | High for RO blue-collar, gig, hospitality, construction | Fragmentary | P2 — strong local signal, but personal data and no structure |
-| **Hacker News "Who is hiring"** | Algolia HN API | High-quality remote tech roles, monthly thread | Open | Cheap win; P2 |
-| **Mastodon** | Open APIs | Small | Open | Ignore for now |
-| **Facebook groups** | Login-gated | High for RO local work | ToS + login | **Out of scope** |
+| **BrighterMonday** | Public HTML; detail pages publish `schema.org/JobPosting` | Title, employer, location, employment type, salary band ("Confidential" often), description, deadline, sometimes AI-summarised requirements | Pagination; "recommended/endorsed" vs. sourced listings; employer pages are a useful identity anchor | **P0** |
+| **Fuzu** | Public HTML per country path (`/kenya`) | Title, employer, location, posting date, "days left to apply", descriptions | Mixed content; some listings "Only on Fuzu"; country sites share structure | **P0** |
+| **MyJobMag** | Public HTML | Title, employer, location, deadline, full description; heavy PSC/county/NGO coverage | Aggregated duplicates; some posts are summaries of newspaper adverts | **P0** |
+| **JobWeb Kenya** | Public HTML | NGO/public-sector depth | Lower volume | P1 |
+| **CareerPoint / KenyaOnline / JobsInKenya** | Public HTML | Long-tail coverage | Quality varies; duplication | P2 |
 
-**The corroboration rule (non-negotiable):** a social signal is never a job. It becomes a candidate job only when backed by (a) an employer-controlled URL or ATS requisition, **and** (b) at least one independent confirmation. Otherwise it lives in the signal lane and powers *demand intelligence* — "this company is about to hire" — not the feed.
+**Why boards first:** they already aggregate the fragmentation for us, they publish full descriptions on detail pages, and BrighterMonday's JSON-LD gives us structured fields for free. The job is to *verify and deduplicate* them, not to replace them.
 
-### Lane E — News and editorial
+### Lane B — Public sector (the differentiator)
 
-RSS, Google News RSS, GDELT, and Romanian business press (Profit.ro, ZF, Economica.net, StartupCafe). Use for:
-- hiring momentum ("X opens Bucharest engineering hub"),
-- funding, expansion, layoffs,
-- employer context on the job card ("12 roles open, 3 closed this week, raised €4M in June").
+| Source | Access | Notes | Priority |
+|---|---|---|---|
+| **PSC / psckjobs.go.ke** | HTML + PDF adverts | National government. Bursts of 100–1,000+ vacancies per drive. Adverts often reference a `V/No` and a closing date. | **P0** |
+| **MyGov newspaper adverts** | PDF / scanned images | Where many PSC and parastatal vacancies are formally published. Requires OCR. | **P1** |
+| **47 county public service boards** | Individual county websites, many with custom portals | Extremely fragmented. Examples: `cpsb.kirinyaga.go.ke`, `recruitment.mcpsb.go.ke`. Massive spikes (Mombasa ~3,000 posts). | **P1** |
+| **TSC** (Teachers Service Commission) | `tsc.go.ke` | Large volume in bursts; national. | P2 |
+| **Ajira Digital** | `ajira.go.ke` | Youth digital/freelance work; KEPSA programmes. | P2 |
+| **Parastatals / SOEs** | Individual sites | Long tail | P2 |
 
-Never for job records. Always attributed, never paywalled content reproduced.
+**Why this matters strategically:** no consumer product does public-sector aggregation well. It is unglamorous, document-heavy, and high-volume — exactly the kind of work a small determined team can own. It is also where a lot of entry-level graduate employment actually is.
 
-### Lane F — Geo and macro data
+### Lane C — NGO / development (the easy win)
 
-| Need | Source | Notes |
+| Source | Access | Notes | Priority |
+|---|---|---|---|
+| **ReliefWeb API v2** | Free JSON API. **Requires a pre-approved `appname`** (applied for at `apidoc.reliefweb.int`). v1 is decommissioned and returns HTTP 410. | Jobs endpoint filters by country; fields include title, organisation, country, city, closing date, URL, sometimes salary. Excellent for Nairobi-based INGO/UN roles. | **P0** |
+| **UN careers** | Public HTML/JSON | Structured by duty station; heavy process | P1 |
+| **Impactpool / Devex** | Paid / login-walled | Higher-end development roles | P2 |
+| **Individual INGO career pages** | Public HTML | IRC, MSF, Oxfam, Save the Children, CARE, UNHCR, IOM, APHRC, AAS | P1 |
+
+Nairobi hosts regional offices for a large number of UN agencies and INGOs. This lane produces high-quality, deadline-bearing, well-paid roles that never appear on BrighterMonday — and ReliefWeb gives it to us through one free API.
+
+### Lane D — Employer direct
+
+Target list: ~300 employers — banks (Equity, KCB, NCBA, Absa, Stanbic), telcos (Safaricom, Airtel), tech (Google/Microsoft/AWS Africa offices, M-Pesa Africa, Cellulant, Twiga, Kyosk, SunCulture), BPOs, manufacturers, universities, hospitals, and the larger NGOs.
+
+- Detect ATS by URL pattern (`myworkdayjobs.com`, `successfactors`, `taleo`, `greenhouse.io`, `lever.co`, `smartrecruiters`, `zoho`, `workable`).
+- Most Kenyan employers will not use any of these — they will have a hand-rolled careers page, a PDF, or an email address.
+- **This is where `schema.org/JobPosting` appears when it appears.** Parse it when present; fall back to HTML heuristics; fall back to PDF.
+
+**Priority: P1.** Small volume, best quality, and the highest-value roles (a graduate role at Safaricom will never be exclusively on BrighterMonday).
+
+### Lane E — Documents (the hard, defensible work)
+
+A large share of Kenyan vacancies are published as:
+
+- newspaper adverts (MyGov) scanned as images,
+- PDFs with tables of posts and reference numbers,
+- plain text with "apply by email to `recruitment@…` before 5pm on Friday",
+- images shared on social media.
+
+**Pipeline:** PDF text extraction → OCR fallback → layout-aware parsing → LLM structured extraction with confidence → human review below threshold.
+
+This is the single biggest technical differentiator against local competitors, and the single biggest quality risk. Budget for it explicitly.
+
+### Lane F — Social and informal (out of scope for v1)
+
+| Source | Status | Verdict |
 |---|---|---|
-| Geocoding | Nominatim / Photon (OSM), plus manual overrides | Romanian addresses are messy; sector + street + number needs a normaliser |
-| Routing / isochrones | OSRM, Valhalla, OpenRouteService | Self-host OSRM for cost; ORS/Valhalla for isochrone polygons |
-| Public transit | GTFS per city (Bucharest STB/Metrorex availability to verify) | *Reported* as patchy; plan a fallback |
-| Spatial index | H3 (res 7 ≈ 5 km², res 9 ≈ 0.1 km²) | Pre-compute reachability bands per H3 cell |
-| Admin geography | SIRUTA codes, 41 județe + București, sectors | Needed for county-level pay baselines and ANOFM joins |
-| Occupations | ISCO-08 (EU) + COR (RO) | Cross-walk table required; COR is what ANOFM publishes |
-| Pay baselines | INS/TEMPO, ANOFM, EURES LMI | County × activity × month |
+| **WhatsApp groups** | Where much informal hiring happens | **Do not touch.** Login-gated, personal data, unverifiable, fraud vector, no consent |
+| **Facebook groups** | Login-gated, large | Out of scope |
+| **Telegram public channels** | Public but unstructured | Revisit as a *signal lane* with corroboration only |
+| **LinkedIn** | ToS prohibits scraping; link-out only | Link-out only; never collect profiles |
+| **X** | Paid, restrictive | Out of scope |
 
-**Research support for the geography model:** spatial job-search literature finds the utility of a job offer decays roughly exponentially with distance (order of ~0.3 per km in one UK estimate), and that a job 5 km further away can be ~4.5× less attractive. Administrative units badly mis-measure real labour markets; travel time or commuting flows are better. This is the academic justification for making travel time a first-class field rather than a filter.
+**The corroboration rule:** a social signal is never a job. It becomes a candidate only when backed by an employer-controlled URL or an official advert, plus one independent confirmation.
+
+### Lane G — Editorial and macro
+
+Business Daily, The Star, Techweez, Kenyan Wall Street, county notices, KNBS releases, CA sector statistics. Use for:
+- hiring momentum and expansions,
+- layoffs and closures,
+- pay benchmarks,
+- employer context on the card ("12 open roles, 3 closed this month").
+
+Never for job records.
 
 ---
 
 ## 4. Field-level reality check
 
-What sources actually return, versus what the product needs. This table drives the canonical schema in [`02`](./02-technical-blueprint.md).
+What Kenyan sources actually return, versus what the product needs.
 
-| Field | ATS | JSON-LD | ANOFM | Local boards | Aggregators | Coverage verdict |
+| Field | BrighterMonday | Fuzu | MyJobMag | PSC/county | ReliefWeb | Verdict |
 |---|---|---|---|---|---|---|
 | Title | ✅ | ✅ | ✅ | ✅ | ✅ | Universal |
-| Employer | ✅ (GH only named) | ✅ | ✅ (+ CIF) | ✅ | ✅ | Universal, needs normalisation |
-| Full description | ✅ | ✅ | Partial | ✅ | ❌ snippet | **ATS + JSON-LD only** |
-| Stable source ID | ✅ | ✅ (`identifier`) | ✅ | ✅ | ✅ | Universal |
-| Posted date | ✅ | ✅ | ✅ | Varies | ✅ (board-claimed) | Needs `first_seen` to be trustworthy |
-| Close event | ✅ (absence) | ✅ (`validThrough`) | ✅ (expiry) | Varies | ❌ | **Our differentiator** |
-| Structured salary | Ashby ✅, Lever ~, GH ❌ | ~ | ✅ RON gross/net | BestJobs ~ | ❌ free text | Biggest data gap; needs parsing + local baseline |
-| Work mode | Lever/Ashby ✅ | ✅ (`jobLocationType`) | ❌ | ~ | ~ | Needs inference + user-visible confidence |
-| Coordinates | ❌ | Place only | ❌ (city/county) | Some (eJobs GPS *Reported*) | ❌ | **Must geocode ourselves** |
-| Multi-location | ✅ (Lever `allLocations`) | Partial | ❌ | ~ | ❌ | Needs explicit modelling |
-| Occupations | ❌ | ❌ | ✅ COR | ~ | ~ | Build a COR/ISCO cross-walk |
-| Employer identity | Partial | `sameAs` | ✅ CIF | company ID | Weak | Build the company entity resolver |
+| Employer | ✅ | ✅ | ✅ | ✅ | ✅ | Needs normalisation (Ltd, PLC, "Kenya", county suffixes) |
+| Full description | ✅ detail page | ✅ | ✅ | Partial (advert) | ✅ | Boards good; public sector needs OCR |
+| Stable source ID | ✅ in URL | ✅ | ✅ | Reference number (`V/No`) | ✅ | Good |
+| Posted date | ⚠️ re-datable | ✅ | ⚠️ | ⚠️ advert date | ✅ | Always pair with `first_seen` |
+| Deadline | ✅ | ✅ ("days left") | ✅ | ✅ | ✅ | Strong local asset — better than most EU boards |
+| Salary | ⚠️ often "Confidential" | ⚠️ | ⚠️ | ✅ (scale/grade) | ❌ | **Biggest gap.** Needs parsing + KNBS baseline |
+| Coordinates | ❌ | ❌ | ❌ | ❌ | Country centroid only | **We geocode ourselves** |
+| Employment type | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | Needs normalisation |
+| Entry-level signal | ⚠️ "No Experience" filter only | ⚠️ | ⚠️ | ✅ grade-based | ✅ | **Build it ourselves** — this is a wedge |
+| Scam indicators | ❌ | ❌ | ❌ | ❌ | ❌ | **Nobody does this. Build it.** |
+
+**Two derived fields are worth more than any raw field:**
+
+1. **`entry_fit`** — a structured judgement of whether a 0–3 year candidate can actually apply, extracted from the requirement text ("3 years experience required" vs. "fresh graduates encouraged"). The market's stated problem is that 70% of "entry-level" ads demand experience; a field that surfaces this honestly is a product.
+2. **`scam_flags[]`** — named evidence: asks for a fee, contact is a personal mobile number only, employer domain does not exist, advert reproduces a known scam template, application is via WhatsApp DM. Never a score; always named criteria.
 
 ---
 
-## 5. Cost envelope (order of magnitude)
+## 5. Cost envelope
 
-*Inferred from published pricing and typical token costs; validate in Phase 1.*
+*Inferred; validate in Phase 1. KES at ~129/USD.*
 
-| Item | Monthly | Notes |
+| Item | Monthly (USD) | Notes |
 |---|---|---|
-| Compute + Postgres + object storage (small) | €40–120 | A single 4–8 vCPU node plus managed Postgres is enough for Phase 1–2 |
-| LLM enrichment | €30–250 | Only on new/changed postings; deterministic parsing first; ~5–15k new RO-relevant postings/day assumed |
-| Routing / isochrones | €0–100 | Self-hosted OSRM ≈ free; hosted ORS if needed |
-| Aggregator API benchmarks | €0–60 | Adzuna free tier; one paid month for calibration |
-| Proxy / crawl infrastructure | €0–150 | Only if polite crawling is insufficient; avoid aggressive scraping |
-| **Total** | **≈ €100–700/mo** | Comfortably bootstrappable; the constraint is engineering time, not infrastructure |
+| Compute (1–2 small VPS in Kenya) | 30–80 | Safaricom Cloud, Angani, Truehost, or a Nairobi colo; needed for DPA s50 |
+| Managed Postgres + object storage | 25–70 | Can run on the same host early |
+| OCR + LLM extraction | 40–200 | PDFs are the cost driver; deterministic parsing first, LLM only on ambiguity |
+| Routing (OSRM self-hosted + matatu GTFS) | 0–40 | Self-hosting keeps this near zero |
+| WhatsApp Business API | 20–80 | Per-conversation pricing; digest batching keeps it low |
+| SMS fallback (Africa's Talking) | 10–50 | Only for users who opt in |
+| Board API / partnership (if pursued) | 0–300 | Unknown; a partnership conversation, not a listed price |
+| **Total** | **≈ 125–820** | Engineering time remains the real constraint |
 
 ---
 
-## 6. Legal and compliance posture
+## 6. Legal and compliance posture (Kenya)
 
-> Not legal advice. Before public launch we need a Romanian/EU DPO review and a DPIA. Budget for both explicitly.
+> Not legal advice. Retain Kenyan counsel for the privacy notice, the DPIA, and the scam-flagging policy before public launch.
 
-### 6.1 Collection
+### 6.1 The governing law
 
-| Question | Position | Basis |
+The **Data Protection Act, 2019** (DPA), enforced by the **Office of the Data Protection Commissioner (ODPC)**. It is structurally close to GDPR: lawful basis, purpose limitation, minimisation, storage limitation, data-subject rights, breach notification, DPIAs for high-risk processing.
+
+| Requirement | Detail | Our position |
 |---|---|---|
-| Is scraping public pages a crime? | Generally no in the US (CFAA does not reach public pages, *hiQ*), but it is not a free pass | *hiQ v. LinkedIn* (9th Cir. 2022); *Van Buren* (2021) |
-| Do terms of service bind? | Yes, if you accepted them. Logged-out public collection was held outside Meta's terms in *Meta v. Bright Data* (N.D. Cal., Jan 2024) | Log-in status is the sharpest line in the case law |
-| Can we scrape while logged in? | **No.** This is the fact pattern that destroyed hiQ: fake accounts, contract breach, $500K, injunction, shutdown | *hiQ* consent judgment (Dec 2022) |
-| What about EU contract terms? | *Ryanair v. PR Aviation* (CJEU, C-30/14): even where database rights don't apply, the site owner can restrict extraction contractually | EU is stricter than the US here |
-| Do database rights apply? | Possibly, for substantial extraction from a protected database | EU Database Directive *sui generis* right |
+| **Registration** | Mandatory for controllers/processors above thresholds: turnover > KES 5M, or > 10 employees, or in one of 18 mandatory sectors | Register before beta. Cheap, and a credibility signal |
+| **Lawful basis** | Consent, contract, legal obligation, vital interest, public interest, legitimate interest | Contract + legitimate interest for the product; explicit consent for alerts |
+| **Breach notification** | ODPC within **72 hours**; processors notify controllers within 48 | Incident runbook from day one |
+| **DPIA** | Required for high-risk processing | Do one before launch; ranking + profiling is squarely in scope |
+| **Cross-border transfer** | Adequacy, appropriate safeguards, contract necessity, or consent | Keep the primary store in Kenya; document any transfer |
+| **Localisation (s.50)** | **At least one serving copy of personal data on a server in Kenya** | Primary DB hosted in Kenya. Replicate outward, never inward-only |
+| **Penalties** | Up to KES 5M or 1% of turnover (lower of), plus criminal exposure | Treat as a real constraint, not a rounding error |
 
-**Operating rules we adopt:**
-1. No accounts, no credentials, no fake users, no paywall bypass.
-2. Honour `robots.txt` and rate limits; identify ourselves honestly.
-3. Prefer documented/public JSON endpoints over HTML.
-4. Log every fetch (URL, timestamp, status, policy decision) for auditability.
-5. Maintain a per-source kill switch and a `terms_reviewed_at` field in the adapter registry.
-6. Never store personal data from social posts beyond what is strictly necessary; no author profiling.
+**Enforcement is real.** By 2025 the ODPC had received ~9,061 complaints and issued 357 determinations, 134 enforcement notices, 20 penalty notices and 184 compensation orders. The first penalty (Oppo Kenya) was KES 5M — the maximum — for posting a customer's photograph without consent. A later case saw a penalty reduced on appeal to KES 2.5M for a first-time offender.
 
-### 6.2 Personal data (GDPR)
+### 6.2 What we collect, and what we refuse to collect
 
-- Publicly available personal data is still personal data. The CNIL fined KASPR €240,000 over LinkedIn-derived data and only closed the injunction after the database was erased and collection ceased *Reported*.
-- The EDPB's 2026 guidance on web scraping confirms GDPR applies whenever personal data is involved, and that public posting is not consent.
-- **Our boundary:** we store *job* data, employer data, and the user's own profile. We do **not** build a people database. No candidate profiles, no recruiter contact harvesting, no "find the hiring manager's email" feature.
-- User-side: consent + contract bases, data minimisation, retention limits, export, delete, and a plain-language notice written in Romanian and English.
+| We collect | We do not collect |
+|---|---|
+| Job postings (public adverts) | Candidate CVs belonging to other people |
+| Employer names, domains, public contact channels | Personal profiles, phone numbers of individuals, social handles |
+| The user's own profile, CV, preferences | WhatsApp group content |
+| Public statistics (KNBS, CA, ODPC) | Anything behind a login |
 
-### 6.3 AI Act and automated decision-making
+**The boundary that matters:** we are a *jobs and employers* database, not a *people* database. That single decision keeps us out of the highest-risk category of both the DPA and any future AI law, and it is also the honest thing to do.
 
-| Date | Obligation | Status | Impact on us |
-|---|---|---|---|
-| 2 Feb 2025 | Article 5 prohibitions (emotion inference at work); AI literacy | In force | We do none of the prohibited practices |
-| 2 Aug 2026 | Article 50 transparency (tell people they're interacting with AI) | In force | Label any AI-generated summaries; disclose the matcher |
-| **2 Dec 2027** | Annex III high-risk for recruitment, incl. **candidate ranking** and **targeted job advertising** | Deferred from 2 Aug 2026 by Reg. (EU) 2026/1744 | Our ranking engine is in scope. Build oversight, logging, and documentation now |
-| Today | GDPR Art. 22 — no solely automated decisions with significant effects | In force | We never auto-reject, auto-apply, or auto-contact. Human decides |
+### 6.3 AI regulation
 
-*Key legal detail to design around:* **profiling candidates is always high-risk**; the narrow-task exemption in Art. 6(3) does not open for it. And from Dec 2027, Art. 86 gives an affected person the right to a meaningful explanation of the AI's role in a decision. Our "why this job" panel is therefore both a product feature and a compliance artefact.
+| Instrument | Status | Consequence |
+|---|---|---|
+| **National AI Strategy 2025–2030** | Published March 2025; policy, not law | Direction only; no obligations |
+| **Draft AI & Emerging Technologies Policy 2026** | Consultation closed 4 Aug 2026; not law | Foreshadows a registrar/registry model |
+| **Artificial Intelligence Bill, 2026** | Senate Bill; first reading 2 Apr 2026; **rejected by the Senate ICT Committee in October 2026** over proportionality concerns | Not law. Likely to return in amended form. It borrowed the EU's four-tier risk model |
+| **Data Protection Act 2019** | In force | **The binding instrument today** |
 
-### 6.4 Other surfaces
+**Design posture:** build as if a four-tier risk regime will eventually pass. That means: explainability, human decision-making, audit logs, no automated adverse decisions, no protected attributes, and a documented risk assessment. It costs little now and saves a rebuild later.
 
-- **DSA** — if we host user-generated content or become an intermediary, notice-and-action duties may attach. Keep v1 read-only for users; no public posting.
-- **Consumer protection** — no dark patterns, no fake urgency, no "12 people applied" theatre unless it is true.
-- **Pay transparency** — the EU Pay Transparency Directive pushes employers toward disclosing ranges; this is a tailwind for our salary normalisation, not a constraint.
-- **Accessibility** — WCAG 2.2 AA from day one; job search is a high-need accessibility category.
+### 6.4 Online-safety and fraud
+
+- **Fake job adverts are a public-safety issue in Kenya**, and the "never pay for a job" message is well established. Our scam screening is therefore a genuine safety feature, not a differentiator gimmick.
+- **Defamation and reputation risk:** flagging a *named employer* as fraudulent is a serious claim. Mitigate by (a) flagging the *posting* not the company where possible, (b) publishing the named evidence, (c) giving a correction/appeal path, (d) requiring high confidence before any public display.
+- **Consumer protection:** no fake urgency, no invented "12 people applied", no paid placement disguised as relevance.
 
 ---
 
 ## 7. What this landscape tells us to build
 
-1. **Employer-direct first.** ATS + JSON-LD gives us the only records with full text, stable identity, and a real close signal.
-2. **Aggregators as a measuring stick.** Their coverage gap defines our roadmap; their duplication defines our quality bar.
-3. **ANOFM is a local superpower.** No global player will invest in parsing a Romanian public registry with COR codes and CIFs. We should.
-4. **Social is seasoning, not substrate.** The platforms are closing; the legal exposure is asymmetric; the signal is real but must be corroborated.
-5. **The moat is the boring middle:** board discovery, entity resolution, lifecycle tracking, geocoding, pay baselines. None of it demos well. All of it compounds.
+1. **Boards are the spine, not the enemy.** They already aggregate the market; our value is verification, dedupe, entry-level fit, and reachability.
+2. **Public sector is the differentiator nobody else will do.** PSC + 47 counties + newspaper adverts is unglamorous, document-heavy work with real volume.
+3. **ReliefWeb is a free, high-quality gift.** One API, one `appname`, dozens of well-paid Nairobi roles with deadlines.
+4. **Documents are the moat and the risk.** OCR + structured extraction is what separates us from a scraper.
+5. **Social is out of scope, and saying so is a feature.** WhatsApp and Facebook groups are where the informal market lives; they are also unverifiable and full of fraud.
+6. **The boring middle wins again:** identity, lifecycle, entry-fit, scam screening, geocoding, KES salary normalisation. None of it demos. All of it compounds.
+
+---
+
+## 8. Loose ends to verify in Phase 1
+
+| Unknown | Why it matters | How to resolve |
+|---|---|---|
+| BrighterMonday's actual terms on automated access | Determines crawl politeness and partnership strategy | Read ToS; email partnerships |
+| Whether any Kenyan board offers a partner API | Could replace months of adapter work | One meeting each with BrighterMonday and MyJobMag |
+| County board coverage: how many of the 47 publish machine-readable adverts | Determines whether P1 is 5 sources or 47 | Manual audit in week 2 |
+| Real duplication rate across KE sources | Global benchmarks (40–60%) may not hold at this volume | Measure on the 300-posting golden set |
+| Whether employers will confirm postings to us | A "verified by employer" badge would be category-defining | Test with 10 friendly employers |
+| Cost and latency of Kenyan hosting | Drives the s50 solution and unit economics | Get quotes from 2–3 providers |
+| Trademark availability of "Kazi-Kasi" | Brand risk given KaziChat/KaziKit/KaziNest | Kenya IP search before launch |

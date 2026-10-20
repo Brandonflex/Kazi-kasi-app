@@ -1,178 +1,214 @@
-# Kazi-Kasi — Executive Brief
+# Kazi-Kasi — Executive Brief (Kenya)
 
-**Status:** research draft v0.1 · 2026-10-20
+**Status:** research draft v0.2 · 2026-10-20 · supersedes v0.1 (Romania-first)
+**Market:** Kenya, Nairobi metro first
 **Scope of this round:** research and framing only. No product code yet.
-**Read this first, then:** [`01-source-landscape.md`](./01-source-landscape.md) → [`02-technical-blueprint.md`](./02-technical-blueprint.md) → [`03-refinement-session.md`](./03-refinement-session.md)
+
+**Read this first, then:** [`01-source-landscape.md`](./01-source-landscape.md) → [`02-technical-blueprint.md`](./02-technical-blueprint.md) → [`03-refinement-session.md`](./03-refinement-session.md) → [`04-expansion-path.md`](./04-expansion-path.md) → [`05-evidence-log.md`](./05-evidence-log.md)
 
 ---
 
-## 1. The problem, said plainly
+## 1. The correction that changes the thesis
 
-A job seeker in Bucharest does not have a "not enough jobs" problem. They have four other problems:
+v0.1 assumed Romania. It was wrong, and the error was structural, not cosmetic: it assumed a market with dense employer ATS adoption, GDPR as the governing law, and a large advertised formal job market.
 
-1. **Fragmentation.** The same role lives on eJobs, BestJobs, Hipo, ANOFM, LinkedIn, the employer's own careers page, and a recruiter's repost — six versions, three of them stale.
-2. **Distance that lies.** A posting says "București". That can mean Pipera at 08:15, or Militari at 06:00, or a fully remote role tagged with the HQ city. "Nearby" is not the same as "reachable from my life".
-3. **Staleness and ghosts.** Boards re-date postings, roles get filled and left up, aggregators keep expired copies. A large share of any raw feed is not a real opening. Industry estimates put ghost/filled-but-listed postings in the 15–22% range, and cross-source duplication in the 40–60% range once you merge boards.
-4. **No explanation.** Existing tools give a score with no reason, or a list with no prioritisation. The user cannot tell *why* something is a fit, or whether it is worth an hour of their evening.
+Kenya is the opposite on all three counts — and that is an advantage, not a problem.
 
-**Kazi-Kasi's job is to collapse all four into one quiet, trustworthy answer: what is actually open, actually reachable, and actually worth applying to — today, near me.**
+| Assumption | Mature market (EU) | Kenya |
+|---|---|---|
+| Advertised formal vacancies at any moment | Hundreds of thousands | **~1,000–8,000** across every board combined |
+| Employer ATS adoption | High (Greenhouse, Lever, Workday) | Low; most hire via boards, email, PDFs, and walk-ins |
+| Governing privacy law | GDPR | **Data Protection Act 2019** (ODPC) — GDPR-shaped, lighter enforcement, one hard localisation rule |
+| Where the labour market actually is | Mostly formal | **83.8% informal** (18.1M of 21.6M) |
+| Distribution channel | Web + email | **WhatsApp**, mobile-first, data-constrained |
+
+**The strategic unlock is in row one.** BrighterMonday — Kenya's largest generalist board — was showing ~1,104 live vacancies for the entire country on the day this was written, 695 of them in Nairobi. That is not a market you need to sample. It is a market you can **enumerate, verify, and become the definitive record of.**
+
+Every global competitor optimises for *coverage at scale*. In Kenya the winning move is the opposite: **completeness at small scale, with proof.** That is a moat a small team can actually build, and it is worth more than an 8-million-row index nobody can trust.
 
 ---
 
-## 2. The one idea
+## 2. The problem, said plainly
 
-> **Kazi-Kasi is a geo-anchored hiring radar.** It continuously watches the hiring internet, resolves every posting into one live, deduplicated, provenance-tracked job graph, and tells a single person — in their own language and their own travel reality — which roles are real, reachable, and worth their time.
+A 24-year-old graduate in Nairobi does not have a "not enough job listings" problem. The listings are findable. They have five other problems:
 
-Three commitments define the product. Everything else is negotiable.
+1. **The market is invisible and small.** ~1 million young people enter the labour market each year; the modern sector added roughly 105,000 jobs in 2025. The formal advertised market is a few thousand roles at a time — and it is scattered across BrighterMonday, Fuzu, MyJobMag, PSC, 47 county public service boards, ReliefWeb, LinkedIn, and hundreds of employer pages.
+2. **Everyone applies to the same 40 roles.** Entry-level postings routinely draw 200–500 applications, and roughly 70% of "entry-level" adverts still demand experience. Being *early* beats being *better* — but nobody tells you what just appeared in the last hour.
+3. **Scams are endemic.** Fake vacancies that ask for "registration fees", "interview fees", or send applicants to WhatsApp numbers are a known public-safety problem. A listings product that does not screen for this is actively unsafe.
+4. **Distance is a real constraint, and nobody models it.** Nairobi's commute is the defining daily cost. A job in Karen and a job in Ruiru are both "Nairobi". Matatu routes, transfer count, fare, and time-of-day matter more than kilometres.
+5. **Nothing is verified.** Boards re-date postings. Roles get filled and stay up. There is no "last confirmed open" stamp anywhere in the market.
+
+**Kazi-Kasi's job: become the verified, live, reachable answer — for one city, then one region.**
+
+---
+
+## 3. The one idea
+
+> **Kazi-Kasi is a geo-anchored hiring radar for Kenya.** It continuously watches every place a real job is advertised — boards, public service portals, NGO feeds, employer career pages, PDFs and notice images — resolves them into one live, deduplicated, provenance-tracked job graph, and tells one person which roles are real, reachable, safe to apply for, and worth their time.
+
+Three commitments, unchanged by the market pivot:
 
 | Commitment | What it means concretely | Why it is the moat |
 |---|---|---|
-| **Live, not listed** | Every job carries `first_seen`, `last_seen`, `closed_at`, `proof[]` and a ghost score with *named* criteria. We show our evidence. | Cheap to say, expensive to build. Requires continuous re-verification, per-source lifecycle logic, and entity resolution. This is plumbing, not prompt engineering — which is exactly why competitors skip it. |
-| **Reachable, not nearby** | Geo scope is travel time from the user's anchors (home, second anchor), by mode, at the hour that matters — not a radius in kilometres. | Nobody in the consumer space does this properly. The research on local labour markets is unambiguous: job attractiveness decays sharply with commute distance, and administrative boundaries badly mis-measure real labour markets. |
-| **Explained, not scored** | Every match shows its factors: skills overlap, pay vs. local median, commute minutes, freshness, seniority gap, language requirement. User can re-weight. | Explainability is now also a legal direction of travel (GDPR Art. 22 today; EU AI Act Art. 86 explanation rights for high-risk systems from Dec 2027). Building it in early is cheaper than retrofitting. |
+| **Complete, not aggregated** | We aim to hold *every* formal vacancy advertised in Nairobi, not a sample. We publish coverage: "we track 94% of the roles BrighterMonday lists, plus 1,200 that never reach it." | Completeness is only credible if you can prove it, and proof requires enumeration + dedupe. Neither global player will do this city-by-city in Africa. |
+| **Verified, not listed** | Every job carries `first_seen`, `last_seen`, `closed_at`, `proof[]`, a **scam flag with named evidence**, and a "last verified" stamp. | Boards re-date, roles die, and fraud is common. Verification is operationally expensive and therefore defensible. |
+| **Reachable, not nearby** | Commute is modelled as matatu + walking time from your anchors, with fare and transfer count — not a radius. | Digital Matatus published Nairobi's GTFS: 135 routes, ~2,500 stops, open and free. Almost nobody builds on it. This is a real, cheap differentiator. |
 
 ### The compressed thesis
 
-**Own one metro end-to-end before touching a second one.** Depth beats breadth. A verified, live, travel-time-aware graph of Bucharest is worth more than a thin global index of 8 million rows, because the thin index is exactly what already exists and is free.
-
-Expansion path: **Bucharest → Cluj-Napoca / Timișoara / Iași / Brașov → Romania → CEE (Bulgaria, Hungary, Serbia, Moldova)**. Each step reuses the pipeline; only source adapters and geo data change.
+**Own Nairobi end-to-end. Then let the same adapters carry you to Kampala and Dar es Salaam, because the same three boards operate there.**
 
 ---
 
-## 3. What the market already does
+## 4. Who we are building for (from the session)
 
-Four clusters. None of them occupy the position above.
+| Surface | User | Job to be done |
+|---|---|---|
+| **Feed** (primary) | Early-career white-collar: 0–3 years, IT/tech-adjacent, plus internships and industrial attachments | "Show me what just opened, that I can actually get to, that I actually qualify for, and that isn't a scam." |
+| **Radar** (secondary) | Passive watchers: employed, not applying, watching the market | "Tell me when a company I care about hires, when pay moves, and when something better appears — without making me search." |
 
-| Cluster | Examples | Strength | Structural gap |
+These share one engine. The difference is cadence and framing: the Feed pushes *urgency*, Radar pushes *intelligence*. Radar is also the retention product for the 40+ weeks a person is not actively applying — which is most of their life.
+
+**Deliberately not the first user:** blue-collar informal work, senior/executive, and recruiter-side sourcing. All three are real markets; none is the wedge.
+
+---
+
+## 5. What the market already does
+
+| Cluster | Players (Kenya) | Strength | Gap we exploit |
 |---|---|---|---|
-| **Legacy aggregators** | Indeed, LinkedIn, Jooble, Careerjet, Adzuna, Talent.com, eJobs, BestJobs, Hipo | Volume, SEO, employer relationships | Query-shaped access, snippets instead of records, no cross-source identity, no lifecycle, re-dated listings, no geography beyond a string |
-| **Public employment** | ANOFM (RO), EURES (EU) | Legally authoritative in Romania — employers must register vacancies; COR codes; salary in RON; contact details | Poor UX, no dedupe, no reachability, no matching |
-| **AI-native job search** | HiringCafe, Jobright, Simplify, Teal, Welcome to the Jungle (Otta), LoopCV, LazyApply | Real-time indexing, match scoring, autofill, tailoring, ghost-job filtering | Almost entirely US-first; matching is resume-similarity; geo is a filter, not a model; sourcing sits in a ToS grey zone; the product ends at "apply faster", not "choose better" |
-| **B2B labour-market data** | Lightcast, LinkUp, JobsPikr, Coresignal, Revelio | Clean feeds, APIs, enterprise buyers | Sold to companies and analysts; the individual worker is not the customer; no personal travel reality |
+| **General boards** | BrighterMonday (~1,100 live, 40k employers, 800k seekers, ~1,600 placements/month), Fuzu (~3M talent pool, 7.5M lifetime users) | Brand, employer relationships, application flow | Re-dated listings, no verification, no commute model, weak entry-level fit signal |
+| **Aggregators** | MyJobMag (largest traffic: ~756k visits/mo), JobWeb Kenya, Careerjet KE (~94k) | Volume, SEO, government/NGO coverage | Duplication, deadline-only lifecycle, no quality signal, PDF/notice dumps |
+| **Public sector** | PSC (`psckjobs.go.ke`, MyGov adverts), TSC, 47 county public service boards, Ajira Digital | Authoritative, free, high volume in bursts | Fragmented across dozens of portals; often published as scanned adverts; no alerts, no dedupe |
+| **NGO / development** | ReliefWeb (free API), Devex (paid), UN careers, Impactpool | Structured, deadline-bearing, Nairobi is a global hub | None of them aggregate with private-sector roles; no local commute context |
+| **AI-native (emerging)** | SwiftKazi, KaziChat, KaziKit, KaziNest | Already pitching "AI job search Kenya" | Mostly thin wrappers over scraped boards; no verification, no geography, no scam screening |
+| **HR tech** | Fuzu (pivoting to AI data operations via Fuzu Atlas), corporate ATS suites | Enterprise relationships | Fuzu's attention is moving away from the job board — a window is open |
 
-### The two competitors worth studying closely
+**Two conclusions.**
 
-- **HiringCafe** — the closest analogue to our indexing ambition: it bypasses aggregators and indexes employer career pages directly, claims ~5.7M live roles, raised $6.8M, and markets itself explicitly against ghost jobs. Its weakness is our opening: it is a US-centric search engine, not a geo-reasoning companion.
-- **Jobright** — the closest analogue to our matching ambition: ~8M listings, ~400K added daily, match scoring plus tailoring plus referral discovery. Its weakness: US-only coverage, no local pay/commute realism, and the value proposition collapses into "apply more".
+1. **The "AI job search" label is already taken locally, and cheaply.** SwiftKazi and KaziChat already claim it. Competing on "AI matching" is a losing framing in this market — it invites direct comparison to thin wrappers. Competing on **verified completeness and safety** is not.
+2. **Fuzu's pivot is a strategic opening.** It raised $3.86M, has 7.5M lifetime users and a 3M talent pool, and is now repositioning around AI data operations for global clients. That is a large incumbent turning its attention elsewhere. The entry-level segment is the one it will service least well.
 
-**Conclusion: the differentiation is not "AI job matching" — that is now table stakes. The differentiation is a verifiable, geo-grounded data layer and a product that optimises for *fewer, better, provably-live* roles.**
+### Brand note (act on this early)
+
+There are at least four Kenyan products using the "Kazi" prefix: **KaziChat, KaziKit, KaziNest, SwiftKazi**. "Kazi-Kasi" is distinctive in combination and the Swahili meaning (work + speed/rate) is strong — but before printing anything, run a trademark and domain check in Kenya. See D12.
 
 ---
 
-## 4. What we can actually ingest (summary)
+## 6. What we can actually ingest (summary)
 
-Full detail and feasibility scoring in [`01-source-landscape.md`](./01-source-landscape.md).
+Full detail in [`01-source-landscape.md`](./01-source-landscape.md). The important structural difference from a mature market: **there is no ATS spine here.** The spine is boards + public portals + documents.
 
 | Lane | Best sources | Access | Quality | Verdict |
 |---|---|---|---|---|
-| **ATS public boards** | Greenhouse, Lever, Ashby, Workday (CXS), SmartRecruiters, Workable, Recruitee, Personio | Free, no auth, JSON | Highest: full descriptions, structured pay, stable IDs, real close events | **Build first.** This is the spine. |
-| **Structured web** | Any page publishing `schema.org/JobPosting` JSON-LD (~100K–1M domains) | Free, polite crawl | High; survives redesigns; includes employer-direct URLs | **Build second.** Covers the long tail of career pages. |
-| **Aggregator APIs** | Adzuna, Jooble, JSearch, JobsPipe-class vendors | Free tiers / cheap | Medium: snippets, duplicates, weak lifecycle | **Borrow, don't depend.** Use for coverage gaps and benchmarking. |
-| **Romanian public + local** | ANOFM/mediere (mandatory vacancy registry), eJobs, BestJobs, Hipo | Scrape / partner | High local relevance, COR codes, RON salaries | **Build, with legal care.** ANOFM is the authoritative RO baseline. |
-| **Social / informal** | Bluesky firehose, HN "Who is hiring", Telegram public channels; Reddit is closing | Free–cheap | Noisy, personal-data-heavy | **Signal lane only.** Never canonical until corroborated by an employer source. |
-| **News / editorial** | RSS, GDELT, local business press | Free | Context, not records | **Enrichment.** Hiring momentum, expansions, layoffs, funding. |
+| **Kenyan boards** | BrighterMonday, Fuzu, MyJobMag, JobWeb Kenya | HTML with JSON-LD on detail pages (BrighterMonday publishes `schema.org/JobPosting`); no public API | Medium-high; full descriptions on detail pages | **Build first.** This is the spine. |
+| **Public sector** | PSC/`psckjobs.go.ke`, MyGov adverts, 47 county boards, TSC, Ajira | HTML, PDF, scanned images | Authoritative but messy; bursty volume | **Build second.** High differentiation, high extraction cost. |
+| **NGO / development** | ReliefWeb API v2 (free, requires a pre-approved `appname`), UN careers, Devex (paid) | JSON API | High: structured, deadline-bearing | **Build second.** Nairobi is a humanitarian hub. |
+| **Employer direct** | ~300 target employer career pages and `schema.org/JobPosting` pages | HTML / JSON-LD | Highest where present | **Build third.** Small volume, best quality. |
+| **Aggregator APIs** | Adzuna (no KE coverage), Jooble, JSearch | Free tiers / cheap | Low local relevance | **Skip in v1.** Global aggregators barely cover Kenya. |
+| **Social / informal** | WhatsApp groups, Telegram, X, Facebook groups, LinkedIn posts | Mostly ToS-hostile or login-gated | High noise, high fraud, personal data | **Out of scope for v1.** Revisit as a *signal* lane with strict corroboration. |
+| **Editorial / news** | Business Daily, The Star, Techweez, Kenyan Wall Street, county notices | RSS / HTML | Context, not records | **Enrichment.** Hiring momentum, layoffs, expansions. |
 
-**The single most important engineering insight from the research:** the hard part is not fetching. It is **identity** — deciding that six observations are one job, that this job is closed, and that this employer is that company. Get that right and everything else is presentation.
-
----
-
-## 5. Legal posture (EU/Romania), in one page
-
-Full treatment in [`01-source-landscape.md` §6](./01-source-landscape.md).
-
-- **Public ≠ free to use.** Under GDPR, a public profile or post containing personal data is still personal data. The French CNIL fined KASPR €240,000 over LinkedIn-derived personal data and closed the injunction only after the database was erased and collection stopped. "It was public" is not a lawful basis.
-- **Logged-in scraping is the losing pattern.** *hiQ v. LinkedIn* won the CFAA argument and still lost on contract, paid $500K, and was enjoined and shut down. *Meta v. Bright Data* (2024) went the other way precisely because the collection was logged-out and public. Design rule: **no accounts, no credentials, no fake users, ever.**
-- **Terms of service still bind.** In the EU, *Ryanair v. PR Aviation* confirms contract terms can restrict extraction even where database rights do not apply. Respect `robots.txt`; prefer official/public JSON endpoints; identify the crawler; honour rate limits.
-- **The AI Act is not a 2027 problem.** Article 50 transparency has applied since 2 Aug 2026. The Annex III high-risk regime for recruitment (which includes *candidate ranking* and *targeted job advertising*) now applies from **2 Dec 2027** under Regulation (EU) 2026/1744. Profiling candidates is always high-risk; there is no narrow-task escape hatch for it. GDPR Art. 22 (no solely-automated significant decisions) applies **today**.
-- **Our design answers:** user is the controller of their own profile; consent + contract as bases; no recruiter-side sale of candidate data in v1; no automated rejection or outreach; full export/delete; DPIA before launch; visible "why am I seeing this"; human decides, always.
-
-This is not legal advice. Before public launch we need a Romanian/EU DPO review — budget for it explicitly.
+**The engineering reality nobody in this market handles well:** a large share of Kenyan vacancies are published as **PDFs, scanned newspaper adverts, or "apply by email before Friday" text**. So OCR + document parsing is a *day-one* requirement here, not an optimisation. That is also why the local wrappers are weak — it is hard, unglamorous work.
 
 ---
 
-## 6. What "constant update 24/7" should actually mean
+## 7. Legal posture (Kenya), in one page
 
-"Real time" is a cost decision, not a slogan. Proposed freshness contract, by source class:
+Full treatment in [`01` §6](./01-source-landscape.md).
 
-| Class | Examples | Re-check cadence | Why |
+- **Data Protection Act 2019** governs. It is GDPR-shaped: lawful basis, purpose limitation, data-subject rights, 72-hour breach notification, DPIA for high-risk processing.
+- **Registration with the ODPC is mandatory** above thresholds (turnover > KES 5M, > 10 employees, or an 18-sector list). Do it early — it is cheap and it is a credibility asset.
+- **Section 50 localisation is the hard constraint:** at least one *serving copy* of personal data must be stored on a server **in Kenya**. This drives hosting choice from day one.
+- **Penalties** reach KES 5M or 1% of turnover (whichever is lower) administratively, plus criminal exposure for unlawful disclosure. Smaller than GDPR, but the enforcement record is real — 357 determinations, 134 enforcement notices, 20 penalty notices by 2025.
+- **AI-specific law does not exist yet.** The National AI Strategy 2025–2030 is policy, not law. The AI Bill 2026 was rejected at Senate committee stage in October 2026. The DPA is the binding instrument today; the Bill will likely return.
+- **Public-sector portals are public documents, not personal data.** Scraping a PSC vacancy list is not the same risk category as scraping people. Keep that boundary absolute: **we index jobs and employers, never people.**
+
+Design consequences: no logged-in scraping, no CV harvesting, no candidate database, no WhatsApp scraping. A published privacy notice in English and Swahili. Export and delete. A DPIA before public launch.
+
+*Not legal advice. Get a Kenyan data-protection lawyer to review the notice and the DPIA before beta.*
+
+---
+
+## 8. What "constant update 24/7" means here
+
+| Class | Sources | Cadence | Why |
 |---|---|---|---|
-| **Hot** | ATS boards of target employers; user's saved/search companies | 10–30 min | Close events are the product. |
-| **Warm** | Long-tail ATS boards, ANOFM, major local boards | 1–6 h | Volume without urgency. |
-| **Cold** | JSON-LD career pages, niche boards | 24 h | Cheap discovery, slow drift. |
-| **Signal** | Bluesky, HN, news | streaming / 15 min | Early warning, not truth. |
+| **Hot** | BrighterMonday, Fuzu, MyJobMag first pages; user's saved employers | 10–20 min | Early application is the product. |
+| **Warm** | Full board sweeps, PSC, county boards, ReliefWeb | 1–4 h | Volume without urgency. |
+| **Cold** | Employer career pages, long-tail boards | 24 h | Cheap discovery. |
+| **Burst** | PSC / county mass recruitment, NGO deadline waves | event-driven | These arrive in hundreds at once; alerting must handle spikes. |
 
-Pair this with a **freshness SLO** (e.g. p95 time-to-detect-close < 2 h for hot sources, < 24 h for warm) and a public "last verified" stamp on every card. That stamp is the trust product.
-
----
-
-## 7. Non-goals for v1 (deliberate)
-
-We are not building, in the first release:
-
-- an **auto-apply bot** — legally messy, ethically poor, and it optimises the wrong metric;
-- a **resume factory** — commodity, and it pulls focus from the data layer;
-- a **recruiter CRM / candidate marketplace** — different buyer, different compliance surface, and it turns the user into inventory;
-- **global coverage** — thin global coverage is a solved, free commodity;
-- **a social scraper at scale** — the platforms are actively closing (Reddit's public API dies by March 2027; LinkedIn is off-limits), so a dependency there is a time bomb.
+Publish the actual freshness achieved per source. "Last verified 8 minutes ago" on a card is the trust product — and it is falsifiable, which is the point.
 
 ---
 
-## 8. What success looks like
+## 9. Non-goals for v1
 
-North star: **verified, reachable, relevant roles surfaced per active user per week** — with the user's own judgement as the check ("saved" or "applied"), not clicks.
-
-Leading indicators:
-- % of feed items still live at 7 days (target > 95% for hot sources)
-- duplicate rate in feed (target < 1%)
-- median "why this job" agreement rate in user interviews (target > 80%)
-- p95 commute estimate error vs. a manual routing check (target < 15%)
-- feed precision at position 10, human-labelled (target > 0.7)
-
-Guardrails:
-- ghost false-positive rate (flagging a real job as ghost) — must stay low; a false accusation is a trust event
-- adverse-impact ratio across gender/age proxies in ranking
-- source concentration (no single source > 35% of served roles)
+- **Indexing the informal economy.** 83.8% of Kenyan work is informal. It is also unverifiable, personal-data-heavy, WhatsApp-based, and not where our first user competes. We say this openly rather than pretending to cover it.
+- **Auto-apply.** Volume application is the pathology this market already suffers from; automating it makes the product part of the problem.
+- **A CV/resume builder.** Commodity, and it distracts from the data layer.
+- **Recruiter CRM or candidate marketplace.** Different buyer, and it turns the user into inventory.
+- **Global coverage.** Irrelevant here; global aggregators barely cover Kenya anyway.
+- **WhatsApp group scraping.** ToS-hostile, personal data, and a fraud vector.
 
 ---
 
-## 9. Risks, ranked
+## 10. What success looks like
+
+North star: **verified, reachable, relevant roles surfaced per active user per week**, validated by the user's own action (save, apply, or "I got an interview"), not clicks.
+
+| Metric | Target |
+|---|---|
+| Live-role coverage vs. BrighterMonday + MyJobMag union (Nairobi, entry-level) | ≥ 95% |
+| Duplicate rate in feed | < 1% |
+| Verified-live rate at 7 days | ≥ 92% |
+| Time-to-first-see for a new hot-source posting | p95 < 20 min |
+| Scam-flag precision (flagged roles that are genuinely fraudulent) | ≥ 95%, and a low false-positive rate |
+| "Why this job" agreement in user interviews | ≥ 80% |
+| W4 retention (beta) | ≥ 20% |
+
+Guardrails: false scam accusations are a trust event and a potential defamation exposure — always name the evidence and allow a correction path.
+
+---
+
+## 11. Risks, ranked
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| 1 | Identity/dedupe quality is worse than expected | High | High | Golden set of 500 hand-labelled postings before launch; measure precision/recall per source; human review queue for low-confidence merges |
-| 2 | Source access revoked or priced up | High | High | Adapter abstraction; never >35% concentration; community/public sources prioritised; no ToS-hostile collection |
-| 3 | GDPR/DPIA exposure from social sourcing | Medium | High | Signal lane corroboration rule; no personal profiles stored; DPO review before launch |
-| 4 | Cold-start: not enough local coverage to feel useful | Medium | High | Anchor the first release on ATS + ANOFM + one local board partnership; publish honest coverage stats |
-| 5 | LLM cost/latency on enrichment | Medium | Medium | Deterministic-first parsing; content-hash caching; cheap-model triage, expensive model only on ambiguity |
-| 6 | Ranking skew / discrimination | Medium | High | Exclude protected attributes; monitor adverse impact; explainability; no automated decisions |
-| 7 | Commute data unavailable (GTFS gaps in RO) | Medium | Medium | Start with drive/walk isochrones + straight-line damping; add transit per-city as data permits; label confidence |
-| 8 | Founders' attention spread across too many surfaces | High | Medium | One metro, one feed, one map, one metric |
+| 1 | Board access blocked or terms tightened | Medium | High | Adapter abstraction; polite crawling; pursue partnership with at least one board; never depend on a single source |
+| 2 | Document extraction (PDF/scan) quality too low | High | High | OCR + LLM extraction with confidence scores; human review queue; publish per-source quality |
+| 3 | Legal exposure from a false scam accusation | Medium | High | Evidence-only flags, no public naming of individuals, correction and appeal path, legal review |
+| 4 | Distribution: web app doesn't reach users | High | High | WhatsApp digest from week one; PWA; <1MB pages |
+| 5 | Data residency (s50) adds cost and complexity | High | Medium | Choose a Kenyan host for the primary store from the start; replicate outward, not inward |
+| 6 | Monetisation unclear (undecided) | High | Medium | Keep schema open for B2B; no employer-paid ranking in the feed, ever |
+| 7 | Incumbent response (BrighterMonday/Fuzu) | Low | Medium | They are optimising for employer revenue and AI data ops, not verification — move fast on the trust layer |
+| 8 | Brand collision with existing "Kazi\*" products | Medium | Medium | Trademark/domain check before launch (D12) |
+| 9 | Informal-market expectations ("where are the kazi za mtaa?") | High | Medium | Be explicit about scope; add a clearly-labelled informal signals lane later |
 
 ---
 
-## 10. Recommended 90-day shape
-
-Not a commitment — an input to the refinement session.
+## 12. Recommended 90-day shape
 
 | Phase | Weeks | Output |
 |---|---|---|
-| **0 — Decisions** | 1 | This brief argued through; the 12 decisions in [`03`](./03-refinement-session.md) locked |
-| **1 — Spine** | 2–5 | 5 ATS adapters + raw ELT store + canonical schema + golden set; ingesting ~5k live RO-relevant roles |
-| **2 — Identity** | 5–8 | Dedupe/ER with measured precision/recall; lifecycle state machine; freshness + ghost scoring |
-| **3 — Geography** | 8–10 | Geocoding, H3 indexing, isochrone cache, travel-time scope for Bucharest |
-| **4 — Feed** | 10–13 | Explainable matching, feed UI, "why this job", save/hide feedback loop; closed beta (50–100 users) |
-| **5 — Trust** | 13+ | Public freshness stats, DPIA, privacy notice, export/delete, source-health dashboard |
+| **0 — Decisions** | 1 | The twelve decisions in [`03`](./03-refinement-session.md) locked; ODPC registration started; host chosen |
+| **1 — Spine** | 2–4 | BrighterMonday + Fuzu + MyJobMag adapters, raw store, canonical schema, golden set of 300 postings |
+| **2 — Documents** | 4–6 | PDF/scan pipeline for PSC, county boards, and notice images; OCR + confidence scoring; human review queue |
+| **3 — Identity & trust** | 6–9 | Dedupe/ER with measured precision; lifecycle state machine; scam screening with named criteria |
+| **4 — Feed + WhatsApp** | 9–12 | Explainable matching, "why this job", WhatsApp digest, save/hide feedback, 50–100 user closed beta |
+| **5 — Geography** | 12–14 | Matatu GTFS routing, commute bands, fare estimates, "reachable by 8am" scope |
+
+Geography is deliberately late: routing on top of unverified job identity is wasted work. It is also the most visible differentiator once the base is solid.
 
 ---
 
-## 11. Open questions for the session
+## 13. Open questions
 
-These are not rhetorical. Each one changes the build:
+1. **Nairobi only, or Nairobi + Mombasa + Kisumu** in beta? My recommendation: Nairobi metro plus remote-first roles (the majority of entry-level tech roles are Nairobi-based or remote).
+2. **Board partnership or independent indexing?** A partnership with MyJobMag or BrighterMonday would accelerate coverage and reduce legal risk; it would also constrain the product. Worth one meeting each.
+3. **Is "early-career white-collar" narrow enough?** It spans IT, finance, admin, NGO programme support, and graduate schemes. My recommendation: start with IT/digital and graduate schemes, then widen.
+4. **What does Radar show in v1?** My recommendation: target-company hiring activity and pay movement only — not a second feed.
+5. **Free forever, or paid alerts?** Undecided. Keep it free through beta; instrument willingness to pay.
 
-1. Who is the user — the **active searcher** (urgency, applications), the **passive watcher** (curiosity, alerts), or the **career switcher** (long horizon)? The product shape differs substantially.
-2. Is the wedge **white-collar Bucharest**, **blue-collar/local** (where ANOFM and Telegram signals are strongest and competition is weakest), or **early-career** (where Hipo and internships dominate)?
-3. Is this **consumer-first** (free, grow, monetise later) or **B2B-first** (sell the data layer, consumer as demo)?
-4. How far do we go on **social signals** in v1 — none, or a single corroborated lane?
-5. Is "Kazi-Kasi" the brand we build on, and does the Romania-first hypothesis hold?
-
-My working answers are in [`03-refinement-session.md`](./03-refinement-session.md), with the reasoning for each. Disagree with them there, not in the abstract.
+My working answers, with reasoning, are in [`03-refinement-session.md`](./03-refinement-session.md).

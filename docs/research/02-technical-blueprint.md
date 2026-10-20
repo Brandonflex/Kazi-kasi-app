@@ -1,344 +1,395 @@
-# Technical Blueprint
+# Technical Blueprint (Kenya)
 
-**Companion to:** [`00-executive-brief.md`](./00-executive-brief.md) · research draft v0.1 · 2026-10-20
+**Companion to:** [`00-executive-brief.md`](./00-executive-brief.md) · draft v0.2 · 2026-10-20
 
-A design we can start building from, not a final architecture. Two principles run through everything:
+A design we can start building from. Three principles run through everything, and the third is new to this market:
 
-> **1. Raw first.** Every payload is stored exactly as received, before parsing. If a parser is wrong, we replay; we never re-crawl to recover.
-> **2. Deterministic before generative.** Regex, rules, and geography run before an LLM. Models are reserved for genuine ambiguity and for language-facing output.
+> **1. Raw first.** Every payload — HTML, PDF, JSON, image — is stored exactly as received before parsing. If a parser is wrong, we replay; we never re-crawl to recover.
+> **2. Deterministic before generative.** Regex, rules, layout parsing, and geography run before an LLM. Models handle genuine ambiguity and language-facing output only.
+> **3. Verify, don't trust.** A listing is a claim, not a fact. Every job carries evidence, a last-verified timestamp, and an explicit confidence.
 
 ---
 
 ## 1. System shape
 
 ```
-                        ┌──────────────────────────────────────────────┐
-                        │  SOURCE REGISTRY (adapters + policy + quota) │
-                        └───────────────┬──────────────────────────────┘
-                                        │
-   ATS APIs ──┐                  ┌──────▼───────┐
-   JSON-LD  ──┼──► FETCHER ────► │  RAW STORE   │  payload + hash + headers + policy decision
-   ANOFM    ──┤   (tiered      │  (object     │
-   Local    ──┤    scheduler)   │   storage)   │
-   Social   ──┤                  └──────┬───────┘
-   News     ──┘                         │
-                                 ┌──────▼───────┐
-                                 │  EXTRACTOR   │  per-provider parser → source record
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │ NORMALISER   │  currency, salary period, geo, occupation,
-                                 │              │  work mode, seniority, skills, language
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │  RESOLVER    │  dedupe + entity resolution (company, job)
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │  LIFECYCLE   │  state machine + freshness + ghost score
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │  ENRICHER    │  LLM: summaries, skills, ambiguity; news context
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │  INDEX       │  Postgres + pgvector → search index later
-                                 └──────┬───────┘
-                                 ┌──────▼───────┐
-                                 │  MATCHER     │  constraints → relevance → utility → explanation
-                                 └──────┬───────┘
-                                        │
-                                   API + WEB
+   BrighterMonday ─┐
+   Fuzu ───────────┤
+   MyJobMag ───────┤   ┌────────────┐   ┌────────────┐   ┌────────────┐
+   PSC / counties ─┼──►│  FETCHER   │──►│ RAW STORE  │──►│ EXTRACTOR  │
+   ReliefWeb API ──┤   │ (tiered,   │   │ (payload + │   │ HTML / JSON│
+   Employer pages ─┤   │  polite)   │   │  hash +    │   │ / PDF / OCR│
+   News / RSS ─────┘   └────────────┘   │  headers)  │   └─────┬──────┘
+                                        └────────────┘         │
+   ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────▼──────┐
+   │  MATCHER   │◄──│   INDEX    │◄──│  LIFECYCLE │◄──│  NORMALISER   │
+   │ constraints│   │ Postgres + │   │ + VERIFY + │   │ KES, county,  │
+   │ →relevance │   │ pgvector   │   │ SCAM SCREEN│   │ entry_fit, geo│
+   │ →utility    │   └────────────┘   └─────▲──────┘   └──────┬────────┘
+   └─────┬──────┘                             │                 │
+         │                            ┌───────┴──────┐   ┌──────▼──────┐
+         │                            │  RESOLVER    │◄──│  ENRICHER   │
+         │                            │ dedupe + ER  │   │ LLM, geocode│
+         │                            └──────────────┘   └─────────────┘
+         ▼
+   ┌──────────────────────────────────────────────────┐
+   │  API  →  Web (PWA)  +  WhatsApp digest  +  SMS   │
+   └──────────────────────────────────────────────────┘
 ```
 
-**Stack recommendation for v1** (boring on purpose):
+**Stack for v1** — boring, cheap, and operable by one or two people:
 
 | Layer | Choice | Why |
 |---|---|---|
-| Language | Python (ingestion, enrichment) + TypeScript (web) | Ecosystem for parsing/ML; TS for UI |
-| DB | PostgreSQL 16 + `pgvector` + PostGIS | One database for relational, vector, and spatial; fewer moving parts |
-| Queue/workflow | Temporal (or Arq/Redis as a lighter start) | Durable retries, long-running crawls, per-source rate limits |
-| Raw storage | S3-compatible bucket, content-addressed | Replay without re-crawl |
-| Search | Postgres FTS + trigram initially → OpenSearch/Typesense at ~1M rows | Don't buy a search cluster before you need it |
-| API | FastAPI | Typed, fast to build, good OpenAPI story |
-| Web | Next.js | SSR for SEO on job pages, good i18n (RO/EN) |
-| Cache | Redis | Hot feed pages, isochrone cache, rate limiting |
-
-Everything here is replaceable. The parts that are *not* replaceable are the schema, the resolver, and the source registry.
+| Language | Python (ingest, extract, enrich) + TypeScript (web) | Best parsing/OCR ecosystem; TS for UI |
+| DB | PostgreSQL 16 + `pgvector` + PostGIS | One database for relational, vector, spatial |
+| Queue | Redis + Arq (or Celery) | Simple, sufficient at this volume |
+| Raw store | S3-compatible, content-addressed, **hosted in Kenya** | Replay + DPA s.50 |
+| OCR | Tesseract (pidgin/eng) → PaddleOCR fallback | Free; PDF volume is the driver |
+| Search | Postgres FTS + trigram | Not enough volume to justify a search cluster |
+| API | FastAPI | Typed, fast, good OpenAPI |
+| Web | Next.js PWA, server-rendered, <1MB pages | Data cost is a real UX constraint |
+| Messaging | WhatsApp Business API (Meta) + Africa's Talking SMS fallback | How Kenya actually communicates |
+| Geo | OSRM (self-hosted) + Digital Matatus GTFS + H3 | Matatu routing is open and free |
 
 ---
 
 ## 2. Canonical data model
 
-Names are indicative; the *separation of concerns* is the point.
-
-### 2.1 Core entities
-
 ```sql
--- One observation from one source. Never mutated after write.
+-- One observation from one source. Immutable after write.
 job_source_record (
-  id                 uuid primary key,
-  source_id          text not null,          -- 'greenhouse', 'anofm', 'ejobs'
-  source_job_id      text not null,          -- provider's stable id
-  source_url         text not null,
-  fetched_at         timestamptz not null,
-  raw_payload_ref    text not null,          -- object storage key
-  raw_hash           text not null,          -- sha256 of payload; change detection
-  parsed             jsonb not null,         -- provider-specific parse
-  parser_version     text not null,
+  id               uuid primary key,
+  source_id        text not null,        -- 'brightermonday' | 'fuzu' | 'psc' | 'reliefweb'
+  source_job_id    text not null,        -- board id, PSC V/No, county ref
+  source_url       text not null,
+  fetched_at       timestamptz not null,
+  raw_ref          text not null,        -- object key
+  raw_hash         text not null,        -- sha256; change detection
+  content_type     text not null,        -- html | json | pdf | image
+  parser_version   text not null,
+  parsed           jsonb not null,
   unique (source_id, source_job_id)
 );
 
 -- The canonical job. Many source records → one job.
 job (
   id                 uuid primary key,
-  company_id         uuid references company(id),
+  employer_id        uuid references employer(id),
   title              text not null,
   title_normalized   text not null,
   description_md     text,
-  seniority          text,                   -- intern|junior|mid|senior|lead|principal|exec
-  employment_type    text,                   -- full_time|part_time|contract|internship|temporary
-  work_mode          text,                   -- onsite|hybrid|remote|unknown
-  work_mode_source   text,                   -- 'ats'|'jsonld'|'inferred'|'user_reported'
-  occupation_code    text,                   -- ISCO-08
-  cor_code           text,                   -- Romanian COR
+  description_source text,               -- 'html' | 'pdf_text' | 'ocr' | 'llm'
+  extraction_confidence numeric,
+
+  seniority          text,               -- intern | attachment | graduate | junior | mid | senior
+  entry_fit          text,               -- open_to_freshers | some_experience | experienced | unknown
+  entry_fit_evidence text,               -- the quoted phrase that decided it
+  employment_type    text,               -- full_time | part_time | contract | internship | attachment
+  work_mode          text,               -- onsite | hybrid | remote | unknown
+  work_mode_source   text,               -- 'posting' | 'inferred'
+
+  occupation_code    text,               -- ISCO-08
+  sector             text,
+
   first_seen_at      timestamptz not null,
   last_seen_at       timestamptz not null,
   date_posted_claimed date,
-  date_posted_effective date,                -- min(claimed, first_seen) — never trust the board
-  status             text not null,          -- see §5 state machine
+  date_posted_effective date,            -- earliest sighting anywhere
+  deadline           date,               -- Kenyan adverts almost always state one
+  status             text not null,
   closed_at          timestamptz,
-  closed_reason      text,                   -- expired|gone|removed|filled|unknown
-  ghost_level        text,                   -- null | possible | likely
-  ghost_criteria     text[],                 -- named evidence only, never an unexplained score
-  confidence         numeric,                -- merge confidence
+  closed_reason      text,                -- deadline_passed | gone | filled | withdrawn
+
+  scam_level         text,               -- null | suspicious | likely_scam
+  scam_flags         text[],             -- named evidence only
+  scam_checked_at    timestamptz,
+
+  merge_confidence   numeric,
   index_embedding    vector(1536)
 );
 
 job_location (
-  job_id             uuid,
-  h3_r9              text,                   -- ~0.1 km² cell
-  h3_r7              text,                   -- ~5 km² cell
-  city               text,
-  county             text,                   -- județ
-  siruta_code        text,
-  country            text,
-  lat                double precision,
-  lng                double precision,
+  job_id        uuid,
+  h3_r9         text,       -- ~0.1 km²
+  h3_r7         text,       -- ~5 km²
+  county        text,       -- e.g. 'Nairobi'
+  sub_county    text,       -- e.g. 'Westlands'
+  town          text,
+  lat           double precision,
+  lng           double precision,
   geocode_confidence numeric,
-  is_primary         boolean
+  is_primary    boolean
 );
 
-job_salary (
-  job_id             uuid,
-  min_amount         numeric,
-  max_amount         numeric,
-  currency           char(3),
-  period             text,                   -- hour|day|month|year
-  gross_net          text,                   -- gross|net|unknown
-  source             text,                   -- 'employer_stated'|'parsed'|'estimated'
-  confidence         numeric
+job_pay (
+  job_id      uuid,
+  min_amount  numeric,
+  max_amount  numeric,
+  currency    char(3) default 'KES',
+  period      text,        -- month | year | day | hour
+  gross_net   text,        -- gross | net | unknown
+  source      text,        -- 'stated' | 'parsed' | 'estimated_from_grade' | 'unknown'
+  confidence  numeric
 );
 
-job_provenance (                              -- shown in the UI; the trust artefact
-  job_id             uuid,
-  source_id          text,
-  source_url         text,
-  first_seen_at      timestamptz,
-  last_seen_at       timestamptz,
-  is_primary_source  boolean,
-  agrees_with        text[]                  -- other sources confirming the same role
+employer (
+  id            uuid primary key,
+  name          text,
+  name_norm     text,
+  domain        text,
+  county        text,
+  is_verified   boolean default false,   -- confirmed by us, not by the board
+  verified_at   timestamptz,
+  scam_history_count int default 0
+);
+
+job_provenance (            -- the artefact the UI renders
+  job_id        uuid,
+  source_id     text,
+  source_url    text,
+  first_seen_at timestamptz,
+  last_seen_at  timestamptz,
+  is_primary    boolean,
+  agrees_with   text[]
 );
 ```
 
-### 2.2 Why these specific fields
+### Why these specific fields exist
 
-- `date_posted_claimed` vs `date_posted_effective` — boards re-date postings to look fresh. We keep the claim and publish the *effective* date (earliest sighting anywhere). This single field is what makes "posted 2 days ago" honest.
-- `ghost_criteria[]` — never show a ghost flag without naming the reason. A false accusation is a trust-destroying event, and an unexplained score is not defensible under Art. 86.
-- `work_mode_source` — "remote" inferred from the word "remote" in a description is a different claim from an ATS `workplaceType` field. The user deserves to know which.
-- `job_provenance` — the UI can say "seen on 3 sources, last verified 14 minutes ago". That is the product.
+- **`date_posted_claimed` vs `date_posted_effective`** — boards re-date. We keep the claim, publish the earliest sighting anywhere.
+- **`deadline`** — a genuine local advantage: Kenyan adverts almost always state a closing date. It gives us a hard close signal that most sources in mature markets lack.
+- **`entry_fit` + `entry_fit_evidence`** — the single most useful derived field for this user. "Fresh graduates encouraged" and "minimum 3 years" are the difference between an hour of the user's evening and a wasted one. Always show the quoted evidence.
+- **`description_source`** — OCR text is not the same claim as clean HTML. The user deserves to know which.
+- **`scam_flags[]`** — never a score. Named criteria, always inspectable.
+- **`employer.is_verified`** — verified by *us*, not by a board's paid badge.
 
 ---
 
-## 3. Ingestion: the source registry
+## 3. Ingestion
 
-Every source is an adapter with a manifest, so policy and code live together.
+### 3.1 Source registry
+
+Each adapter carries its own manifest, so policy and code travel together:
 
 ```yaml
-id: greenhouse
+id: brightermonday
 enabled: true
-access: public_json           # public_json | jsonld_crawl | licensed_api | public_registry | signal
+access: public_html          # public_html | pdf | public_json_api | partner_api | signal
 requires_auth: false
-robots_reviewed_at: 2026-10-18
-terms_reviewed_at: 2026-10-18
-rate_limit: { requests: 60, per: minute }
-tier: hot                     # hot | warm | cold | signal
-cadence_minutes: 30
-supports: [full_description, structured_salary, stable_id, close_detection]
-discovery: { method: url_pattern, pattern: "boards\\.greenhouse\\.io/([^/]+)" }
+terms_reviewed_at: 2026-10-20
+rate_limit: { requests: 30, per: minute }
+tier: hot                    # hot | warm | cold | burst | signal
+cadence_minutes: 15
+supports: [full_description, deadline, jsonld_detail, stable_id]
+discovery: { method: listing_pages, max_depth: 40 }
 ```
 
-Benefits: a per-source kill switch, an auditable legal posture, per-source health and freshness metrics, and a coverage report ("we have 412 Romanian Greenhouse boards, 87 Lever, 23 Ashby").
+Gives us: a per-source kill switch, an auditable legal posture, per-source health and freshness, and a coverage number we can publish.
 
-### 3.1 Scheduling
+### 3.2 Scheduling
 
-- **Tiered polling** with jitter; never synchronous full-refresh across all sources.
-- **Budgeted concurrency** per source and globally; backpressure when downstream lags.
-- **Conditional requests** (`ETag`, `If-Modified-Since`) wherever supported.
-- **Circuit breaker** per source: 5 consecutive failures → exponential backoff → alert; a broken source must never stall the pipeline.
-- **Drift detection**: if a parser's field-fill rate for a required field drops by more than X% week-over-week, raise a schema-drift alarm. Silent nulls are how job datasets rot.
+- Tiered polling with jitter. Never one giant synchronous sweep.
+- Per-source budgets and global backpressure.
+- Conditional requests (`ETag`, `If-Modified-Since`) where supported.
+- Circuit breaker per source: 5 consecutive failures → exponential backoff → alert.
+- **Burst handling** for PSC and county drives: hundreds of adverts can appear in an hour. These go to a separate queue so they cannot starve the hot lane.
+- **Schema-drift alarm:** if a required field's fill rate drops more than X% week-over-week, raise it. Silent nulls are how job datasets rot.
 
-### 3.2 Change detection
+### 3.3 Change detection
 
-Hash the normalised parsed record, not the raw bytes (HTML whitespace and tracking params churn constantly). Only changed records proceed to enrichment. Typically 90%+ of a re-poll is unchanged; without this, LLM costs explode.
+Hash the normalised parsed record, not raw bytes — HTML whitespace and tracking parameters churn constantly. Typically >90% of a re-poll is unchanged; without this, OCR and LLM costs explode.
+
+### 3.4 Document pipeline (the hard part)
+
+```
+PDF ──► text layer? ──yes──► layout parse ──► structured blocks
+          │
+          no
+          ▼
+       render to image ──► OCR (Tesseract) ──► confidence per block
+          │
+          ▼
+   LLM structured extraction (schema-constrained, quote-grounded)
+          │
+          ▼
+   confidence < 0.75 ──► human review queue
+```
+
+Rules:
+- The LLM may only output fields present in the text. Missing → `null`. **No guessing.**
+- Every extracted field keeps its source span, so a human can audit it in one click.
+- PSC/county adverts usually contain *many* posts in one document — this is **one document → N jobs**, not one job per URL. Model it explicitly: a `document` entity with a `post[]` array.
+- Cache by `raw_hash`; a re-parse must be free.
+
+### 3.5 ReliefWeb adapter
+
+- API v2, free, but requires a **pre-approved `appname`**; without one you get 403/410. Apply early — it is a single form, but it is a gate.
+- Filter by country = Kenya; respect their requested attribution and rate norms.
 
 ---
 
 ## 4. Entity resolution
 
-The hardest and most valuable component. Research benchmarks suggest **40–60% duplication in multi-source job data**, and that naive similarity retrieval alone is insufficient — one study found only ~40% of retrieved near-duplicate pairs were true duplicates, which is why an LLM adjudication stage materially improves precision (reported F1 ~95% for GPT-4o-class models, ~92.6% for a small efficient model, on 50k postings).
+Kenyan boards duplicate each other aggressively: MyJobMag republishes BrighterMonday, county adverts get copied to aggregators, and one PSC drive can produce 20 near-identical "Office Administrative Assistant II" postings that are genuinely *different* posts.
 
 ### 4.1 Two-stage matching
 
-**Stage 1 — deterministic keys (cheap, high precision).** In order:
-1. `(source_id, source_job_id)` — never merge two different records from the same source.
-2. **Canonical apply URL** — extract ATS requisition ID from `boards.greenhouse.io/{co}/jobs/{id}`, `jobs.lever.co/{co}/{uuid}`, `jobs.ashbyhq.com/{co}/{uuid}`, Workday `externalPath`. *This is the single strongest signal in practice* — the same requisition across boards carries the same ATS id.
-3. `(company_id, normalized_title, primary_city)` exact triple.
+**Stage 1 — deterministic (cheap, high precision).**
+1. `(source_id, source_job_id)` — never merge two records from the same source.
+2. **Canonical apply target** — the email address, portal URL, or reference number (`V/No`, county ref) is the strongest cross-source key in this market. Two adverts pointing at `recruitment@sameemployer.co.ke` with the same reference are the same job.
+3. `(employer_id, normalized_title, county, deadline)` exact triple.
 
-**Stage 2 — probabilistic merge (only for what stage 1 missed).**
-- **Blocking** to avoid O(n²): same `company_id` (or fuzzy company) AND same `h3_r7` (or both remote) AND posting window within ±45 days.
-- **Signals, weighted:**
-  - title token overlap (Jaccard on normalised tokens, seniority tokens preserved),
-  - description 5-word shingle overlap (a threshold around 0.85 is used in practitioner systems),
-  - salary range equality/overlap,
-  - same `date_posted` window,
-  - embedding cosine similarity of title+first 1,000 chars.
-- **Decision bands:** ≥ 0.95 auto-merge · 0.80–0.95 → LLM adjudication · 0.60–0.80 → human review queue · < 0.60 distinct.
-- **Hard conflicts override similarity:** different employment type, incompatible seniority (intern vs. director), different city with both on-site, different salary currency/period with disjoint ranges → never merge.
+**Stage 2 — probabilistic (only what stage 1 missed).**
+- **Blocking:** same employer (or fuzzy employer) AND same county AND deadline within ±14 days.
+- **Signals:** title token Jaccard, description 5-word shingle overlap, identical deadline, identical salary band, embedding cosine.
+- **Bands:** ≥ 0.95 auto-merge · 0.80–0.95 LLM adjudication · 0.60–0.80 human review · < 0.60 distinct.
+- **Hard conflicts override:** different reference numbers, different counties with both on-site, different employers, different deadlines >14 days apart.
 
-**Never destructive.** A merge creates a `job_cluster` link and a canonical pointer. Source records stay. Un-merging must be a one-line operation, because it will be needed.
+**Critical Kenyan exception:** multiple identical job titles in one public-sector advert are **separate posts**, not duplicates. If they share a document and reference series but have distinct post numbers, they stay separate and are linked as a `post_group`.
 
-### 4.2 Company resolution
+**Never destructive.** Merges create links; source records survive; un-merging is one operation.
 
-Company identity is a prerequisite for dedupe and for employer context. Signals, in order of precision:
-1. Romanian CIF / tax code (ANOFM supplies it) — near-exact.
-2. Employer domain from `hiringOrganization.sameAs` or the apply URL — high precision.
-3. ATS tenant token (`greenhouse:stripe`) — high precision.
-4. Normalised legal name with suffixes stripped (SRL, SA, S.A., S.R.L., GmbH, Ltd) + fuzzy match at ratio ≥ 0.92 and length ≥ 4.
+### 4.2 Employer resolution
+
+Order of precision:
+1. Employer domain from the apply URL or careers page.
+2. Exact registered name (once we have a company registry match; note: Kenyan names often include "Kenya", "Ltd", "PLC", "Sacco", "County Government of…").
+3. Normalised name + county + sector.
+4. Fuzzy at ratio ≥ 0.92, length ≥ 4.
 5. Human review for the remainder.
 
-Reported benchmarks put hybrid matching (fuzzy + URL + ML) at ~90–95% accuracy with false merges under 1%. That is the target; it must be *measured*, not assumed.
+Target: ≥ 93% accuracy, < 1% false merges — **measured on a labelled set, not assumed.**
 
 ### 4.3 Evaluation before launch
 
-Build a **golden set of 500 postings** spanning sources and languages, hand-labelled:
-- 150 known-duplicate pairs, 150 known-distinct near-miss pairs (same company, different role; same title, different city).
-- 100 postings with hand-verified close dates.
-- 100 with hand-verified salary normalisation.
+Golden set of **300 postings**:
+- 100 known-duplicate pairs (cross-board republication),
+- 50 known-distinct near-misses (same title, different county or post number),
+- 75 public-sector documents with hand-verified extracted fields (including at least 25 OCR-only),
+- 75 with hand-verified salary or `entry_fit`.
 
-Report per-batch: pairwise precision/recall, cluster purity, company-match accuracy, salary field F1. No resolver change ships without the golden set.
+No resolver or extractor change ships without re-running it.
 
 ---
 
-## 5. Lifecycle and freshness
+## 5. Lifecycle, verification and scam screening
+
+### 5.1 State machine
 
 ```
-discovered ──► verified ──► open ──► suspect_closed ──► closed ──► archived
-                   │           │             │
-                   │           └── reopened ─┘
-                   └── invalid (spam/404 on first fetch)
+discovered ──► extracted ──► verified ──► open ──► suspect_closed ──► closed ──► archived
+                    │                        │            │
+                    └── needs_review         └── reopened ┘
 ```
 
-**Transitions**
-| From → To | Trigger |
+| Transition | Trigger |
 |---|---|
-| discovered → verified | ≥1 authoritative fetch (ATS/JSON-LD/registry) with required fields present |
-| verified → open | published and not expired |
-| open → suspect_closed | absent from a full board fetch, or `validThrough` passed, or 2 consecutive 404/410s, or soft-404 detected |
-| suspect_closed → closed | confirmed on a second check or after N hours |
-| closed → open | re-appears with the same identity (counts as a *repost*, not a new job) |
+| discovered → extracted | parse succeeded above confidence threshold |
+| extracted → verified | ≥1 authoritative fetch with required fields present |
+| verified → open | published, deadline not passed |
+| open → suspect_closed | gone from a full source sweep, or deadline passed, or 2× 404 |
+| suspect_closed → closed | confirmed on a second check, or deadline passed |
+| closed → open | reappears with same identity (counts as a *repost*) |
 
-**Freshness fields surfaced to users:** `first_seen`, `last_seen`, `verified_at`, `source_count`, `repost_count`.
+**Deadlines make this much stronger than in mature markets.** A job with a stated closing date can be closed deterministically, and a job that survives its deadline without being reposted is strong evidence of a ghost.
 
-**Ghost scoring — evidence, not vibes.** Each criterion is a named boolean:
+### 5.2 Freshness surfaced to users
+
+`first_seen` · `last_seen` · `verified_at` · `deadline` · `source_count` · `repost_count`
+
+Displayed as plain language: **"Seen on 3 sites · last checked 8 min ago · closes Friday."**
+
+### 5.3 Scam screening (a safety feature, not a growth hack)
+
+Named criteria, each a boolean with evidence:
 
 | Criterion | Definition |
 |---|---|
-| `evergreen` | Open continuously > 90 days across re-checks |
-| `ats_absent` | Gone from the employer's own board but still live on an aggregator |
-| `re_dated` | `date_posted_claimed` moved forward by > 14 days while `first_seen` stayed put |
-| `mass_posting` | Same requisition replicated across > 5 locations simultaneously |
-| `no_apply_path` | No working application URL |
-| `repost_loop` | Same identity closed and reopened ≥ 3 times |
+| `fee_requested` | Text asks for payment: "registration", "processing", "interview", "training" fee |
+| `personal_number_only` | Application contact is a personal mobile number, no employer domain |
+| `no_employer_identity` | No registered name, no domain, no physical address |
+| `domain_mismatch` | Apply email domain does not match the named employer |
+| `template_match` | Matches a known scam template (e.g. "Send KES 500 to confirm your slot") |
+| `whatsapp_only` | Application is solely via a WhatsApp link with no employer presence |
+| `copy_of_known_scam` | Duplicate of a previously confirmed fraudulent posting |
+| `no_interview_process` | "Immediate start, no interview" combined with a fee |
 
-Display `ghost_level` only when ≥1 criterion holds, and always list the criteria. Never show a percentage.
+**Rules:**
+- Display `likely_scam` only at ≥ 2 independent criteria, or on any `fee_requested`.
+- Always show the criteria and the quoted text.
+- Flag the **posting**, not the person; avoid naming individuals.
+- Provide a correction/appeal path and a visible "report this job" action.
+- Track precision monthly. A false accusation is a trust and legal event.
 
 ---
 
-## 6. Geography: from "near me" to "reachable from my life"
+## 6. Geography: reachability in Nairobi
 
-### 6.1 The model
+### 6.1 Why this matters more here than almost anywhere
 
-A user does not have a location. They have **anchors** and **constraints**:
+Nairobi's commute is the defining daily cost for the user. Distance is a poor proxy: 6 km in traffic can be 50 minutes, and a matatu route with two transfers can be cheaper but slower than one direct route. "Nairobi" as a location string is almost meaningless — Westlands, Karen, Ruiru, and Kitengela are different lives.
+
+### 6.2 The model
 
 ```
-anchor:   home | second_anchor (partner's work, school, family)
-modes:    walk | transit | car | bike
-budget:   max_minutes per mode, and arrival window (e.g. "in office by 09:15")
-tolerance: days per week on-site (0 for fully remote)
+anchor:   home | campus | second_anchor
+modes:    matatu+walk (primary) | boda | car | walk
+budget:   max_minutes, arrival window ("in office by 08:30")
+fare:     max_kes_per_day (a real constraint for entry-level workers)
 ```
 
-**Reachability** for a job = does any of its locations fall inside the user's travel-time polygon for an accepted mode, on a representative weekday?
+**Reachability** = is the job inside the user's travel-time polygon for an accepted mode and fare budget, for a representative weekday peak?
 
-### 6.2 Implementation
+### 6.3 Implementation
 
-1. **Geocode** every job location. Normalise Romanian address noise ("Sector 2", "Șos.", "Bd.", diacritics, missing numbers). Keep `geocode_confidence`; if < threshold, fall back to city centroid and *label it*.
-2. **Index** with H3: `h3_r9` for precision, `h3_r7` for fast joins and market analytics.
-3. **Precompute isochrones** per H3 cell per mode per time band (AM peak, PM peak, off-peak). Cache aggressively — there are only so many cells in a metro, and they don't change intraday.
-4. **Query**: `jobs JOIN reachable_cells(user) ON h3_r7`, then refine with exact travel time for the top N results.
-5. **Fallback ladder** when routing data is missing: transit → car isochrone → straight-line with distance decay. Always expose a `commute_confidence` label.
-6. **Remote handling**: a remote job has no commute, but it does have a *time-zone and jurisdiction* constraint. Model `remote_scope` (worldwide / EU / RO / city) and `timezone_overlap_hours`.
+1. **Geocode** every job. Normalise Kenyan address noise: "off Thika Road", "Opp. Yaya Centre", "P.O. Box", estate names, missing street numbers. Keep `geocode_confidence`; if low, fall back to sub-county centroid and **label it**.
+2. **Index** with H3 (r9 ≈ 0.1 km², r7 ≈ 5 km²).
+3. **Transit data:** Digital Matatus GTFS — 135 routes, ~2,500 stops, open and free, in Google Maps since 2015, updated in 2019 with frequency estimates. Load into OpenTripPlanner or a GTFS-aware router.
+4. **Precompute** isochrones per H3 cell per mode per time band (AM peak, PM peak, off-peak, Saturday). Cache aggressively.
+5. **Query:** join jobs to reachable cells, then refine the top N with exact routing.
+6. **Fallback ladder:** matatu GTFS → OSRM drive/boda → straight-line with distance decay. Always expose `commute_confidence`.
+7. **Fare:** matatu fares fluctuate and are not in GTFS reliably. Store a per-route estimate table, refresh it from user reports, and label it an estimate.
 
-### 6.3 Why this is defensible
+### 6.4 The "geo scope" as a product object
 
-The empirical literature is consistent: job attractiveness decays sharply with commute distance (one UK estimate: ~4.5× less attractive at +5 km, roughly exponential at ~0.3/km), and administrative boundaries mis-measure real labour markets — travel times or commuting flows do better. Practitioners in staffing already rank candidates by commute burden rather than straight-line distance. No consumer job product does this well. It is a genuine product idea, not a feature.
+Let the user *draw* their scope, and save it:
 
-### 6.4 The "geo scope" as a first-class product object
+- **Commute** — "≤ 45 min and ≤ KES 150/day by matatu, Mon–Fri".
+- **Remote** — "anywhere in EAT ±1h".
+- **Relocate** — "Nakuru or Kisumu if pay ≥ +30% rent-adjusted".
+- **Watch** — "any employer within 3 km of home, even if not hiring" (Radar).
 
-Rather than a filter, let the user *draw* their scope:
-
-- **Commute scope** — "≤ 35 min door-to-door by transit, Tue–Thu".
-- **Relocation scope** — "Cluj, if pay ≥ +25% and rent-adjusted".
-- **Remote scope** — "EU time zones, ±2h".
-- **Watch scope** — "any employer within 3 km of home, even if not hiring yet" (signals lane).
-
-Save scopes, name them, switch between them. This is the differentiator made tangible.
+This is the differentiator made tangible, and it is cheap to build once the GTFS is loaded.
 
 ---
 
 ## 7. Matching and explanation
 
-Three layers, in order. Cheap and hard-constrained first.
+Three layers, cheapest first.
 
 **Layer 1 — constraints (boolean, explainable, no model).**
-Work authorisation, required language level (RO/EN), licence/certification, shift availability, minimum pay floor, on-site days tolerance, travel-time budget. Fail → excluded, with a stated reason ("requires C1 German", "on-site 5 days, your limit is 2").
+`entry_fit` vs. the user's experience, deadline not passed, commute within budget, language requirement (English/Kiswahili), licence/certification, work authorisation, minimum pay floor. Fail → excluded, with the reason shown: *"asks for 3 years' experience; you have 1"*.
 
 **Layer 2 — relevance (retrieval + model).**
-- Candidate representation: structured profile (roles, skills with years, domains, tools, languages, education) + a derived embedding.
-- Job representation: title + normalised skills + seniority + domain + description embedding.
-- Candidate generation: BM25/trigram over title+skills, plus pgvector ANN, plus a "same company, adjacent role" source.
-- Scoring: must-have skill coverage, nice-to-have overlap, seniority distance, domain adjacency, recency of the skill in the user's history.
-- **Hard rule:** never use protected attributes or their proxies (name, gender, age, nationality, photo, address beyond coarse geo). Audit for proxy leakage — postal code is a well-known ethnicity proxy.
+- Candidate representation: structured profile (roles, skills with months of use, tools, education, attachment history) + embedding.
+- Job representation: title + normalised skills + seniority + sector + description embedding.
+- Candidate generation: BM25/trigram over title+skills, pgvector ANN, plus "same employer, adjacent role".
+- Scoring: must-have coverage, nice-to-have overlap, seniority distance, sector adjacency, recency of skill use.
 
 **Layer 3 — utility (the part everyone skips).**
-- **Pay vs. local baseline**: salary normalised to monthly gross RON, compared with the INS county × activity median. Show the percentile, not just the number.
-- **Rent-adjusted**: net pay minus median rent for a 1-bedroom in the job's city (source: INS / local listings — to be selected).
-- **Commute cost**: minutes and estimated monthly cost.
-- **Employer signal**: open roles, roles closed in the last 30 days, funding/expansion news, response signals if we ever have them.
+- **Pay vs. local baseline:** KES normalised to monthly gross, compared with the relevant reference (statutory minimum KES 16,113.75 for general labour; sector and grade bands where known; KNBS earnings series). Show the comparison, not just the number.
+- **Commute cost:** minutes, transfers, KES/day, and KES/month.
+- **Net take-home estimate:** if gross is stated, show approximate net after statutory deductions.
+- **Employer signal:** open roles, roles closed in the last 30 days, whether the employer is verified, scam history.
 
-**The explanation contract.** Every card can answer, in one sentence and three factors:
-> "Strong skills match (8 of 10 must-haves) · pay is 78th percentile for Cluj · 24 min by tram from your saved home · verified 11 minutes ago on the employer's own board."
+**The explanation contract.** Every card can answer in one sentence and three factors:
 
-If any factor is missing, say so. A blank is honest; a fabricated strength is not.
+> "Open to fresh graduates (posting says so) · 34 min by matatu, 1 transfer, ~KES 100/day · KES 45,000–55,000/month, above the sector median for this grade · checked 9 minutes ago, closes Friday."
 
-**Human-in-the-loop by design.** We rank and explain. The user decides. No auto-apply, no auto-reject, no automated outreach. This is both an ethical stance and the cleanest path through GDPR Art. 22 and the AI Act's high-risk regime.
+If a factor is missing, say so. A blank is honest; a fabricated strength is not.
+
+**Hard rules:** never use protected attributes or proxies (name, gender, ethnicity, religion, disability, exact address). Audit county/sub-county for proxy leakage. Never auto-reject, auto-apply, or auto-contact. The user decides.
 
 ---
 
@@ -346,15 +397,16 @@ If any factor is missing, say so. A blank is honest; a fabricated strength is no
 
 | Concern | Design |
 |---|---|
-| Uptime | Stateless API behind a load balancer; DB with PITR; object storage durable |
-| Freshness SLO | p95 close-detection < 2h (hot), < 24h (warm); publish actuals internally and, later, publicly |
-| Backpressure | Queue depth and consumer lag are first-class metrics; shed cold-tier work before hot-tier work |
-| Idempotency | Every write keyed on `(source_id, source_job_id, raw_hash)`; replays are free |
-| Dead letters | Per-source DLQ with a replay tool; nothing is silently dropped |
-| Source health | Per-source dashboard: last success, error rate, field-fill rates, parse drift |
-| Cost control | Per-source daily budget (requests + LLM tokens); hard caps with alerts |
-| Observability | Structured logs with `source_id` and `job_id`; traces across fetch → parse → resolve → index |
-| Secrets | No credentials in the repo; environment injection; rotate |
+| Uptime | Stateless API; Kenyan-hosted primary DB with PITR; object storage durable |
+| Freshness SLO | p95 new hot posting seen < 20 min; p95 close detection < 2h after deadline or removal |
+| Backpressure | Queue depth and lag are first-class metrics; shed cold-tier work before hot-tier |
+| Burst safety | Separate queue + rate budget for PSC/county drives |
+| Idempotency | Writes keyed on `(source_id, source_job_id, raw_hash)`; replays free |
+| Dead letters | Per-source DLQ with a replay tool; nothing silently dropped |
+| Source health | Last success, error rate, field-fill drift, OCR confidence distribution |
+| Cost control | Per-source daily budget for requests, OCR pages, and LLM tokens; hard caps with alerts |
+| Data residency | Primary store in Kenya (DPA s.50); document any cross-border replica |
+| Secrets | Environment injection only; never in the repo |
 
 ---
 
@@ -362,30 +414,32 @@ If any factor is missing, say so. A blank is honest; a fabricated strength is no
 
 | What | How | Target |
 |---|---|---|
-| Extraction quality | Golden set, field-level F1 vs. human labels | title/company/location ≥ 0.95; salary ≥ 0.85 |
-| Dedupe | Pairwise precision/recall on 300 labelled pairs | precision ≥ 0.97, recall ≥ 0.90 |
-| Company resolution | 200 labelled employer pairs | accuracy ≥ 0.93, false-merge rate < 1% |
-| Liveness | 100 postings with known fate | precision ≥ 0.95, recall ≥ 0.85 |
+| Extraction — HTML | 100 hand-labelled postings | title/employer/location F1 ≥ 0.95 |
+| Extraction — PDF/OCR | 75 documents incl. 25 OCR-only | field F1 ≥ 0.85; date F1 ≥ 0.90 |
+| Dedupe | 150 labelled pairs | precision ≥ 0.97, recall ≥ 0.90 |
+| Employer resolution | 150 labelled pairs | accuracy ≥ 0.93; false merges < 1% |
+| Liveness | 100 postings with known fate | precision ≥ 0.95 |
+| Scam screening | 100 labelled postings (30 known scams) | precision ≥ 0.95, recall ≥ 0.70 |
 | Geo | 50 addresses vs. manual routing | p95 error < 15% or < 5 min |
-| Ranking | NDCG@10 + user save/apply rate in beta | NDCG@10 ≥ 0.7; save rate improving week-over-week |
-| Fairness | Adverse-impact ratio by proxy groups | within 0.8–1.25 |
-| User trust | "Was this accurate?" thumbs on 200 cards | ≥ 85% positive |
+| Ranking | NDCG@10 + save/apply in beta | NDCG@10 ≥ 0.7 |
+| Fairness | adverse-impact ratio by county/sub-county proxy | 0.8–1.25 |
+| User trust | "Was this accurate?" on 200 cards | ≥ 85% positive |
 
-Two rules: **no metric is reported without its sample size**, and **no ranking change ships without an offline evaluation and a fairness check**.
+**Two rules:** no metric without its sample size; no ranking change without an offline evaluation and a fairness check.
 
 ---
 
-## 10. What to build first (spine, not surface)
+## 10. Build order (spine, not surface)
 
-1. `source_registry` table + 5 ATS adapters (Greenhouse, Lever, Ashby, Workday, SmartRecruiters).
-2. Raw store + content-addressed hashing + replay tooling.
+1. `source_registry` + 3 board adapters (BrighterMonday, Fuzu, MyJobMag) + ReliefWeb.
+2. Raw store, content hashing, replay tooling, Kenyan hosting.
 3. Canonical schema + migrations.
-4. Board discovery for Romanian employers (the seed list is the work).
-5. Golden set (500 postings) — *before* the resolver, not after.
-6. Resolver stage 1 (deterministic) → measure → stage 2.
-7. Lifecycle state machine + freshness/ghost criteria.
-8. Geocoding + H3 + one city's isochrones.
-9. Feeds API + a deliberately plain UI.
+4. Golden set (300 postings) — **before** the resolver.
+5. Resolver stage 1 → measure → stage 2.
+6. Document pipeline (PDF/OCR) for PSC + one county; human review queue.
+7. Lifecycle + deadlines + scam screening.
+8. Feed API + WhatsApp digest.
+9. Geocoding + H3 + matatu GTFS routing.
 10. Instrumentation for every metric in §9.
 
-Notice what is absent: no LLM in the critical path, no vector database, no microservices, no mobile app. Those are all later, and only if the numbers justify them.
+Absent by design: LLM in the critical path, vector database, microservices, mobile app, chat interface. All later, and only if the numbers justify them.
