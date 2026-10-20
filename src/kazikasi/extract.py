@@ -15,7 +15,6 @@ import re
 from datetime import date, timedelta
 from typing import Any
 
-from bs4 import BeautifulSoup
 
 from .models import JobPay
 
@@ -41,6 +40,28 @@ def clean_text(value: str | None) -> str:
     return value.strip()
 
 
+def parse_html(markup: str):
+    """Public entry point for adapters that need a soup. See `_soup`."""
+    return _soup(markup)
+
+
+def _soup(markup: str):
+    """Parse HTML, importing the parser only when there is HTML to parse.
+
+    `beautifulsoup4` is an ingestion dependency, not a serving one. Importing it
+    at module scope made the read-only web app un-importable without a parser —
+    which is exactly the kind of dependency that turns a small deploy into a
+    debugging session.
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ModuleNotFoundError as exc:  # pragma: no cover - depends on install
+        raise RuntimeError(
+            "parsing HTML needs beautifulsoup4: pip install beautifulsoup4"
+        ) from exc
+    return BeautifulSoup(markup, "html.parser")
+
+
 def html_to_text(markup: str | None) -> str:
     """HTML → text that keeps paragraph structure.
 
@@ -50,7 +71,7 @@ def html_to_text(markup: str | None) -> str:
     """
     if not markup:
         return ""
-    soup = BeautifulSoup(markup, "html.parser")
+    soup = _soup(markup)
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     for br in soup.find_all("br"):
@@ -593,7 +614,7 @@ def parse_location(value: str | None) -> tuple[str | None, str | None, str]:
 # schema.org JobPosting
 # --------------------------------------------------------------------------
 
-def _iter_jsonld_blocks(soup: BeautifulSoup) -> list[Any]:
+def _iter_jsonld_blocks(soup) -> list[Any]:
     blocks: list[Any] = []
     for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
         text = script.string or script.get_text()
@@ -644,7 +665,7 @@ def extract_jobpostings(html: str) -> list[dict]:
     Handles a single object, a top-level array, ``@graph``, and JobPostings
     nested inside ``itemListElement``. Never raises on malformed markup.
     """
-    soup = BeautifulSoup(html or "", "html.parser")
+    soup = _soup(html or "")
     found: list[dict] = []
     for block in _iter_jsonld_blocks(soup):
         found.extend(_flatten(block))

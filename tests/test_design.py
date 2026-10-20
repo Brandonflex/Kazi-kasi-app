@@ -180,5 +180,5 @@ class TestSurfaces:
 
         from kazikasi import serve
 
-        source = inspect.getsource(serve._Handler._send)
+        source = inspect.getsource(serve._Handler._respond)
         assert "X-Content-Type-Options" in source

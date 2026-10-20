@@ -271,14 +271,18 @@ CREATE INDEX IF NOT EXISTS idx_receipts_provider ON message_receipts (provider_i
 """
 
 
-def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
+def connect(path: str | Path = ":memory:", *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open a connection, enable foreign keys, and migrate.
 
     The caller owns the connection and should close it (or use it as a context
     manager). In-memory databases are per-connection: use ``tmp_path`` in tests
     when more than one connection is needed.
+
+    ``check_same_thread=False`` exists for one case: a serverless instance that
+    keeps a single in-memory database alive across requests. It is only safe
+    when the caller serialises access (see ``api/index.py``).
     """
-    conn = sqlite3.connect(str(path), detect_types=0)
+    conn = sqlite3.connect(str(path), detect_types=0, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     if str(path) != ":memory:":

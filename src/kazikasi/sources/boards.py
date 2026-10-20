@@ -17,7 +17,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from bs4 import BeautifulSoup
 
 from ..extract import (
     clean_text,
@@ -34,6 +33,7 @@ from ..extract import (
     html_to_text,
     jsonld_to_candidate_fields,
     parse_date,
+    parse_html,
     parse_location,
     parse_pay,
 )
@@ -51,7 +51,7 @@ class HtmlBoardAdapter(Adapter):
     description_selectors: tuple[str, ...] = ()
 
     def parse_listing(self, html: str, base_url: str) -> list[str]:
-        soup = BeautifulSoup(html, "html.parser")
+        soup = parse_html(html)
         links: list[str] = []
         for anchor in soup.select(f"a[href*='{self.detail_pattern}']"):
             href = anchor.get("href")
@@ -64,7 +64,7 @@ class HtmlBoardAdapter(Adapter):
                     links.append(self._absolute(href, base_url))
         return self._dedupe_links(links)
 
-    def _first_text(self, soup: BeautifulSoup, selectors: tuple[str, ...]) -> str | None:
+    def _first_text(self, soup, selectors: tuple[str, ...]) -> str | None:
         for selector in selectors:
             node = soup.select_one(selector)
             if node:
@@ -73,7 +73,7 @@ class HtmlBoardAdapter(Adapter):
                     return text
         return None
 
-    def _description(self, soup: BeautifulSoup) -> tuple[str, str]:
+    def _description(self, soup) -> tuple[str, str]:
         for selector in self.description_selectors:
             node = soup.select_one(selector)
             if node:
@@ -88,7 +88,7 @@ class HtmlBoardAdapter(Adapter):
         return "", "html"
 
     def parse_detail(self, html: str, url: str) -> JobCandidate:
-        soup = BeautifulSoup(html, "html.parser")
+        soup = parse_html(html)
         notes: list[str] = []
 
         jsonld = extract_jobpostings(html)

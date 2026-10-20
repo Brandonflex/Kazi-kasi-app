@@ -20,18 +20,20 @@ Routes:
 
 from __future__ import annotations
 
+import hmac as _hmac
 import html
 import json
 import os
 import sqlite3
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import hmac as _hmac
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import db, digest as digest_module, graph, metrics, outbox, ranking, slo, tracking, webhooks
+from .corpus import load_corpus
 from .profile import DEMO_PROFILES, list_profiles, seed_profiles
 
 ENTRY_FIT_LABEL = ranking.ENTRY_FIT_LABEL
@@ -676,222 +678,307 @@ class _RateLimiter:
         self.hits.clear()
 
 
+def demo_connection(*, thread_safe: bool = False, now: datetime | None = None) -> sqlite3.Connection:
+    """An in-memory database with the synthetic corpus and the demo profiles.
+
+    This is what a serverless deployment serves: no file to mount, no write to
+    a read-only filesystem, and nothing real to leak. State lives as long as the
+    instance does, which for a testing link is the right trade.
+    """
+    conn = db.connect(":memory:", check_same_thread=not thread_safe)
+    load_corpus(conn, now=now or datetime.now(timezone.utc))
+    seed_profiles(conn)
+    return conn
+
+
+# --------------------------------------------------------------------------
+# One router, two transports
+#
+# Everything below the HTTP layer is a pure function of (connection, method,
+# path, query, body). That is what lets the same app run behind the stdlib
+# server here and behind a serverless function on Vercel — and it is why the
+# two cannot drift apart.
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class Response:
+    status: int = 200
+    body: str = ""
+    content_type: str = "text/html; charset=utf-8"
+    headers: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def is_redirect(self) -> bool:
+        return self.status in (301, 302, 303, 307, 308)
+
+
+def _query_one(query: dict, key: str, default: str = "") -> str:
+    values = query.get(key) or [default]
+    return values[0] if values else default
+
+
+def handle(
+    conn: sqlite3.Connection,
+    method: str,
+    path: str,
+    query: dict,
+    *,
+    body: bytes = b"",
+    headers: dict | None = None,
+    demo: bool = False,
+    limiter: "_RateLimiter | None" = None,
+    client: str = "unknown",
+    now: datetime | None = None,
+) -> Response:
+    """The whole app, minus the socket.
+
+    ``headers`` keys are matched case-insensitively. ``body`` is the raw request
+    body, because a webhook signature is computed over bytes, not over a parsed
+    form.
+    """
+    now = now or datetime.now(timezone.utc)
+    header_map = {str(key).lower(): str(value) for key, value in (headers or {}).items()}
+    method = method.upper()
+
+    if method == "GET":
+        return _handle_get(conn, path, query, demo=demo, now=now)
+    if method != "POST":
+        return Response(405, "method not allowed", "text/plain; charset=utf-8")
+
+    # Consent and webhook endpoints change state; they are throttled.
+    throttled = ("/digest/subscribe", "/digest/unsubscribe", "/webhooks/whatsapp", "/webhooks/sms")
+    if path in throttled and limiter is not None and not limiter.allow(client):
+        return Response(429, "too many requests", "text/plain; charset=utf-8")
+
+    if path in ("/webhooks/whatsapp", "/webhooks/sms"):
+        return _handle_webhook(conn, path, query, body, header_map, demo=demo)
+    if path in ("/digest/subscribe", "/digest/unsubscribe"):
+        return _handle_consent(conn, path, body)
+    if path == "/action":
+        return _handle_action(conn, body, header_map)
+    return Response(404, "not found", "text/plain; charset=utf-8")
+
+
+def _handle_get(conn, path: str, query: dict, *, demo: bool, now: datetime) -> Response:
+    if path == "/healthz":
+        return Response(200, "ok", "text/plain; charset=utf-8")
+
+    if path == "/api/health":
+        summary = metrics.stats(conn, now=now)
+        return Response(
+            200,
+            json.dumps(
+                {
+                    "ok": True,
+                    "schema": db.SCHEMA_VERSION,
+                    "live_jobs": summary["live_jobs"],
+                    "sources_reporting": len(summary["jobs_per_source"]),
+                    "as_of": summary["as_of"],
+                    "demo": demo,
+                },
+                indent=2,
+                default=str,
+            ),
+            "application/json; charset=utf-8",
+        )
+
+    if path == "/api/jobs":
+        profile = _profile_or_default(conn, _query_one(query, "profile") or None)
+        limit = int(_query_one(query, "limit", "40") or 40)
+        matches, _ = _ranked(conn, profile, now=now, limit=limit)
+        payload = {"profile": profile.to_dict(), "matches": [match.to_dict() for match in matches]}
+        return Response(200, json.dumps(payload, indent=2, default=str), "application/json; charset=utf-8")
+
+    if path == "/go":
+        profile_id = _query_one(query, "profile")
+        job_id = _query_one(query, "job")
+        row = graph.job_row(conn, job_id)
+        source = graph.primary_source(conn, job_id)
+        if row is None or source is None:
+            return Response(404, _page("Not found", "<h1>Job not found</h1>", demo=demo))
+        tracking.record(conn, profile_id, job_id, "clicked_through", detail=source["source_id"])
+        return Response(303, "", headers={"Location": source["source_url"]})
+
+    if path == "/slo":
+        return Response(200, render_slo(conn, now=now, demo=demo))
+
+    if path == "/review":
+        return Response(200, render_review(conn, now=now, demo=demo))
+
+    if path == "/webhooks/whatsapp":
+        challenge = webhooks.verify_challenge(
+            {key: _query_one(query, key) for key in query},
+            os.environ.get("WHATSAPP_VERIFY_TOKEN"),
+        )
+        if challenge is None:
+            return Response(403, "verification failed", "text/plain; charset=utf-8")
+        return Response(200, challenge, "text/plain; charset=utf-8")
+
+    if path == "/digest":
+        return Response(
+            200,
+            render_digest(
+                conn,
+                profile_id=_query_one(query, "profile") or None,
+                now=now,
+                demo=demo,
+                error=_query_one(query, "error"),
+            ),
+        )
+
+    if path.startswith("/job/"):
+        page = render_job(
+            conn,
+            path.rsplit("/", 1)[-1],
+            profile_id=_query_one(query, "profile") or None,
+            now=now,
+            demo=demo,
+        )
+        if page is None:
+            return Response(404, _page("Not found", "<h1>Job not found</h1>", demo=demo))
+        return Response(200, page)
+
+    if path in ("/", "/index.html"):
+        return Response(
+            200,
+            render_feed(conn, profile_id=_query_one(query, "profile") or None, now=now, demo=demo),
+        )
+
+    return Response(404, _page("Not found", "<h1>Not found</h1>", demo=demo))
+
+
+def _handle_webhook(conn, path: str, query: dict, raw: bytes, headers: dict, *, demo: bool) -> Response:
+    """Inbound replies and receipts. Fails closed on an unverified sender."""
+    if path == "/webhooks/whatsapp":
+        secret = os.environ.get("WHATSAPP_APP_SECRET")
+        signature = headers.get(webhooks.SIGNATURE_HEADER.lower())
+        if secret:
+            if not webhooks.verify_signature(raw, signature, secret):
+                return Response(403, "bad signature", "text/plain; charset=utf-8")
+        elif not demo:
+            # No secret and not a demo: we cannot tell Meta from anyone.
+            return Response(503, "webhook not configured", "text/plain; charset=utf-8")
+        result = webhooks.handle_meta(conn, webhooks.parse_json(raw))
+        return Response(200, json.dumps(result, default=str), "application/json; charset=utf-8")
+
+    token = _query_one(query, "token")
+    expected = os.environ.get("AT_WEBHOOK_TOKEN")
+    if expected and not _constant_time_equal(token, expected):
+        return Response(403, "bad token", "text/plain; charset=utf-8")
+    if not expected and not demo:
+        return Response(503, "webhook not configured", "text/plain; charset=utf-8")
+    form = {
+        key: (values or [""])[0]
+        for key, values in parse_qs(raw.decode("utf-8", errors="replace")).items()
+    }
+    result = webhooks.handle_africas_talking(conn, form)
+    return Response(200, json.dumps(result, default=str), "application/json; charset=utf-8")
+
+
+def _handle_consent(conn, path: str, body: bytes) -> Response:
+    """Subscribe or opt out from the digest page. Always redirects back."""
+    form = parse_qs(body.decode("utf-8", errors="replace"))
+    profile_id = _query_one(form, "profile")
+    msisdn = _query_one(form, "msisdn")
+    error = ""
+    if path.endswith("/unsubscribe"):
+        outbox.unsubscribe(conn, profile_id, reason="web")
+    else:
+        try:
+            outbox.subscribe(conn, profile_id, msisdn, source="web")
+        except ValueError as exc:
+            error = str(exc)
+
+    target = f"/digest?profile={quote(profile_id)}"
+    if error:
+        target += f"&error={quote(error)}"
+    return Response(303, "", headers={"Location": target})
+
+
+def _handle_action(conn, body: bytes, headers: dict) -> Response:
+    form = parse_qs(body.decode("utf-8", errors="replace"))
+    profile_id = _query_one(form, "profile")
+    job_id = _query_one(form, "job")
+    kind = _query_one(form, "kind")
+
+    if profile_id and job_id and kind in tracking.KINDS:
+        try:
+            tracking.record(conn, profile_id, job_id, kind)
+        except ValueError:
+            pass
+
+    if headers.get("accept", "").startswith("application/json"):
+        return Response(200, json.dumps({"ok": True}), "application/json; charset=utf-8")
+    return Response(303, "", headers={"Location": f"/?profile={quote(profile_id)}" if profile_id else "/"})
+
+
 class _Handler(BaseHTTPRequestHandler):
     db_path = ":memory:"
     demo = False
     limiter = _RateLimiter()
-    server_version = "kazikasi-feed/0.5"
+    server_version = "kazikasi-feed/0.6"
 
-    def _send(self, status: int, body: str, content_type: str = "text/html; charset=utf-8", headers=None) -> None:
-        payload = body.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
+    def _read_body(self) -> bytes:
+        length = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(min(length, 512 * 1024)) if length else b""
+
+    def _respond(self, response: Response) -> None:
+        if response.is_redirect:
+            self.send_response(response.status)
+            for key, value in response.headers.items():
+                self.send_header(key, value)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        payload = response.body.encode("utf-8")
+        self.send_response(response.status)
+        self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        for key, value in (headers or {}).items():
+        for key, value in response.headers.items():
             self.send_header(key, value)
         self.end_headers()
         self.wfile.write(payload)
 
-    def _redirect(self, location: str) -> None:
-        self.send_response(303)
-        self.send_header("Location", location)
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
-    def do_GET(self) -> None:  # noqa: N802 - stdlib naming
-        parsed = urlparse(self.path)
-        query = parse_qs(parsed.query)
-        now = datetime.now(timezone.utc)
-        conn = db.connect(self.db_path)
-        try:
-            if parsed.path == "/healthz":
-                self._send(200, "ok", "text/plain; charset=utf-8")
-                return
-            if parsed.path == "/api/jobs":
-                profile = _profile_or_default(conn, (query.get("profile") or [None])[0])
-                matches, _ = _ranked(conn, profile, now=now, limit=int((query.get("limit") or [40])[0]))
-                payload = {"profile": profile.to_dict(), "matches": [match.to_dict() for match in matches]}
-                self._send(200, json.dumps(payload, indent=2, default=str), "application/json; charset=utf-8")
-                return
-            if parsed.path == "/go":
-                profile_id = (query.get("profile") or [""])[0]
-                job_id = (query.get("job") or [""])[0]
-                row = graph.job_row(conn, job_id)
-                source = graph.primary_source(conn, job_id)
-                if row is None or source is None:
-                    self._send(404, _page("Not found", "<h1>Job not found</h1>", demo=self.demo))
-                    return
-                tracking.record(conn, profile_id, job_id, "clicked_through", detail=source["source_id"])
-                self._redirect(source["source_url"])
-                return
-            if parsed.path == "/slo":
-                self._send(200, render_slo(conn, now=now, demo=self.demo))
-                return
-            if parsed.path == "/review":
-                self._send(200, render_review(conn, now=now, demo=self.demo))
-                return
-            if parsed.path == "/webhooks/whatsapp":
-                challenge = webhooks.verify_challenge(
-                    {key: (values or [""])[0] for key, values in query.items()},
-                    os.environ.get("WHATSAPP_VERIFY_TOKEN"),
-                )
-                if challenge is None:
-                    self._send(403, "verification failed", "text/plain; charset=utf-8")
-                else:
-                    self._send(200, challenge, "text/plain; charset=utf-8")
-                return
-            if parsed.path == "/digest":
-                self._send(
-                    200,
-                    render_digest(
-                        conn,
-                        profile_id=(query.get("profile") or [None])[0],
-                        now=now,
-                        demo=self.demo,
-                        error=(query.get("error") or [""])[0],
-                    ),
-                )
-                return
-            if parsed.path.startswith("/job/"):
-                page = render_job(
-                    conn,
-                    parsed.path.rsplit("/", 1)[-1],
-                    profile_id=(query.get("profile") or [None])[0],
-                    now=now,
-                    demo=self.demo,
-                )
-                if page is None:
-                    self._send(404, _page("Not found", "<h1>Job not found</h1>", demo=self.demo))
-                else:
-                    self._send(200, page)
-                return
-            if parsed.path in ("/", "/index.html"):
-                self._send(
-                    200,
-                    render_feed(
-                        conn,
-                        profile_id=(query.get("profile") or [None])[0],
-                        now=now,
-                        demo=self.demo,
-                    ),
-                )
-                return
-            self._send(404, _page("Not found", "<h1>Not found</h1>", demo=self.demo))
-        finally:
-            conn.close()
-
-    def do_POST(self) -> None:  # noqa: N802 - stdlib naming
-        parsed = urlparse(self.path)
-        if parsed.path in ("/webhooks/whatsapp", "/webhooks/sms"):
-            self._webhook(parsed)
-            return
-        if parsed.path in ("/digest/subscribe", "/digest/unsubscribe"):
-            self._consent(parsed.path)
-            return
-        if parsed.path != "/action":
-            self._send(404, "not found", "text/plain; charset=utf-8")
-            return
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length).decode("utf-8", errors="replace")
-        form = parse_qs(body)
-        profile_id = (form.get("profile") or [""])[0]
-        job_id = (form.get("job") or [""])[0]
-        kind = (form.get("kind") or [""])[0]
-
-        conn = db.connect(self.db_path)
-        try:
-            if profile_id and job_id and kind in tracking.KINDS:
-                try:
-                    tracking.record(conn, profile_id, job_id, kind)
-                except ValueError:
-                    pass
-        finally:
-            conn.close()
-
-        if self.headers.get("Accept", "").startswith("application/json"):
-            self._send(200, json.dumps({"ok": True}), "application/json; charset=utf-8")
-            return
-        self._redirect(f"/?profile={quote(profile_id)}" if profile_id else "/")
-
     def _client_key(self) -> str:
         return str(self.client_address[0] if self.client_address else "unknown")
 
-    def _limited(self) -> bool:
-        if self.limiter.allow(self._client_key()):
-            return False
-        self._send(429, "too many requests", "text/plain; charset=utf-8")
-        return True
-
-    def _webhook(self, parsed) -> None:
-        """Inbound replies and receipts. Fails closed on an unverified sender."""
-        if self._limited():
-            return
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(min(length, 512 * 1024))
+    def _dispatch(self, method: str) -> None:
+        parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
+        body = self._read_body() if method == "POST" else b""
+        headers = {key: value for key, value in self.headers.items()}
 
         conn = db.connect(self.db_path)
         try:
-            if parsed.path == "/webhooks/whatsapp":
-                secret = os.environ.get("WHATSAPP_APP_SECRET")
-                signature = self.headers.get(webhooks.SIGNATURE_HEADER)
-                if secret:
-                    if not webhooks.verify_signature(raw, signature, secret):
-                        self._send(403, "bad signature", "text/plain; charset=utf-8")
-                        return
-                elif not self.demo:
-                    # No secret and not a demo: we cannot tell Meta from anyone.
-                    self._send(503, "webhook not configured", "text/plain; charset=utf-8")
-                    return
-                payload = webhooks.parse_json(raw)
-                result = webhooks.handle_meta(conn, payload)
-            else:
-                token = (parse_qs(parsed.query).get("token") or [""])[0]
-                expected = os.environ.get("AT_WEBHOOK_TOKEN")
-                if expected and not _constant_time_equal(token, expected):
-                    self._send(403, "bad token", "text/plain; charset=utf-8")
-                    return
-                if not expected and not self.demo:
-                    self._send(503, "webhook not configured", "text/plain; charset=utf-8")
-                    return
-                form = {
-                    key: (values or [""])[0]
-                    for key, values in parse_qs(raw.decode("utf-8", errors="replace")).items()
-                }
-                result = webhooks.handle_africas_talking(conn, form)
+            response = handle(
+                conn,
+                method,
+                parsed.path,
+                query,
+                body=body,
+                headers=headers,
+                demo=self.demo,
+                limiter=self.limiter,
+                client=self._client_key(),
+            )
+        except Exception as exc:  # noqa: BLE001 - a 500 with a reason beats a dropped socket
+            response = Response(
+                500,
+                _page("Error", f"<h1>Something broke</h1><p class=\"small\">{_e(exc)}</p>", demo=self.demo),
+            )
         finally:
             conn.close()
+        self._respond(response)
 
-        self._send(200, json.dumps(result, default=str), "application/json; charset=utf-8")
+    def do_GET(self) -> None:  # noqa: N802 - stdlib naming
+        self._dispatch("GET")
 
-    def _consent(self, path: str) -> None:
-        """Subscribe or opt out from the digest page. Always redirects back."""
-        if self._limited():
-            return
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length).decode("utf-8", errors="replace")
-        form = parse_qs(body)
-        profile_id = (form.get("profile") or [""])[0]
-        msisdn = (form.get("msisdn") or [""])[0]
-
-        conn = db.connect(self.db_path)
-        error = ""
-        try:
-            if path.endswith("/unsubscribe"):
-                outbox.unsubscribe(conn, profile_id, reason="web")
-            else:
-                try:
-                    outbox.subscribe(conn, profile_id, msisdn, source="web")
-                except ValueError as exc:
-                    error = str(exc)
-        finally:
-            conn.close()
-
-        target = f"/digest?profile={quote(profile_id)}"
-        if error:
-            target += f"&error={quote(error)}"
-        self._redirect(target)
+    def do_POST(self) -> None:  # noqa: N802 - stdlib naming
+        self._dispatch("POST")
 
     def log_message(self, fmt: str, *args) -> None:  # keep the console readable
         if args and str(args[1]).startswith(("4", "5")):

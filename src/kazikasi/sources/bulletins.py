@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from urllib.parse import urljoin, urlparse
 
-from bs4 import BeautifulSoup
 
 from ..documents import DocumentError, document_to_candidates
+from ..extract import parse_html
 from ..models import JobCandidate
 from .base import Adapter, Manifest, Payload
 
@@ -40,7 +40,7 @@ class BulletinAdapter(Adapter):
     default_email: str | None = None
 
     def parse_listing(self, html: str, base_url: str) -> list[str]:
-        soup = BeautifulSoup(html, "html.parser")
+        soup = parse_html(html)
         links: list[str] = []
         for anchor in soup.select("a[href]"):
             href = anchor["href"].strip()
