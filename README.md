@@ -2,9 +2,10 @@
 
 A geo-anchored hiring radar for Kenya: complete, verified, reachable job discovery — starting with Nairobi.
 
-> **Current phase: Phase 4 build.** The research pack is settled; ingestion, the job graph, the
-> document lane and the tailored feed are built and tested offline. See the phase notes:
-> [1](./docs/phase-1-build.md) · [2](./docs/phase-2-build.md) · [3](./docs/phase-3-build.md) · [4](./docs/phase-4-build.md).
+> **Current phase: Phase 5 build.** The research pack is settled; ingestion, the job graph, the
+> document lane, the tailored feed and the WhatsApp digest are built and tested offline. See the
+> phase notes: [1](./docs/phase-1-build.md) · [2](./docs/phase-2-build.md) · [3](./docs/phase-3-build.md)
+> · [4](./docs/phase-4-build.md) · [5](./docs/phase-5-build.md).
 
 ## Start here
 
@@ -20,12 +21,13 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 - [Phase 2 build](./docs/phase-2-build.md) — the job graph: identity rules, liveness, metrics, and the internal feed
 - [Phase 3 build](./docs/phase-3-build.md) — the document lane: advert PDFs, "one advert, N posts", PSC and a county source
 - [Phase 4 build](./docs/phase-4-build.md) — constraints → relevance → utility, distance bands, the freshness page, apply tracking
+- [Phase 5 build](./docs/phase-5-build.md) — the WhatsApp digest: selection rules, consent, idempotency, retries, SMS fallback
 
 ## Run it
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 286 tests, no network
+python -m pytest                                    # 421 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -36,7 +38,10 @@ kazikasi load  --db ./data/kazi.db --demo            # synthetic corpus
 kazikasi match --db ./data/kazi.db --profile demo-fresher
 kazikasi stats --db ./data/kazi.db
 kazikasi slo   --db ./data/kazi.db
-kazikasi serve --db ./data/kazi.db --demo            # feed on http://localhost:8765
+kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe "0712 000 000"
+kazikasi digest --db ./data/kazi.db --profile demo-fresher --preview   # the message, unsent
+kazikasi outbox --db ./data/kazi.db --send --dry-run                   # deliver, offline
+kazikasi serve --db ./data/kazi.db --demo            # feed + /digest on http://localhost:8765
 ```
 
 ## Scope in one line

@@ -124,8 +124,9 @@ assuming a fresh database, and a test starts from a v2 file and upgrades it.
 - **No CV parsing, no embeddings, no LLM ranking.** The ranking is arithmetic a
   person can read and argue with. If it is wrong, it is wrong in a way that can
   be fixed in a test.
-- **No WhatsApp digest.** D5 says web feed + WhatsApp; WhatsApp is not built, and
-  this feed is still internal (banner included).
+- **No WhatsApp digest.** D5 says web feed + WhatsApp; at the time of this phase
+  WhatsApp was not built, and this feed was still internal (banner included).
+  [Phase 5](./phase-5-build.md) builds the digest.
 - **No accounts or auth.** Profiles are local rows; the demo profiles are seeded.
 - **No application forms, no auto-apply.** Never.
 - **No commute routing.** Bands from straight lines, labelled approximate.
@@ -137,4 +138,4 @@ assuming a fresh database, and a test starts from a v2 file and upgrades it.
    proven against synthetic fixtures, not live pages.
 2. **Persist real profiles from a sign-up**, then measure the funnel on real
    users — `clicked_through / viewed` is the first honest product metric.
-3. **WhatsApp digest (D5's second half)**, once the feed has one returning user.
+3. **WhatsApp digest (D5's second half)** — built in [Phase 5](./phase-5-build.md).
