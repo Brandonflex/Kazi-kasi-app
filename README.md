@@ -80,14 +80,43 @@ county or a page. `/job/<id>` carries the evidence, who to address, the
 application kit and the direct-apply route; `/signin` and `/account` cover
 optional sign-in and the CV that fills that kit; `/auth/ready` reports the
 sign-in configuration as JSON, without secrets. See
-[phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md) and
-[phase 9](./docs/phase-9-sources.md) and [phase 10](./docs/phase-10-signin.md).
+[phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md),
+[phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md) and
+[phase 11](./docs/phase-11-cron.md) (the scheduled tick).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
 curl -s https://kazi-kasi-app.vercel.app/api/health
-# {"ok": true, "schema": 7, "live_jobs": 28, "sources_reporting": 4, ...}
+# {"ok": true, "schema": 7, "live_jobs": 28, "sources_reporting": 4,
+#  "synthetic": true, "strict": false,
+#  "outbox": {"queued": 0, "sent_24h": 0, "failed_24h": 0, "suppressed": 0}, ...}
 ```
+
+`synthetic` answers "is this corpus invented?" and `strict` answers "is this
+production?" — two different questions that the old single `demo` flag was
+answering for both. The cron tick below refuses to send when `synthetic` is true.
+
+### The scheduled tick
+
+`GET` or `POST /api/cron/run` (alias `/api/cron`) is the one endpoint a
+scheduler calls. `vercel.json` points Vercel Cron at it for `0 15 * * *` — 18:00
+EAT, the middle of the default evening window. A tick composes every digest and
+brief that is due, delivers through whatever transport has credentials, and
+returns the outbox counts.
+
+It refuses in three ways, in this order, and every refusal names what is missing:
+
+| condition | status | body |
+| --- | --- | --- |
+| `CRON_SECRET` unset | 503 | `cron not configured` |
+| wrong token (`Authorization: Bearer`, or `?token=`) | 403 | `bad cron token` |
+| synthetic corpus, no `KAZIKASI_ALLOW_SYNTHETIC_SEND=1` | 409 | `refusing to send` |
+| no transport credentials | 503 | `no transport configured` |
+
+The third is the important one. A deployment without `DATABASE_URL` serves the
+demo corpus; a cron tick there would text *fabricated vacancies* to a real
+number. So it does not. Set `KAZIKASI_ALLOW_SYNTHETIC_SEND=1` only to test
+delivery against your own phone.
 
 How it is wired — there is no build step and no static output:
 

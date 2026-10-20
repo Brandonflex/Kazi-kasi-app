@@ -47,9 +47,11 @@ from . import (
     recap,
     metrics,
     momentum,
+    channels,
     outbox,
     pulse,
     ranking,
+    scheduler,
     shortlist,
     slo,
     tracking,
@@ -2761,6 +2763,8 @@ def handle(
         )
     if path in ("/digest/subscribe", "/digest/unsubscribe"):
         return _handle_consent(conn, path, body)
+    if path in ("/api/cron/run", "/api/cron"):
+        return _handle_cron(conn, header_map, query, now=now, demo=demo)
     if path == "/action":
         return _handle_action(conn, body, header_map)
     if path in ("/auth/guest", "/auth/demo", "/auth/signout", "/account/cv", "/account/forget"):
@@ -2784,11 +2788,103 @@ def _record_view(conn, profile_id: str, job_id: str, now: datetime) -> None:
         pass
 
 
+def _transports_from_env() -> dict:
+    """The real senders, if this deployment has credentials for them.
+
+    Missing credentials are not an error at import time — the site must render
+    without a WhatsApp account — but they *are* an error for a cron run, which is
+    why the cron handler reports 503 rather than pretending to have sent.
+    """
+    transports = {}
+    for name, factory in (("whatsapp", channels.WhatsAppCloudTransport), ("sms", channels.SmsTransport)):
+        try:
+            transports[name] = factory()
+        except RuntimeError:
+            continue
+    return transports
+
+
+def _outbox_counts(conn, *, now: datetime) -> dict:
+    since = (now - timedelta(hours=24)).isoformat()
+    row = conn.execute(
+        """SELECT
+             SUM(state = 'queued')    AS queued,
+             SUM(state = 'sent'   AND updated_at >= ?) AS sent_24h,
+             SUM(state = 'failed' AND updated_at >= ?) AS failed_24h,
+             SUM(state = 'suppressed') AS suppressed
+           FROM messages""",
+        (since, since),
+    ).fetchone()
+    return {key: int(row[key] or 0) for key in ("queued", "sent_24h", "failed_24h", "suppressed")} if row else {}
+
+
+def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool) -> Response:
+    """One scheduled tick: compose what is due, then deliver it.
+
+    Three refusals, in order, before anything leaves the building:
+
+    1. **No shared secret, no tick.** `CRON_SECRET` gates the endpoint; Vercel's
+       scheduler sends it as a bearer token automatically.
+    2. **No synthetic sends.** On an instance serving the demo corpus, a cron run
+       would deliver fabricated vacancies to a real phone number. That is the one
+       outcome this product must never produce.
+    3. **No silent success.** With no transport configured the answer is 503, not
+       a cheerful 200 with nothing sent.
+    """
+    expected = (os.environ.get("CRON_SECRET") or "").strip()
+    supplied = ""
+    authorization = str(headers.get("authorization") or "")
+    if authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip()
+    supplied = supplied or _query_one(query, "token")
+    if not expected:
+        return _json(503, {"error": "cron not configured", "hint": "set CRON_SECRET"})
+    if not _constant_time_equal(supplied, expected):
+        return _json(403, {"error": "bad cron token"})
+
+    # `demo` is this process's own answer (a `--demo` server, or the serverless
+    # shim reading the store); `synthetic_build()` catches a deployment that is
+    # configured like production but has no database behind it. Either one means
+    # the corpus is invented, and invented vacancies must not reach a phone.
+    if (demo or synthetic_build()) and (os.environ.get("KAZIKASI_ALLOW_SYNTHETIC_SEND") or "") != "1":
+        return _json(
+            409,
+            {
+                "error": "refusing to send",
+                "detail": "This instance serves a synthetic corpus, so a cron run would "
+                "text fabricated vacancies to real numbers. Wire a real store first, or "
+                "set KAZIKASI_ALLOW_SYNTHETIC_SEND=1 to test against your own number.",
+            },
+        )
+
+    transports = _transports_from_env()
+    if not transports:
+        return _json(
+            503,
+            {
+                "error": "no transport configured",
+                "needs": ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"],
+                "fallback": ["AT_USERNAME", "AT_API_KEY"],
+            },
+        )
+
+    report = scheduler.run_due(conn, transports, now=now, with_brief=True)
+    report["outbox"] = _outbox_counts(conn, now=now)
+    return _json(200, report)
+
+
+def _json(status: int, payload: dict) -> Response:
+    return Response(status, json.dumps(payload, indent=2, default=str), "application/json; charset=utf-8")
+
+
 def _handle_get(
     conn, path: str, query: dict, *, demo: bool, now: datetime, headers: dict | None = None
 ) -> Response:
     if path == "/healthz":
         return Response(200, "ok", "text/plain; charset=utf-8")
+
+    if path in ("/api/cron/run", "/api/cron"):
+        return _handle_cron(conn, headers or {}, query, now=now, demo=demo)
 
     if path == "/api/health":
         summary = metrics.stats(conn, now=now)
@@ -2798,10 +2894,15 @@ def _handle_get(
                 {
                     "ok": True,
                     "schema": db.SCHEMA_VERSION,
+                    "outbox": _outbox_counts(conn, now=now),
                     "live_jobs": summary["live_jobs"],
                     "sources_reporting": len(summary["jobs_per_source"]),
                     "as_of": summary["as_of"],
-                    "demo": demo,
+                    # Two different questions, two names: the corpus is synthetic
+                    # until a real store exists; whether this is production is
+                    # answered by KAZIKASI_DEMO (see /auth/ready).
+                    "synthetic": demo,
+                    "strict": accounts.strict_mode(),
                     "build": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev",
                 },
                 indent=2,

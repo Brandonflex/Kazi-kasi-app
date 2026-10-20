@@ -82,7 +82,10 @@ class TestRouting:
         assert payload["ok"] is True
         assert payload["schema"] >= 5
         assert payload["live_jobs"] > 0
-        assert payload["demo"] is True
+        # The corpus is synthetic (no DATABASE_URL); strictness is a separate
+        # question and is reported by /auth/ready.
+        assert payload["synthetic"] is True
+        assert payload["strict"] is False
 
     def test_the_api_serves_json_not_html(self, deployed):
         status, headers, body = call(deployed, "/api/jobs")
