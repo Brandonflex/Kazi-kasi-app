@@ -2,8 +2,9 @@
 
 A geo-anchored hiring radar for Kenya: complete, verified, reachable job discovery — starting with Nairobi.
 
-> **Current phase: Phase 1 build.** The research pack is settled; the ingestion spine is
-> built and tested offline. See [`docs/phase-1-build.md`](./docs/phase-1-build.md).
+> **Current phase: Phase 2 build.** The research pack is settled; the ingestion spine and the
+> job graph are built and tested offline. See [`docs/phase-1-build.md`](./docs/phase-1-build.md)
+> and [`docs/phase-2-build.md`](./docs/phase-2-build.md).
 
 ## Start here
 
@@ -16,15 +17,21 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 - [Evidence log](./docs/research/05-evidence-log.md) — every claim and its source
 - [Brand and IP check](./docs/research/06-brand-ip-check.md) — the name, the crowding, and the KIPI path
 - [Phase 1 build](./docs/phase-1-build.md) — what the ingestion spine does, and how to run it
+- [Phase 2 build](./docs/phase-2-build.md) — the job graph: identity rules, liveness, metrics, and the internal feed
 
 ## Run it
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                 # 101 tests, no network
-kazikasi sources
+python -m pytest                                    # 155 tests, no network
+
+kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
 kazikasi replay --source brightermonday --store ./data/raw
+
+kazikasi load  --db ./data/kazi.db --demo            # synthetic corpus
+kazikasi stats --db ./data/kazi.db
+kazikasi serve --db ./data/kazi.db --demo            # feed on http://localhost:8765
 ```
 
 ## Scope in one line

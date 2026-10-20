@@ -122,10 +122,9 @@ regression it encodes is lost.
 
 ## 7. Next
 
-1. Persist candidates and clusters (Postgres), with the identity keys from
-   `identity.py` as indexes.
-2. Add PSC Kenya and one county government source — the public-sector lane is the
-   least crowded and the most deadline-driven.
-3. Measure: density per county, entry-fit share, dedupe rate between MyJobMag and
-   BrighterMonday (research expectation: 40–60% cross-source duplication).
-4. Only then: the web feed.
+Done in [Phase 2](./phase-2-build.md): persistence (SQLite, Postgres-portable),
+identity resolution, liveness, metrics and an internal read-only feed.
+
+Still to do: PSC Kenya and one county government source, real ingest into the
+graph, and the duplication-rate / entry-fit numbers that decide whether
+probabilistic clustering is needed at all.
