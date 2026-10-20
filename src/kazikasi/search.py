@@ -218,7 +218,10 @@ def run(
         query=query or "",
         terms=words,
         filters=filters,
-        considered=sum(1 for match in ranked if match.eligible),
+        # Every live role the person has not dismissed, in or out of scope: the
+        # denominator has to be the size of the market, not the size of the
+        # person's slice of it, or "3 of 10" reads as a tiny market.
+        considered=len(ranked),
     )
     for match in ranked:
         row = dict(match.row or {})

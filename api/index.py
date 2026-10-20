@@ -41,6 +41,8 @@ _LOCK = threading.RLock()
 _STATE: dict[str, object] = {"conn": None, "path_source": None}
 
 LIMITER = serve._RateLimiter()
+SEARCH_LIMITER = serve._RateLimiter(limit=serve.SEARCH_RATE_LIMIT)
+ACTION_LIMITER = serve._RateLimiter(limit=serve.ACTION_RATE_LIMIT)
 
 
 def _connection():
@@ -110,14 +112,11 @@ def _error_page(exc: Exception) -> bytes:
     where = f"{frame[0].filename}:{frame[0].lineno}" if frame else "unknown"
     body = f"""<!doctype html><html lang="en-KE"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Deployment error</title>
-<style>body{{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-background:#FBF8F2;color:#12161C;margin:0;padding:32px}}
-pre{{background:#fff;border:1px solid #E3DCCF;border-radius:14px;padding:16px;
-white-space:pre-wrap;font:13px/1.6 ui-monospace,Menlo,monospace}}</style></head>
-<body><h1 style="font-size:24px;margin:0 0 8px">The app failed to start a response</h1>
-<p style="color:#5C6675;margin:0 0 16px">{serve._e(where)}</p>
+<style>{serve.ERROR_STYLE}</style></head>
+<body><h1>The app failed to start a response</h1>
+<p class="mut">{serve._e(where)}</p>
 <pre>{serve._e(detail)}</pre>
-<p style="color:#5C6675">Synthetic demo data. Check <code>/api/health</code> after the fix.</p>
+<p class="mut">Synthetic demo data. Check <code>/api/health</code> after the fix.</p>
 </body></html>"""
     return body.encode("utf-8")
 
@@ -142,6 +141,8 @@ def app(environ, start_response):
                 # Synthetic until a real store exists — see serve.synthetic_build().
                 demo=serve.synthetic_build(),
                 limiter=LIMITER,
+                search_limiter=SEARCH_LIMITER,
+                action_limiter=ACTION_LIMITER,
                 client=_client(environ),
             )
         status = f"{response.status} {'OK' if response.status < 400 else 'Error'}"
@@ -151,6 +152,7 @@ def app(environ, start_response):
             ("Content-Length", str(len(payload))),
             ("Cache-Control", "no-store"),
             ("X-Content-Type-Options", "nosniff"),
+            *serve.security_headers().items(),
             *[(key, value) for key, value in response.headers.items()],
         ]
     except Exception as exc:  # noqa: BLE001 - surfaced, not swallowed
@@ -161,6 +163,7 @@ def app(environ, start_response):
             ("Content-Length", str(len(payload))),
             ("Cache-Control", "no-store"),
             ("X-Content-Type-Options", "nosniff"),
+            *serve.security_headers().items(),
         ]
 
     start_response(status, headers)

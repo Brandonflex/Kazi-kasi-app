@@ -175,10 +175,14 @@ class TestSurfaces:
         assert "@media (max-width:520px)" in STYLE
         assert "grid-template-columns:repeat(2,1fr)" in STYLE
 
-    def test_the_nosniff_header_is_sent(self):
+    def test_the_response_policy_is_attached_to_every_response(self):
+        """One policy, three paths: local server, function response, function error."""
         import inspect
+        from pathlib import Path
 
         from kazikasi import serve
 
-        source = inspect.getsource(serve._Handler._respond)
-        assert "X-Content-Type-Options" in source
+        assert "security_headers(" in inspect.getsource(serve._Handler._respond)
+        shim = (Path(serve.__file__).resolve().parents[2] / "api" / "index.py").read_text()
+        assert shim.count("serve.security_headers()") >= 2, "both the normal and the error path"
+        assert "X-Content-Type-Options" in serve.security_headers()

@@ -20,9 +20,9 @@ Routes:
 
 from __future__ import annotations
 
-import re
-
+import base64
 import hashlib
+import re
 import hmac as _hmac
 import html
 import json
@@ -271,6 +271,12 @@ main{padding-bottom:40px}
 .rail-note{color:var(--muted);font-size:12px;margin:6px 0 0}
 
 /* ---- profile switcher --------------------------------------------- */
+.mt0{margin-top:0}.mt6{margin-top:6px}.mt10{margin-top:10px}.mt12{margin-top:12px}
+.mt18{margin-top:18px}.mt26{margin-top:26px}.mt28{margin-top:28px}.mt32{margin-top:32px}
+.flush{margin:0}.inline{display:inline}.inline-ml{display:inline;margin-left:10px}
+.stack{flex-direction:column;align-items:stretch}
+.codebox{font:14px/1.5 var(--font-mono);padding:12px;border:1px solid var(--line);
+  border-radius:var(--radius-sm);background:var(--card);color:var(--ink);width:100%}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0}
 .filters a{border:1px solid var(--line);background:transparent;border-radius:var(--radius-pill);
   padding:6px 13px;font-size:12.5px;color:var(--ink-2);min-height:34px;
@@ -453,7 +459,7 @@ def _page(
         if demo
         else ""
     )
-    demo_line = f'<div class="small" style="margin-top:6px">demo build {_e(build)}</div>' if demo else ""
+    demo_line = f'<div class="small mt6">demo build {_e(build)}</div>' if demo else ""
     palette_html = _palette_markup(palette or [])
     links = nav or (
         '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
@@ -1088,6 +1094,73 @@ PALETTE_JS = """
 """
 
 
+# --------------------------------------------------------------------------
+# Response policy
+# --------------------------------------------------------------------------
+
+def _inline_hash(source: str) -> str:
+    """sha256 of an inline block, in the form a CSP accepts.
+
+    The style sheet and the one script are the only inline assets on the site.
+    Hashing them means the policy can say `'none'` for everything else and still
+    let the page work — which is the difference between a header that is present
+    and a header that is doing something.
+    """
+    digest = hashlib.sha256(source.encode("utf-8")).digest()
+    return "sha256-" + base64.b64encode(digest).decode("ascii")
+
+
+ERROR_STYLE = """body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+background:#FBF8F2;color:#12161C;margin:0;padding:32px}
+h1{font-size:24px;margin:0 0 8px}
+.mut{color:#5C6675;margin:0 0 16px}
+pre{background:#fff;border:1px solid #E3DCCF;border-radius:14px;padding:16px;
+white-space:pre-wrap;font:13px/1.6 ui-monospace,Menlo,monospace}"""
+
+STYLE_HASH = _inline_hash(STYLE)
+SCRIPT_HASH = _inline_hash(PALETTE_JS)
+ERROR_STYLE_HASH = _inline_hash(ERROR_STYLE)
+
+
+def security_headers(*, https: bool | None = None) -> dict[str, str]:
+    """The whole policy for a response, in one place.
+
+    Both transports (the stdlib server here, the serverless adapter on Vercel)
+    call this, so a header cannot exist on one path and be missing on the other.
+    `frame-ancestors 'none'` and `X-Frame-Options: DENY` say the same thing twice
+    on purpose: the older header is what some scanners still read.
+    """
+    headers = {
+        "Content-Security-Policy": "; ".join(
+            [
+                "default-src 'none'",
+                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}'",
+                # The palette's index is a JSON data block, not a program; the
+                # only executable inline script is PALETTE_JS.
+                f"script-src '{SCRIPT_HASH}'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self'",
+                "form-action 'self'",
+                "base-uri 'none'",
+                "frame-ancestors 'none'",
+                "object-src 'none'",
+            ]
+        ),
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=(), usb=()",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+    }
+    if https is None:
+        https = _base_url().startswith("https://")
+    if https:
+        headers["Strict-Transport-Security"] = "max-age=15552000; includeSubDomains"
+    return headers
+
+
 def _palette_markup(index: list) -> str:
     """The dialog, its data and its script. Absent when there is nothing to jump to."""
     if not index:
@@ -1343,7 +1416,7 @@ def render_employers(conn, *, now: datetime | None = None, demo: bool = False, h
   <div><b>{live}</b><span>open roles between them</span></div>
   <div><b>{f"{round(sum(paid) / len(paid)):,.0f}" if paid else "—"}</b><span>median of employer medians (n={len(paid)})</span></div>
 </div>
-<div class="tablewrap" style="margin-top:26px"><table>
+<div class="tablewrap mt26"><table>
   <tr><th>Employer</th><th>Open now</th><th>Median advertised minimum (KES)</th><th>Where</th></tr>
   {''.join(lines)}
 </table></div>
@@ -1486,12 +1559,12 @@ def render_year(
         bands = f"""
 <h2>The band</h2>
 <div class="two">
-  <div class="rail-card" style="margin:0">
+  <div class="rail-card flush">
     <p class="small">Band you kept choosing</p>
     <p class="fig">{f"{data.band_aimed:,.0f}" if data.band_aimed else "—"}</p>
     <p class="small">median advertised minimum across {data.band_aimed_n} role{'s' if data.band_aimed_n != 1 else ''} you kept or applied to</p>
   </div>
-  <div class="rail-card" style="margin:0">
+  <div class="rail-card flush">
     <p class="small">Band around you today</p>
     <p class="fig">{f"{data.band_in_scope:,.0f}" if data.band_in_scope else "—"}</p>
     <p class="small">median across {data.band_in_scope_n} role{'s' if data.band_in_scope_n != 1 else ''} inside your scope</p>
@@ -1521,7 +1594,7 @@ whole record →</a></p>"""
   <div><b>{data.applied}</b><span>applied to</span></div>
   <div><b>{data.closed_while_saved}</b><span>closed while kept</span></div>
 </div>
-{f'<p class="small" style="margin-top:10px">Months you were here: {months}</p>' if months else ''}
+{f'<p class="small mt10">Months you were here: {months}</p>' if months else ''}
 {almost}
 {bands}
 {share}
@@ -1582,13 +1655,13 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
   <div class="feedcol">
     <div class="section"><span>Continue with</span><em>we ask for a name and an email</em></div>
     {''.join(cards)}
-    <div class="section" style="margin-top:26px"><span>Or stay a guest</span></div>
-    <div class="rail-card" style="margin:0">
-      <p class="rail-note" style="margin-top:0">A guest gets the whole product on this
+    <div class="section mt26"><span>Or stay a guest</span></div>
+    <div class="rail-card flush">
+      <p class="rail-note mt0">A guest gets the whole product on this
       device: the feed, the shortlist, the brief. Upload a CV and the application kit
       works exactly the same. The only thing you lose is continuity when you clear
       your browser.</p>
-      <form method="post" action="/auth/guest" style="margin-top:12px">
+      <form method="post" action="/auth/guest" class="mt12">
         <input type="hidden" name="next" value="/account?guest=1">
         <button type="submit" class="ghost">Continue as guest</button>
       </form>
@@ -1707,7 +1780,7 @@ def render_account(
     delete_form = ""
     if account:
         delete_form = (
-            '<form method="post" action="/account/forget" style="display:inline;margin-left:10px"'
+            '<form method="post" action="/account/forget" class="inline-ml"'
             ' onsubmit="return confirm(&quot;Delete your account, CV and identity? This cannot be undone.&quot;)">'
             '<button type="submit" class="ghost">Delete everything</button></form>'
         )
@@ -1725,15 +1798,15 @@ def render_account(
     <div class="section"><span>Identity</span></div>
     {''.join(identity) if account else '<p>Not signed in. <a href="/signin">Sign in</a> or continue as a guest.</p>'}
 
-    <div class="section" style="margin-top:26px"><span>Your CV</span>
+    <div class="section mt26"><span>Your CV</span>
       <em>{'read ' + _e(cv['created_at'][:10]) if cv else 'not uploaded'}</em></div>
     <p class="small">Paste the text of your CV, or upload a .txt, .md or .pdf file.
     We read it here, store the fields it states with the line each came from, and
     nothing else. It is never shown to an employer from our side.</p>
-    <form method="post" action="/account/cv" enctype="multipart/form-data" class="subform" style="flex-direction:column;align-items:stretch">
+    <form method="post" action="/account/cv" enctype="multipart/form-data" class="subform stack">
       <input type="file" name="cv_file" accept=".txt,.md,.pdf" aria-label="CV file">
       <textarea name="cv_text" rows="7" placeholder="…or paste your CV text here"
-        style="font:14px/1.5 var(--font-mono);padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card);color:var(--ink)"></textarea>
+        class="codebox"></textarea>
       <button type="submit">Read my CV</button>
     </form>
     {_cv_summary(cv)}
@@ -1742,8 +1815,8 @@ def render_account(
     document's gap, not yours — the kit will tell you what to type rather than make
     something up.</p>
 
-    <div class="section" style="margin-top:26px"><span>Your data</span></div>
-    <form method="post" action="/auth/signout" style="display:inline">
+    <div class="section mt26"><span>Your data</span></div>
+    <form method="post" action="/auth/signout" class="inline">
       <button type="submit" class="ghost">Sign out</button>
     </form>
 {delete_form}
@@ -2041,14 +2114,14 @@ def render_brief(
   <div class="feedcol">
     <div class="section"><span>The move</span><em>one per week, never two</em></div>
     {move_html}
-    <div class="section" style="margin-top:28px"><span>What the numbers mean</span></div>
+    <div class="section mt28"><span>What the numbers mean</span></div>
     <p>{_e(band_text)}</p>
     <p class="small">Computed from live, unflagged adverts in your scope, first seen in the
     last {data['days']} days against the {data['days']} before. The sample size is printed
     because a median of three is a rumour with a decimal point.</p>
-    <div class="section" style="margin-top:28px"><span>Role families in scope</span></div>
+    <div class="section mt28"><span>Role families in scope</span></div>
     <p>{families or '<span class="small">none resolved yet</span>'}</p>
-    <div class="section" style="margin-top:28px"><span>Exactly what we would send</span></div>
+    <div class="section mt28"><span>Exactly what we would send</span></div>
     <div class="msg">{_e(text_version)}</div>
     <p class="small">The same brief goes out on WhatsApp once a week, and only when it has
     something to say.</p>
@@ -2128,10 +2201,10 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
     stated in adverts; <b>n</b> is how many adverts stated one. A band built from four
     adverts is four adverts, and it says so.</p>
 
-    <div class="section" style="margin-top:32px"><span>Employers hiring most</span></div>
+    <div class="section mt32"><span>Employers hiring most</span></div>
     <p>{employers}</p>
 
-    <div class="section" style="margin-top:32px"><span>Sources</span><em>live adverts contributed</em></div>
+    <div class="section mt32"><span>Sources</span><em>live adverts contributed</em></div>
     <div class="tablewrap"><table><tr><th>Source</th><th>Live adverts</th></tr>{sources}</table></div>
     <p class="small">Flagged adverts are excluded from every figure on this page. They stay
     in the corpus for the review queue, not for the statistic.</p>
@@ -2264,7 +2337,7 @@ def render_county(
   <div><b>{data['closing']}</b><span>closing this week</span></div>
   <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "—"}</b><span>median advertised minimum (KES)</span></div>
 </div>
-<div class="tablewrap" style="margin-top:26px"><table>
+<div class="tablewrap mt26"><table>
   <tr><th>Role</th><th>Employer</th><th>Closes</th><th>Pay</th></tr>
   {rows}
 </table></div>
@@ -2556,7 +2629,7 @@ is useful; they are never mixed into the feed.</p>
 </div>
 {unstated_note}
 {cards}
-<div class="filters" style="margin-top:18px">
+<div class="filters mt18">
   <a class="chip" href="{_e(toggle)}">{_e(toggle_label)}</a>
   <a class="chip" href="/?profile={quote(profile.id)}">Back to the feed</a>
   <a class="chip" href="/employers">Employers hiring now</a>
@@ -2717,7 +2790,7 @@ def render_job(
 
     state = _application_state(conn, profile.id, job_id)
     actions = [
-        '<form method="post" action="/action" style="display:inline">'
+        '<form method="post" action="/action" class="inline">'
         f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
         f'<input type="hidden" name="job" value="{_e(job_id)}">'
         '<input type="hidden" name="kind" value="'
@@ -2725,7 +2798,7 @@ def render_job(
         + f'"><input type="hidden" name="next" value="/job/{_e(job_id)}?profile={quote(profile.id)}">'
         f'<button type="submit" class="ghost">{"Saved ✓ — remove" if state["saved"] else "Save for later"}</button>'
         "</form>",
-        '<form method="post" action="/action" style="display:inline;margin-left:10px">'
+        '<form method="post" action="/action" class="inline-ml">'
         f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
         f'<input type="hidden" name="job" value="{_e(job_id)}">'
         f'<input type="hidden" name="kind" value="{"unsaved" if state["applied"] else "applied"}">'
@@ -2964,6 +3037,10 @@ def render_review(conn: sqlite3.Connection, *, now: datetime | None = None, demo
 #: Requests per window per client, for the endpoints that change consent.
 RATE_LIMIT = 30
 RATE_WINDOW_SECONDS = 60
+#: Search ranks every live row per request; it is the most expensive page here.
+SEARCH_RATE_LIMIT = 60
+#: A person saving and dismissing quickly is normal; a loop is not.
+ACTION_RATE_LIMIT = 120
 
 
 class _RateLimiter:
@@ -3098,6 +3175,8 @@ def handle(
     headers: dict | None = None,
     demo: bool = False,
     limiter: "_RateLimiter | None" = None,
+    search_limiter: "_RateLimiter | None" = None,
+    action_limiter: "_RateLimiter | None" = None,
     client: str = "unknown",
     now: datetime | None = None,
 ) -> Response:
@@ -3112,6 +3191,8 @@ def handle(
     method = method.upper()
 
     if method == "GET":
+        if path == "/search" and search_limiter is not None and not search_limiter.allow(client):
+            return Response(429, "too many searches", "text/plain; charset=utf-8")
         return _handle_get(conn, path, query, demo=demo, now=now, headers=header_map)
     if method != "POST":
         return Response(405, "method not allowed", "text/plain; charset=utf-8")
@@ -3135,6 +3216,8 @@ def handle(
     if path in ("/api/cron/run", "/api/cron"):
         return _handle_cron(conn, header_map, query, now=now, demo=demo)
     if path == "/action":
+        if action_limiter is not None and not action_limiter.allow(client):
+            return Response(429, "too many actions", "text/plain; charset=utf-8")
         return _handle_action(conn, body, header_map)
     if path in ("/auth/guest", "/auth/demo", "/auth/signout", "/account/cv", "/account/forget"):
         return _handle_account_post(conn, path, body, header_map, demo=demo, now=now)
@@ -3741,8 +3824,13 @@ class _Handler(BaseHTTPRequestHandler):
         return self.rfile.read(min(length, 512 * 1024)) if length else b""
 
     def _respond(self, response: Response) -> None:
+        # This server speaks plain HTTP; HSTS belongs on the deployment's edge,
+        # where TLS actually terminates (the shim sends it, the base URL decides).
+        policy = security_headers(https=False)
         if response.is_redirect:
             self.send_response(response.status)
+            for key, value in policy.items():
+                self.send_header(key, value)
             for key, value in response.headers.items():
                 self.send_header(key, value)
             self.send_header("Content-Length", "0")
@@ -3754,7 +3842,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
+        for key, value in policy.items():
+            self.send_header(key, value)
         for key, value in response.headers.items():
             self.send_header(key, value)
         self.end_headers()
@@ -3780,6 +3869,8 @@ class _Handler(BaseHTTPRequestHandler):
                 headers=headers,
                 demo=self.demo,
                 limiter=self.limiter,
+                search_limiter=self.search_limiter,
+                action_limiter=self.action_limiter,
                 client=self._client_key(),
             )
         except Exception as exc:  # noqa: BLE001 - a 500 with a reason beats a dropped socket
@@ -3812,7 +3903,13 @@ def make_server(
     handler = type(
         "KazikasiHandler",
         (_Handler,),
-        {"db_path": str(db_path), "demo": demo, "limiter": _RateLimiter()},
+        {
+            "db_path": str(db_path),
+            "demo": demo,
+            "limiter": _RateLimiter(),
+            "search_limiter": _RateLimiter(limit=SEARCH_RATE_LIMIT),
+            "action_limiter": _RateLimiter(limit=ACTION_RATE_LIMIT),
+        },
     )
     return ThreadingHTTPServer((host, port), handler)
 

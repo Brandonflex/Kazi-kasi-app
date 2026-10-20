@@ -205,3 +205,9 @@ class TestThePage:
             response = handle(conn, "GET", "/search", {"days": [value], "pay": [value]}, demo=True, now=NOW)
             assert response.status == 200
 
+
+def test_the_denominator_is_the_market_not_the_slice(conn, profile):
+    """"3 of 10" is a smaller market than the graph actually has."""
+    found = search.run(conn, profile, now=NOW)
+    assert found.considered > len(found.matches)
+    assert found.considered == len(found.matches) + found.blocked_count

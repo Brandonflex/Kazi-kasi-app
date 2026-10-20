@@ -87,8 +87,9 @@ optional sign-in and the CV that fills that kit; `/auth/ready` reports the
 sign-in configuration as JSON, without secrets. See
 [phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md),
 [phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md),
-[phase 11](./docs/phase-11-cron.md) (the scheduled tick) and
-[phase 12](./docs/phase-12-search.md) (search).
+[phase 11](./docs/phase-11-cron.md) (the scheduled tick),
+[phase 12](./docs/phase-12-search.md) (search) and
+[phase 13](./docs/phase-13-hardening.md) (the response policy).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
@@ -138,6 +139,9 @@ How it is wired — there is no build step and no static output:
 * `api/index.py` is a WSGI adapter. It builds the synthetic corpus **in memory**
   on the first request in a warm instance and reuses it behind a lock; a
   function has no writable disk, so it never opens `data/kazi.db`.
+* Every response carries the same policy — `default-src 'none'`, two exact
+  sha256 hashes for the inline style and script, `frame-ancestors 'none'`, no
+  `unsafe-inline` — from one `serve.security_headers()` used by both transports.
 * Routing lives in `kazikasi.serve.handle()` — the same function the local
   `kazikasi serve` uses — so the deployed site and the sandbox cannot drift.
 * No `requirements.txt` is needed or wanted: the web surface imports only the
