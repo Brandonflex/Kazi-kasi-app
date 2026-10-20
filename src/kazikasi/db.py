@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -160,6 +160,19 @@ CREATE TABLE IF NOT EXISTS apply_events (
 
 CREATE INDEX IF NOT EXISTS idx_apply_events_job ON apply_events (job_id, at);
 CREATE INDEX IF NOT EXISTS idx_apply_events_profile ON apply_events (profile_id, at);
+
+-- Attention that is about the person, not a vacancy. A check-in is "I looked
+-- this week"; it belongs here rather than in apply_events, which is keyed to a
+-- job and would otherwise need a fake one. See kazikasi/momentum.py.
+CREATE TABLE IF NOT EXISTS profile_activity (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT NOT NULL REFERENCES profiles(id),
+    kind       TEXT NOT NULL,   -- checked_in
+    at         TEXT NOT NULL,
+    detail     TEXT             -- the ISO week, for idempotency
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_activity ON profile_activity (profile_id, at);
 
 -- ---------------------------------------------------------------------------
 -- v4: the digest. Consent, what was sent, and what happened to it.

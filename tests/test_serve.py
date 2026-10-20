@@ -71,7 +71,10 @@ class TestFeed:
     def test_dismissed_jobs_leave_the_feed(self, conn):
         job_id = conn.execute("SELECT id FROM jobs WHERE title = 'Software Support Analyst'").fetchone()["id"]
         tracking.record(conn, "demo-fresher", job_id, "dismissed")
-        assert "Software Support Analyst" not in readable(render_feed(conn, profile_id="demo-fresher", now=NOW))
+        page = render_feed(conn, profile_id="demo-fresher", now=NOW)
+        # The id, not the title: another job can legitimately share a prefix
+        # ("… Analyst II"), and the promise is that *this* advert leaves.
+        assert job_id not in page
 
     def test_applied_jobs_are_marked_not_hidden(self, conn):
         job_id = conn.execute("SELECT id FROM jobs WHERE title = 'Software Support Analyst'").fetchone()["id"]

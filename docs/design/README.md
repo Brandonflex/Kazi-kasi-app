@@ -78,6 +78,18 @@ shipped:
   county), `/salaries` (advertised pay with n on every row) and `/county/<slug>`,
   each computed from checked adverts, each carrying its window. This is §7's
   search engine, in its smallest honest form, plus `sitemap.xml` and `robots.txt`.
+- **Momentum** — the weekly run (Duolingo D1–D2, `§3.7`): ISO weeks in EAT, one
+  forgiven week, no points and no flame. Opening the brief counts; applying never
+  has to.
+- **The weekly brief** (`/brief`) — the Briefing primitive from §6.1: what is
+  new, what closes, whether advertised pay moved, and one move. The page prints
+  the exact WhatsApp message it would send.
+- **⌘K** — one search box over the page's own index of jobs, counties and pages
+  (Linear N2, `§3.10`). Invisible until pressed; every action still has a
+  visible path.
+- **The wildcard** — one role a week that ignores the scope, labelled *outside
+  your scope*, deterministic per person per week, and only ever one fixable
+  blocker away (Spotify's Discover Weekly mechanic, `§3.8`).
 
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly

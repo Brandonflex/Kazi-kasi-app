@@ -104,7 +104,7 @@ def test_a_v4_database_gains_the_v5_columns_and_tables(tmp_path):
         assert db.table_counts(conn)["message_receipts"] == 0
         assert db.table_counts(conn)["consent_events"] == 0
         versions = [row["version"] for row in conn.execute("SELECT version FROM schema_version")]
-        assert versions == [4, 5]
+        assert versions == [4, db.SCHEMA_VERSION]
     finally:
         conn.close()
 

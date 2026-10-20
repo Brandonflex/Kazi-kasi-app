@@ -25,6 +25,8 @@ rules, and — more importantly — the feature list we are *not* building.
 |---|---|---|
 | **WhatsApp digest** (`digest.py`) | "Tell me what's new that I could actually get, in one message." | Daily, 18:00–20:00 EAT |
 | **Feed** (`/`) | "Show me everything that fits, and let me compare." | A few times a week |
+| **Weekly brief** (`/brief`) | "Is this market moving toward me, and what should I do this week?" | Weekly |
+| **Momentum** (rail, brief) | "Am I still in this?" | Weekly, passive |
 | **Shortlist** (`/shortlist`) | "Keep the ones I am actually considering, and tell me before one closes." | Weekly, and on the one reminder |
 | **Job page** (`/job/<id>`) | "Convince me this is real and worth my morning." | On click-through |
 | **Ops: freshness** (`/slo`) | "Is the promise holding today?" | Internal, daily |

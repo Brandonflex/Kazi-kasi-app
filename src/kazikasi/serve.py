@@ -33,7 +33,22 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from . import db, digest as digest_module, graph, metrics, outbox, pulse, ranking, shortlist, slo, tracking, webhooks
+from . import (
+    brief as brief_module,
+    db,
+    digest as digest_module,
+    graph,
+    metrics,
+    momentum,
+    outbox,
+    pulse,
+    ranking,
+    shortlist,
+    slo,
+    tracking,
+    webhooks,
+    wildcard,
+)
 from .corpus import load_corpus
 from .profile import DEMO_PROFILES, list_profiles, seed_profiles
 
@@ -109,6 +124,35 @@ main{padding-bottom:40px}
 .display{font-family:var(--font-display);font-weight:400;font-size:50px;line-height:1.02;
   letter-spacing:-.025em;margin:12px 0 8px;color:var(--ink)}
 .scopeline{margin:0;color:var(--ink-2);font-size:15px;max-width:60ch}
+.cmdk{font:inherit;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  font-weight:650;color:var(--ink-2);background:none;border:1px solid var(--line);
+  border-radius:8px;padding:7px 10px;cursor:pointer;display:inline-flex;gap:7px;
+  align-items:center;transition:border-color .14s,color .14s}
+.cmdk:hover{border-color:var(--forest);color:var(--forest)}
+.cmdk kbd{font:inherit;font-size:10px;color:var(--muted);border:1px solid var(--line);
+  border-radius:4px;padding:1px 4px}
+.palette{position:fixed;inset:0;z-index:60;background:rgba(18,22,28,.35);
+  display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px}
+.palette[hidden]{display:none}
+.palette-box{width:min(560px,100%);background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow-lift);overflow:hidden}
+.palette input{width:100%;border:0;border-bottom:1px solid var(--line);padding:16px 18px;
+  font:16px/1.4 var(--font-sans);background:var(--card);color:var(--ink);outline:none}
+.palette ul{list-style:none;margin:0;padding:6px;max-height:52vh;overflow:auto}
+.palette li a{display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+  padding:10px 12px;border-radius:8px;color:var(--ink)}
+.palette li a:hover,.palette li.on a{background:var(--forest-soft);text-decoration:none}
+.palette li b{font-weight:600;font-size:14px}
+.palette li span{color:var(--muted);font-size:12px;white-space:nowrap}
+.palette .none{padding:14px 12px;color:var(--muted);font-size:14px}
+.palette .hint{border-top:1px solid var(--line);padding:9px 16px;font-size:11.5px;color:var(--muted)}
+.wildcard{border:1px dashed #CFC3AE;background:var(--sunken)}
+.wildcard .tagline{font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--amber);font-weight:700;margin:0 0 8px}
+.momentum{display:flex;align-items:center;gap:10px;margin-top:4px}
+.marks{display:flex;gap:4px}
+.marks i{width:9px;height:9px;border-radius:2px;background:var(--line);display:block}
+.marks i.on{background:var(--forest)}
 .ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:24px 0 0;
   padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
   font-size:13px;color:var(--ink-2)}
@@ -352,7 +396,15 @@ def _e(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
 
-def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str = "") -> str:
+def _page(
+    title: str,
+    body: str,
+    *,
+    demo: bool = False,
+    nav: str = "",
+    head: str = "",
+    palette: list | None = None,
+) -> str:
     build = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev"
     banner = (
         '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
@@ -360,9 +412,12 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
         else ""
     )
     demo_line = f'<div class="small" style="margin-top:6px">demo build {_e(build)}</div>' if demo else ""
+    palette_html = _palette_markup(palette or [])
     links = nav or (
         '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
-        '<a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
+        '<a href="/brief">Brief</a><a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
+        '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
+        'Jump <kbd>⌘K</kbd></button>'
     )
     return f"""<!doctype html>
 <html lang="en-KE"><head><meta charset="utf-8">
@@ -380,6 +435,7 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
 <nav>{links}</nav></div></div></header>
 {banner}
 <main class="wrap">{body}</main>
+{palette_html}
 <footer class="wrap"><p>Every card says when it was last checked and why it was shown.
 Eligibility labels quote the advert. Applications happen on the employer's site, never here.</p>
 <p class="ops">Ops: <a href="/slo">freshness</a> · <a href="/review">review queue</a> ·
@@ -529,6 +585,8 @@ def render_feed(
     profile = _profile_or_default(conn, profile_id)
     matches, acted = _ranked(conn, profile, now=now, limit=limit)
     saved = shortlist.saved_job_ids(conn, profile.id)
+    momentum.check_in(conn, profile.id, now=now)
+    state = momentum.status(conn, profile.id, now=now)
     summary = metrics.stats(conn, now=now)
     clock = (now + timedelta(hours=3)).strftime("%H:%M")
     if since is None:
@@ -698,6 +756,7 @@ def render_feed(
     <div class="section"><span>The feed</span><em>{len(matches)} roles</em></div>
     {''.join(cards)}
     <p class="endnote">That's all of them. We will tell you when that changes.</p>
+    {_wildcard_html(conn, profile, now=now)}
   </div>
   <aside class="rail">
     <div class="rail-card">
@@ -710,13 +769,31 @@ def render_feed(
       {''.join(soon) or '<p class="rail-note">Nothing closes in the next seven days.</p>'}
     </div>
     <div class="rail-card">
+      <h3>Momentum</h3>
+      {_momentum_html(state)}
+      <p class="rail-note">Weeks, not days. One missed week is forgiven, once.</p>
+    </div>
+    <div class="rail-card">
       <h3>Shortlist</h3>
       <p class="rail-note">{len(saved)} saved — kept for you, never sent to an employer.</p>
       <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
     </div>
   </aside>
 </div>"""
-    return _page("Kazi-Kasi — jobs for you", body, demo=demo)
+    return _page(
+        "Kazi-Kasi — jobs for you",
+        body,
+        demo=demo,
+        nav=(
+            '<a href="/?profile=' + quote(profile.id) + '">Feed</a>'
+            '<a href="/shortlist?profile=' + quote(profile.id) + '">Shortlist</a>'
+            '<a href="/brief?profile=' + quote(profile.id) + '">Brief</a>'
+            '<a href="/pulse">Pulse</a><a href="/digest?profile=' + quote(profile.id) + '">WhatsApp</a>'
+            '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
+            "Jump <kbd>⌘K</kbd></button>"
+        ),
+        palette=palette_index(conn, profile, now=now),
+    )
 
 
 def render_shortlist(
@@ -880,6 +957,277 @@ def _band_line(band: dict | None, *, prefix: str = "KES ") -> str:
 
 def _n(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
+
+
+
+# --------------------------------------------------------------------------
+# ⌘K — one entry point, invisible until it is wanted
+# --------------------------------------------------------------------------
+
+PALETTE_JS = """
+(function(){
+  var dialog=document.getElementById('kazi-palette');
+  if(!dialog) return;
+  var input=document.getElementById('kazi-q'), list=document.getElementById('kazi-results'),
+      raw=document.getElementById('kazi-index'), data=[], shown=[], active=0;
+  try { data=JSON.parse(raw.textContent||'[]'); } catch(e) { data=[]; }
+
+  function paint(){
+    list.textContent='';
+    if(!shown.length){
+      var none=document.createElement('li'); none.className='none';
+      none.textContent='Nothing matches that.'; list.appendChild(none); return;
+    }
+    shown.forEach(function(item, index){
+      var li=document.createElement('li');
+      if(index===active) li.className='on';
+      var a=document.createElement('a'); a.href=item.href;
+      var b=document.createElement('b'); b.textContent=item.label;
+      var s=document.createElement('span'); s.textContent=item.meta||'';
+      a.appendChild(b); a.appendChild(s); li.appendChild(a); list.appendChild(li);
+    });
+  }
+  function filter(){
+    var q=(input.value||'').toLowerCase().trim();
+    shown=data.filter(function(item){
+      if(!q) return true;
+      return ((item.label+' '+(item.meta||''))||'').toLowerCase().indexOf(q)>-1;
+    }).slice(0,8);
+    active=0; paint();
+  }
+  function open(){
+    if(!dialog.hidden) return;
+    dialog.hidden=false; input.value=''; filter();
+    setTimeout(function(){ input.focus(); },0);
+  }
+  function close(){ dialog.hidden=true; }
+  function go(){ if(shown[active]) window.location.href=shown[active].href; }
+
+  document.addEventListener('keydown', function(event){
+    var key=event.key;
+    if((event.metaKey||event.ctrlKey) && key.toLowerCase()==='k'){
+      event.preventDefault(); dialog.hidden?open():close(); return;
+    }
+    if(dialog.hidden) return;
+    if(key==='Escape'){ close(); }
+    else if(key==='ArrowDown'){ event.preventDefault(); active=Math.min(active+1, shown.length-1); paint(); }
+    else if(key==='ArrowUp'){ event.preventDefault(); active=Math.max(active-1, 0); paint(); }
+    else if(key==='Enter'){ event.preventDefault(); go(); }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-cmdk]'), function(button){
+    button.addEventListener('click', open);
+  });
+  dialog.addEventListener('click', function(event){ if(event.target===dialog) close(); });
+  input.addEventListener('input', filter);
+})();
+"""
+
+
+def _palette_markup(index: list) -> str:
+    """The dialog, its data and its script. Absent when there is nothing to jump to."""
+    if not index:
+        return ""
+    payload = (
+        json.dumps(index, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+    return f"""
+<div class="palette" id="kazi-palette" hidden>
+  <div class="palette-box" role="dialog" aria-modal="true" aria-label="Jump to a job, county or page">
+    <input id="kazi-q" type="search" placeholder="Jump to a job, county or page"
+           aria-label="Search jobs, counties and pages" autocomplete="off" spellcheck="false">
+    <ul id="kazi-results"></ul>
+    <div class="hint">↑ ↓ to move · Enter to open · Esc to close</div>
+  </div>
+</div>
+<script type="application/json" id="kazi-index">{payload}</script>
+<script>{PALETTE_JS}</script>
+"""
+
+
+def palette_index(conn, profile, *, now: datetime) -> list:
+    """Jobs, then counties, then pages — the order people look for things in."""
+    index = []
+    seen = set()
+    for match in _ranked(conn, profile, now=now, limit=25)[0]:
+        index.append(
+            {
+                "label": match.title,
+                "meta": "job · " + (match.employer or "employer not stated"),
+                "href": f"/job/{quote(match.job_id)}?profile={quote(profile.id)}",
+            }
+        )
+        seen.add(match.job_id)
+    hidden = tracking.dismissed_job_ids(conn, profile.id)
+    for row in pulse.live_rows(conn):
+        if row["id"] in seen or row["id"] in hidden:
+            continue
+        if len(index) >= 60:
+            break
+        index.append(
+            {
+                "label": row["title"],
+                "meta": "job · " + (row.get("county") or "county not stated"),
+                "href": f"/job/{quote(row['id'])}?profile={quote(profile.id)}",
+            }
+        )
+    for item in pulse.overview(conn, now=now)["counties"]:
+        index.append(
+            {
+                "label": item["county"],
+                "meta": f"county · {item['live']} live",
+                "href": f"/county/{pulse.slug(item['county'])}",
+            }
+        )
+    index.extend(
+        [
+            {"label": "The feed", "meta": "page", "href": f"/?profile={quote(profile.id)}"},
+            {"label": "Shortlist", "meta": "page", "href": f"/shortlist?profile={quote(profile.id)}"},
+            {"label": "Weekly brief", "meta": "page", "href": f"/brief?profile={quote(profile.id)}"},
+            {"label": "Market pulse", "meta": "page", "href": "/pulse"},
+            {"label": "Advertised pay", "meta": "page", "href": "/salaries"},
+            {"label": "WhatsApp digest", "meta": "page", "href": f"/digest?profile={quote(profile.id)}"},
+        ]
+    )
+    return index
+
+
+def _momentum_html(state: dict) -> str:
+    marks = "".join(f'<i class="{"on" if on else ""}"></i>' for on in state["marks"])
+    return (
+        f'<div class="momentum"><span class="marks" aria-hidden="true">{marks}</span>'
+        f'<span class="rail-note">{_e(momentum.line(state))}</span></div>'
+    )
+
+
+def _wildcard_html(conn, profile, *, now: datetime) -> str:
+    """One exception a week, labelled as one."""
+    item = wildcard.pick(conn, profile, now=now)
+    if item is None:
+        return ""
+    href = f"/job/{quote(item['job_id'])}?profile={quote(profile.id)}"
+    feed_path = f"/?profile={quote(profile.id)}"
+    return f"""<article class="card wildcard">
+  <p class="tagline">Outside your scope · this week only</p>
+  <div class="card-top">
+    <div>
+      <h2><a href="{href}">{_e(item['title'])}</a></h2>
+      <div class="employer">{_e(item['employer'] or 'Employer not stated')}</div>
+    </div>
+    <div class="deadline"><span class="dl-label">score</span>
+      <span class="dl-date">{item['match'].score:.2f}</span></div>
+  </div>
+  <div class="badges"><span class="badge warn">{_e(item['blocker'])}</span>
+    <span class="badge muted">{_e(item['row'].get('county') or 'location unstated')}</span></div>
+  <ul class="whythat">{''.join(f'<li>{_e(reason)}</li>' for reason in item['match'].reasons[:2])}</ul>
+  <div class="foot">
+    <span class="small">{_e(wildcard.sentence(item, profile))}</span>
+    <form method="post" action="/action">
+      <input type="hidden" name="profile" value="{_e(profile.id)}">
+      <input type="hidden" name="job" value="{_e(item['job_id'])}">
+      <input type="hidden" name="kind" value="dismissed">
+      <input type="hidden" name="next" value="{_e(feed_path)}">
+      <button type="submit">Not for me</button>
+    </form>
+    <a class="apply" href="{href}">Look at it</a>
+  </div>
+</article>"""
+
+
+def render_brief(
+    conn,
+    *,
+    profile_id: str | None = None,
+    now: datetime | None = None,
+    demo: bool = False,
+) -> str:
+    """The weekly brief as a page: the same numbers as the message, with the working."""
+    now = now or datetime.now(timezone.utc)
+    profile = _profile_or_default(conn, profile_id)
+    data = brief_module.overview(conn, profile, now=now)
+    state = data["momentum"]
+    text_version = brief_module.message(data, profile)
+    move = data["move"]
+    feed_profile = quote(profile.id)
+
+    if move:
+        move_html = f"""<article class="card">
+  <h2><a href="/job/{_e(move['job_id'])}?profile={feed_profile}">{_e(move['title'])}</a></h2>
+  <div class="employer">{_e(move['employer'] or 'Employer not stated')}</div>
+  <ul class="whythat"><li>{_e(move['reason'])}</li></ul>
+  <div class="foot"><a class="apply" href="/job/{_e(move['job_id'])}?profile={feed_profile}">Open it</a></div>
+</article>"""
+    else:
+        move_html = """<div class="card"><h2>No move this week</h2>
+  <p>Nothing new cleared the bar. The honest thing is to wait for the next sweep
+  rather than lower your standards.</p></div>"""
+
+    families = " · ".join(
+        f"{_e(name)} <span class='small'>{count}</span>" for name, count in data["families"]
+    )
+    band_text = brief_module.band_line(data)
+    band_value = f"{data['band_this_week']:,}" if data["band_this_week"] else "—"
+    delta_value = f"{data['delta_pct']:+d}%" if data["delta_pct"] is not None else "—"
+    distance = "≤ %g km" % profile.max_commute_km if profile.max_commute_km else "no distance limit"
+    pay = f"≥ KES {profile.min_monthly_pay:,.0f}" if profile.min_monthly_pay else "no pay floor"
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Weekly brief · week {data['week'].split('-W')[1]} · {data['days']}-day window</p>
+  <h1 class="display">What moved</h1>
+  <p class="scopeline">{_e(brief_module.headline(data, profile))}</p>
+  <p class="ledger"><b>{data['in_scope']} in scope</b> · {data['new']} new ·
+  {data['closing']} closing · updated {(now + timedelta(hours=3)).strftime('%a %H:%M')} EAT</p>
+</div>
+<div class="strip">
+  <div><b>{data['new']}</b><span>new this week</span></div>
+  <div><b>{data['closing']}</b><span>closing this week</span></div>
+  <div><b>{band_value}</b><span>median advertised minimum</span></div>
+  <div><b>{delta_value}</b><span>vs last week</span></div>
+</div>
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>The move</span><em>one per week, never two</em></div>
+    {move_html}
+    <div class="section" style="margin-top:28px"><span>What the numbers mean</span></div>
+    <p>{_e(band_text)}</p>
+    <p class="small">Computed from live, unflagged adverts in your scope, first seen in the
+    last {data['days']} days against the {data['days']} before. The sample size is printed
+    because a median of three is a rumour with a decimal point.</p>
+    <div class="section" style="margin-top:28px"><span>Role families in scope</span></div>
+    <p>{families or '<span class="small">none resolved yet</span>'}</p>
+    <div class="section" style="margin-top:28px"><span>Exactly what we would send</span></div>
+    <div class="msg">{_e(text_version)}</div>
+    <p class="small">The same brief goes out on WhatsApp once a week, and only when it has
+    something to say.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Momentum</h3>
+      {_momentum_html(state)}
+      <p class="rail-note">Weeks, not days. Opening the brief counts; one missed week is
+      forgiven, once.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Your scope</h3>
+      <div class="chips">
+        <span class="chip">{_e(profile.home_area or profile.home_county or 'no home area')}</span>
+        <span class="chip">{_e(distance)}</span>
+        <span class="chip">{_e(pay)}</span>
+      </div>
+    </div>
+  </aside>
+</div>"""
+    return _page(
+        "Weekly brief — Kazi-Kasi",
+        body,
+        demo=demo,
+        palette=palette_index(conn, profile, now=now),
+    )
 
 
 def render_pulse(conn, *, now: datetime | None = None, demo: bool = False) -> str:
@@ -1574,6 +1922,16 @@ def _handle_get(
         if challenge is None:
             return Response(403, "verification failed", "text/plain; charset=utf-8")
         return Response(200, challenge, "text/plain; charset=utf-8")
+
+    if path == "/brief":
+        profile = _profile_or_default(conn, _query_one(query, "profile") or None)
+        momentum.check_in(conn, profile.id, now=now)
+        return Response(
+            200,
+            render_brief(
+                conn, profile_id=_query_one(query, "profile") or None, now=now, demo=demo
+            ),
+        )
 
     if path == "/pulse":
         return Response(200, render_pulse(conn, now=now, demo=demo))
