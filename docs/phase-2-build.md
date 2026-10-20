@@ -160,9 +160,9 @@ launders fake listings into a demo is not a good habit to build.
 
 ## 8. Next
 
-1. **PSC Kenya + one county government source.** The public-sector lane is the
-   least crowded, the most deadline-driven, and the best test of the "one advert,
-   N posts" rule.
-2. **Real ingest into the graph, then read the duplication rate.** That number
-   decides whether stage 3 is needed at all.
-3. **Postgres + a scheduler**, when there is a feed that people open twice.
+Done in [Phase 3](./phase-3-build.md): PSC and Nairobi City County, via the
+document lane — the "one advert, N posts" rule now runs on real bulletin shapes.
+
+Still to do: run the canary against the live sources for a week, add a second
+county, and read the duplication rate on real data. Postgres + a scheduler come
+when a feed has returning users.
