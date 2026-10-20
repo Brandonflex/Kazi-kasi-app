@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -175,6 +175,54 @@ CREATE TABLE IF NOT EXISTS profile_activity (
 CREATE INDEX IF NOT EXISTS idx_profile_activity ON profile_activity (profile_id, at);
 
 -- ---------------------------------------------------------------------------
+-- Accounts (v7)
+--
+-- A person, not a job. `kind` is 'guest' until a provider proves an identity;
+-- optional sign-in exists to personalise and to fill forms, never to gate the
+-- feed. An account with kind='guest' and no provider is a real row: the whole
+-- point is that someone can use the product without an identity.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS accounts (
+    id           TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL,           -- guest | member
+    provider     TEXT,                    -- google | apple | linkedin
+    subject      TEXT,                    -- the provider's stable user id
+    email        TEXT,
+    email_verified INTEGER NOT NULL DEFAULT 0,
+    name         TEXT,
+    created_at   TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    deleted_at   TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_identity
+    ON accounts (provider, subject) WHERE provider IS NOT NULL;
+
+-- A CV is evidence about a person. We keep the extracted fields and a short
+-- excerpt for each, not the whole document, so the smallest useful copy lives here.
+CREATE TABLE IF NOT EXISTS cvs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    filename   TEXT,
+    chars      INTEGER NOT NULL DEFAULT 0,
+    fields     TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+-- One in-flight OAuth attempt: the state token and its PKCE verifier, which
+-- must never leave the server except as a hash in the authorize URL.
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state      TEXT PRIMARY KEY,
+    provider   TEXT NOT NULL,
+    verifier   TEXT NOT NULL,
+    return_to  TEXT,
+    created_at TEXT NOT NULL,
+    used_at    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cvs_account ON cvs (account_id, created_at);
+
+-- ---------------------------------------------------------------------------
 -- v4: the digest. Consent, what was sent, and what happened to it.
 -- ---------------------------------------------------------------------------
 
@@ -319,6 +367,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     from datetime import datetime, timezone
 
     conn.executescript(SCHEMA)
+    _add_column(conn, "subscriptions", "brief_opt_in", "INTEGER NOT NULL DEFAULT 0")
     _add_column(conn, "messages", "run_id", "INTEGER REFERENCES digest_runs(id)")
     _add_column(conn, "messages", "delivered_at", "TEXT")
     conn.execute(

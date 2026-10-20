@@ -91,6 +91,20 @@ shipped:
   your scope*, deterministic per person per week, and only ever one fixable
   blocker away (Spotify's Discover Weekly mechanic, `§3.8`).
 
+- **Sign-in, kept optional** (`/signin`, `/account`) — Google, Apple and LinkedIn
+  with PKCE, and a guest door that withholds nothing. The reason to sign in is
+  continuity and the application kit, never access to jobs. Deleting an account
+  deletes the CV and blanks the identity.
+- **The CV as evidence** — every field keeps the line it came from and a
+  confidence; gaps stay gaps. The kit fills an employer's form from it and says
+  which source each value came from.
+- **The job page as the last mile** (`/job/<id>`) — the evidence panel, the
+  channel the advert actually specifies, a named contact only when one is
+  written down, what the advert does not say, and a direct route to apply.
+- **The tracker** (`/activity`) — saved, applied and visited, one row per job
+  showing the furthest thing done. The same `apply_events` the ledger already
+  used, so the product has one history rather than two.
+
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly
 ritual with forgiveness, because the evidence that rituals drive returns is

@@ -187,8 +187,19 @@ class TestTheReminder:
 
 
 class TestActions:
-    def test_a_visitor_may_not_write_an_applied_event(self, conn, jobs):
+    def test_a_visitor_may_report_an_application_they_made(self, conn, jobs):
+        """Self-reporting is allowed; claiming we submitted it is not.
+
+        There is no in-app application and no auto-apply. "I applied" records
+        what the person says they did, on the employer's site, and the tracker
+        counts it. Nothing here talks to an employer.
+        """
         body = f"profile=demo-fresher&job={jobs[0]}&kind=applied".encode()
+        handle(conn, "POST", "/action", {}, body=body, now=NOW)
+        assert [row["kind"] for row in tracking.events_for_job(conn, jobs[0])] == ["applied"]
+
+    def test_a_visitor_cannot_write_a_click_through(self, conn, jobs):
+        body = f"profile=demo-fresher&job={jobs[0]}&kind=clicked_through".encode()
         handle(conn, "POST", "/action", {}, body=body, now=NOW)
         assert [row["kind"] for row in tracking.events_for_job(conn, jobs[0])] == []
 

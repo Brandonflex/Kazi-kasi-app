@@ -207,6 +207,22 @@ These are the next decisions, each with the trade-off written down.
 | D17 | **Show the match score to users?** | Show · hide · show on the job page only | Show, small and grey: it is an audit trail, and hiding it invites "why this job?" |
 | D18 | **Employer logos** | None · only when verified | None in v1 |
 
+## 7b. Part 15 additions — the last mile
+
+The earlier passes designed the finding. This one designs the **acting**:
+
+| surface | rule it follows | what it refuses |
+| --- | --- | --- |
+| `/signin` | one decision per screen: a provider, or a guest | a login wall, a "why not?" interstitial on the feed |
+| `/account` | every stored field shows its evidence | a CV upload that silently edits the scope |
+| `/job/<id>` | the advert's own words, quoted | invented hiring-team names or guessed emails |
+| the kit | copy-ready values, each labelled with its source | submitting anything on the person's behalf |
+| `/activity` | one row per job, furthest state first | streaks, scores, or a count that shames |
+
+The typographic rules hold: figures in Georgia, no red on an action, no amber
+badge that reads as a warning when it means "unsaved". The tracker's badges are
+deliberately dull — *visited* is grey, *on your shortlist* is the one green.
+
 ## 8. What "done" looks like for this design pass
 
 - [x] A named direction with a stated rationale, not a moodboard

@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
+from . import brief as brief_module
 from . import digest as digest_module
 from . import ranking, tracking
 from .db import _now_iso
@@ -68,6 +69,7 @@ class Subscription:
     max_items: int = digest_module.DEFAULT_MAX_ITEMS
     fallback_channel: str | None = "sms"
     unsubscribed_at: str | None = None
+    brief_opt_in: bool = False
 
     @property
     def active(self) -> bool:
@@ -86,6 +88,7 @@ class Subscription:
             "fallback_channel": self.fallback_channel,
             "active": self.active,
             "unsubscribed_at": self.unsubscribed_at,
+            "brief_opt_in": self.brief_opt_in,
         }
 
 
@@ -100,6 +103,7 @@ def subscribe(
     fallback_channel: str | None = "sms",
     max_items: int = digest_module.DEFAULT_MAX_ITEMS,
     window: tuple[str, str] = ("18:00", "20:00"),
+    brief_opt_in: bool = False,
     now: datetime | None = None,
 ) -> Subscription:
     """Record consent. Re-subscribing clears a previous opt-out and re-dates it."""
@@ -119,8 +123,8 @@ def subscribe(
         """INSERT INTO subscriptions
            (profile_id, channel, msisdn, msisdn_hash, consented_at, consent_source,
             cadence, window_start, window_end, max_items, fallback_channel,
-            unsubscribed_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?)
+            unsubscribed_at, brief_opt_in, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)
            ON CONFLICT(profile_id) DO UPDATE SET
              channel = excluded.channel,
              msisdn = excluded.msisdn,
@@ -130,6 +134,7 @@ def subscribe(
              cadence = excluded.cadence,
              max_items = excluded.max_items,
              fallback_channel = excluded.fallback_channel,
+             brief_opt_in = excluded.brief_opt_in,
              unsubscribed_at = NULL,
              updated_at = excluded.updated_at""",
         (
@@ -144,6 +149,7 @@ def subscribe(
             window_end,
             max_items,
             fallback_channel,
+            1 if brief_opt_in else 0,
             at,
         ),
     )
@@ -205,6 +211,7 @@ def load_subscription(conn, profile_id: str) -> Subscription | None:
         max_items=int(data["max_items"]),
         fallback_channel=data["fallback_channel"],
         unsubscribed_at=data["unsubscribed_at"],
+        brief_opt_in=bool(data.get("brief_opt_in", 0)),
     )
 
 
@@ -546,6 +553,88 @@ def _backoff_due(message_row, now: datetime) -> bool:
     delay = BACKOFF_MINUTES[min(attempts, len(BACKOFF_MINUTES) - 1)]
     last = datetime.fromisoformat(message_row["updated_at"])
     return now >= last + timedelta(minutes=delay)
+
+
+def queue_brief(
+    conn,
+    profile_id: str,
+    *,
+    now: datetime | None = None,
+    dry_run: bool = False,
+    link_base: str | None = None,
+) -> dict:
+    """Compose and enqueue one person's weekly brief. Sends nothing.
+
+    The idempotency key is the ISO week, not the day: a re-run, a restart and a
+    crash all converge on one message, and next Monday gets a new one. A profile
+    with no subscription is not queued at all — the brief is a message, and
+    messages need consent.
+    """
+    now = now or datetime.now(timezone.utc)
+    subscription = load_subscription(conn, profile_id)
+    if subscription is None or not subscription.active:
+        return {"profile_id": profile_id, "state": "unsubscribed", "queued": 0}
+    if not subscription.brief_opt_in:
+        # The brief is a second kind of message. Consent to one is not consent to
+        # both, and adding a weekly message to a daily digest is how a product
+        # teaches people to mute it.
+        return {"profile_id": profile_id, "state": "not_opted_in", "queued": 0}
+
+    profile = load_profile(conn, profile_id)
+    if profile is None:
+        return {"profile_id": profile_id, "state": "no_profile", "queued": 0}
+
+    data = brief_module.overview(conn, profile, now=now)
+    body = brief_module.message(data, profile, base=link_base)
+    week = data["week"]
+    key = f"brief:{profile_id}:{week}"
+
+    if dry_run:
+        return {
+            "profile_id": profile_id,
+            "state": "dry_run",
+            "week": week,
+            "queued": 1,
+            "body": body,
+            "characters": len(body),
+        }
+
+    outgoing = digest_module.Outgoing(
+        profile_id=profile_id,
+        channel=subscription.channel,
+        msisdn=subscription.msisdn,
+        body=body,
+        idempotency=key,
+        kind="brief",
+    )
+    added = enqueue(conn, outgoing, now=now)
+    return {
+        "profile_id": profile_id,
+        "state": "queued" if added else "already_queued",
+        "week": week,
+        "queued": 1 if added else 0,
+        "characters": len(body),
+    }
+
+
+def brief_due(conn, *, now: datetime | None = None) -> list[str]:
+    """Active subscribers who have not had this week's brief yet."""
+    from . import momentum
+
+    now = now or datetime.now(timezone.utc)
+    week = momentum.week_key(now)
+    sent = {
+        row["profile_id"]
+        for row in conn.execute(
+            "SELECT DISTINCT profile_id FROM messages WHERE kind = 'brief' AND idempotency LIKE ?",
+            (f"brief:%:{week}",),
+        )
+    }
+    return [
+        subscription.profile_id
+        for subscription in active_subscriptions(conn)
+        if subscription.brief_opt_in and subscription.profile_id not in sent
+    ]
 
 
 def send_due(

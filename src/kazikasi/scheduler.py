@@ -138,6 +138,7 @@ def run_due(
     now: datetime | None = None,
     link_base: str | None = None,
     dry_run: bool = False,
+    with_brief: bool = False,
 ) -> dict:
     """One tick: compose for everyone due, then try to deliver.
 
@@ -164,6 +165,18 @@ def run_due(
         except ValueError as error:  # a subscription without a profile, or bad data
             composed.append({"profile_id": decision.profile_id, "error": str(error)})
 
+    briefs: list[dict] = []
+    if with_brief:
+        for profile_id in outbox.brief_due(conn, now=now):
+            try:
+                briefs.append(
+                    outbox.queue_brief(
+                        conn, profile_id, now=now, dry_run=dry_run, link_base=link_base
+                    )
+                )
+            except ValueError as error:
+                briefs.append({"profile_id": profile_id, "error": str(error)})
+
     report = None
     if transports is not None and not dry_run:
         report = outbox.send_due(conn, transports, now=now).to_dict()
@@ -175,6 +188,7 @@ def run_due(
         "due": [decision.to_dict() for decision in decisions if decision.due],
         "waiting": waiting,
         "composed": composed,
+        "briefs": briefs,
         "sent": report,
     }
 

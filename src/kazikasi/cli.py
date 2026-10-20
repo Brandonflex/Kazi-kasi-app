@@ -360,7 +360,8 @@ def cmd_digest(args: argparse.Namespace) -> int:
                     conn, args.profile, args.subscribe, source=args.source,
                     channel=args.channel, cadence=args.cadence,
                     fallback_channel=None if args.no_fallback else "sms",
-                    max_items=args.max_items, window=window, now=_now(),
+                    max_items=args.max_items, window=window,
+                    brief_opt_in=getattr(args, "brief", False), now=_now(),
                 )
             except ValueError as error:
                 raise SystemExit(str(error)) from error
@@ -475,7 +476,12 @@ def cmd_run(args: argparse.Namespace) -> int:
                     except RuntimeError as error:
                         raise SystemExit(f"cannot send: {error}") from error
             return scheduler.run_due(
-                conn, transports, now=_now(), link_base=args.link_base, dry_run=args.dry_run
+                conn,
+                transports,
+                now=_now(),
+                link_base=args.link_base,
+                dry_run=args.dry_run,
+                with_brief=getattr(args, "brief", False),
             )
 
         if not args.loop:
@@ -603,6 +609,11 @@ def main(argv: list[str] | None = None) -> int:
     p_digest.add_argument("--window", default=None, metavar="HH:MM-HH:MM")
     p_digest.add_argument("--max-items", type=int, default=5)
     p_digest.add_argument("--source", default="cli", help="how consent was given")
+    p_digest.add_argument(
+        "--brief",
+        action="store_true",
+        help="also consent to the weekly brief (a second kind of message)",
+    )
     p_digest.add_argument("--no-fallback", action="store_true")
     p_digest.add_argument("--preview", action="store_true", help="print the message, queue nothing")
     p_digest.add_argument("--queue", action="store_true", help="queue it even when subscribing")
@@ -621,6 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     p_outbox.set_defaults(func=cmd_outbox)
 
     p_run = sub.add_parser("run", help="the scheduler: compose and send what is due")
+    p_run.add_argument("--brief", action="store_true", help="also queue the weekly brief")
     p_run.add_argument("--db", default="./data/kazi.db")
     p_run.add_argument("--once", action="store_true", help="one tick (default)")
     p_run.add_argument("--loop", action="store_true", help="keep ticking")

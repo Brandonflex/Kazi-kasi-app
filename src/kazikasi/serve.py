@@ -20,6 +20,8 @@ Routes:
 
 from __future__ import annotations
 
+import re
+
 import hashlib
 import hmac as _hmac
 import html
@@ -34,9 +36,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from . import (
+    accounts,
+    autofill,
     brief as brief_module,
     db,
     digest as digest_module,
+    employer,
     graph,
     metrics,
     momentum,
@@ -580,6 +585,7 @@ def render_feed(
     demo: bool = False,
     limit: int = 40,
     since: datetime | None = None,
+    headers: dict | None = None,
 ) -> str:
     now = now or datetime.now(timezone.utc)
     profile = _profile_or_default(conn, profile_id)
@@ -784,14 +790,7 @@ def render_feed(
         "Kazi-Kasi — jobs for you",
         body,
         demo=demo,
-        nav=(
-            '<a href="/?profile=' + quote(profile.id) + '">Feed</a>'
-            '<a href="/shortlist?profile=' + quote(profile.id) + '">Shortlist</a>'
-            '<a href="/brief?profile=' + quote(profile.id) + '">Brief</a>'
-            '<a href="/pulse">Pulse</a><a href="/digest?profile=' + quote(profile.id) + '">WhatsApp</a>'
-            '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
-            "Jump <kbd>⌘K</kbd></button>"
-        ),
+        nav=_nav_for(_account_for(conn, headers), profile.id),
         palette=palette_index(conn, profile, now=now),
     )
 
@@ -802,6 +801,7 @@ def render_shortlist(
     profile_id: str | None = None,
     now: datetime | None = None,
     demo: bool = False,
+    headers: dict | None = None,
 ) -> str:
     """Saved jobs, the comparison, and the one reminder a save earns.
 
@@ -934,7 +934,12 @@ with an employer, and a save is never sold as a lead.</p>
   <p><a class="apply" href="{_e(feed_path)}">Back to the feed</a></p>
 </div>"""
 
-    return _page("Shortlist — Kazi-Kasi", body, demo=demo)
+    return _page(
+        "Shortlist — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_nav_for(_account_for(conn, headers), profile.id),
+    )
 
 
 
@@ -1138,12 +1143,491 @@ def _wildcard_html(conn, profile, *, now: datetime) -> str:
 </article>"""
 
 
+
+# --------------------------------------------------------------------------
+# Accounts, the CV, and the application kit
+# --------------------------------------------------------------------------
+
+
+def _account_for(conn, headers: dict | None) -> dict | None:
+    account_id = accounts.read_session(headers)
+    if not account_id:
+        return None
+    return accounts.account(conn, account_id)
+
+
+def _first_name(account: dict | None) -> str:
+    if not account:
+        return ""
+    name = (account.get("name") or "").strip()
+    return name.split()[0].title() if name else ""
+
+
+def _public_nav(conn, headers: dict | None) -> str:
+    """The same nav for pages that are not tied to one saved scope."""
+    return _nav_for(_account_for(conn, headers), _profile_or_default(conn, None).id)
+
+
+def _nav_for(account: dict | None, profile_id: str) -> str:
+    who = _first_name(account)
+    label = who or ("Guest" if account else "Sign in")
+    return (
+        '<a href="/?profile=' + quote(profile_id) + '">Feed</a>'
+        '<a href="/shortlist?profile=' + quote(profile_id) + '">Shortlist</a>'
+        '<a href="/brief?profile=' + quote(profile_id) + '">Brief</a>'
+        '<a href="/activity?profile=' + quote(profile_id) + '">Activity</a>'
+        '<a href="/pulse">Pulse</a>'
+        '<a href="/account">' + _e(label) + "</a>"
+        '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
+        "Jump <kbd>⌘K</kbd></button>"
+    )
+
+
+def _notice(kind: str, message: str) -> str:
+    if not message:
+        return ""
+    tone = {"good": "good", "warn": "warn", "bad": "danger"}.get(kind, "")
+    return f'<div class="whobar"><span class="badge {tone}">{_e(message)}</span></div>'
+
+
+def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
+    """Three providers, a guest door, and an honest statement of what is stored."""
+    configured = {key: provider.configured for key, provider in accounts.PROVIDERS.items()}
+    cards = []
+    for key, provider in accounts.PROVIDERS.items():
+        state = "ready" if configured[key] else "not configured in this build"
+        cards.append(
+            '<form method="post" action="/auth/start" class="provider">'
+            f'<input type="hidden" name="provider" value="{key}">'
+            f'<button type="submit" class="provider-button{" off" if not configured[key] else ""}">'
+            f'<b>Continue with {_e(provider.label)}</b>'
+            f"<span>{_e(accounts.WHY[key])}</span></button>"
+            f'<span class="small">{_e(state)}</span>'
+            "</form>"
+        )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Optional · takes ten seconds</p>
+  <h1 class="display">Sign in, or don't</h1>
+  <p class="scopeline">The feed works without an account. Signing in keeps your
+  shortlist across devices and lets us fill employer forms with details your CV
+  already contains — nothing else.</p>
+</div>
+{_notice(tone, notice)}
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>Continue with</span><em>we ask for a name and an email</em></div>
+    {''.join(cards)}
+    <div class="section" style="margin-top:26px"><span>Or stay a guest</span></div>
+    <div class="rail-card" style="margin:0">
+      <p class="rail-note" style="margin-top:0">A guest gets the whole product on this
+      device: the feed, the shortlist, the brief. Upload a CV and the application kit
+      works exactly the same. The only thing you lose is continuity when you clear
+      your browser.</p>
+      <form method="post" action="/auth/guest" style="margin-top:12px">
+        <input type="hidden" name="next" value="/account?guest=1">
+        <button type="submit" class="ghost">Continue as guest</button>
+      </form>
+    </div>
+    <h2>What we store, and what we never ask for</h2>
+    <ul class="sources">
+      <li>Your name and email address, as your provider returns them.</li>
+      <li>The details your CV states, with the line each one came from.</li>
+      <li>Your shortlist and what you told us you applied to.</li>
+    </ul>
+    <p class="small">We do not read your contacts, your posts or your connections —
+    LinkedIn sign-in asks only for your name, headline and email. We do not sell a
+    save, a click or an application to an employer. Deleting your account deletes the
+    CV and blanks the identity, and you can do it in one click.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Why bother</h3>
+      <p class="rail-note">Two reasons: your shortlist follows you to another device,
+      and the application kit can fill an employer's form from your CV instead of you
+      retyping it at 11pm.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Guest is not a trial</h3>
+      <p class="rail-note">Nothing is withheld from a guest. That is deliberate: a job
+      board that hides jobs behind a login is a lead-generation form with extra steps.</p>
+    </div>
+  </aside>
+</div>"""
+    return _page("Sign in — Kazi-Kasi", body, demo=demo)
+
+
+def _cv_summary(cv: dict | None) -> str:
+    if not cv:
+        return ""
+    fields = cv.get("fields") or {}
+    rows = []
+    labels = {
+        "name": "Name", "email": "Email", "phone": "Phone", "location": "Location",
+        "experience": "Experience", "education": "Education", "links": "Links",
+        "skills": "Skills", "referees": "Referees",
+    }
+    for key, label in labels.items():
+        field = fields.get(key) or {}
+        value = field.get("value")
+        if not value:
+            continue
+        if isinstance(value, list):
+            value = ", ".join(value)
+        rows.append(
+            f"<tr><td>{_e(label)}</td><td>{_e(value)}</td>"
+            f'<td class="small">{_e(field.get("evidence") or "")}</td></tr>'
+        )
+    if not rows:
+        return '<p class="small">We could not find any of the usual fields in that text.</p>'
+    return (
+        "<table><tr><th>Field</th><th>Read as</th><th>From your CV</th></tr>"
+        + "".join(rows)
+        + "</table>"
+    )
+
+
+def render_account(
+    conn,
+    account: dict | None,
+    *,
+    profile,
+    demo: bool = False,
+    notice: str = "",
+    tone: str = "good",
+) -> str:
+    cv = accounts.latest_cv(conn, account["id"]) if account else None
+    suggestions = autofill.profile_suggestions(cv.get("fields", {})) if cv else {}
+    gaps = autofill.missing(cv.get("fields", {})) if cv else ["Full name", "Email", "Phone number"]
+
+    who = (account or {}).get("name") or ("Guest" if account else "Not signed in")
+    kind = (account or {}).get("kind") or "none"
+    provider = (account or {}).get("provider")
+    provider_label = accounts.PROVIDERS[provider].label if provider in accounts.PROVIDERS else None
+
+    identity = []
+    if account is None:
+        identity.append(
+            '<p>You are browsing as a guest without a session. <a href="/signin">Sign in</a>'
+            " to keep a shortlist across devices.</p>"
+        )
+    else:
+        identity.append(
+            f"<p><b>{_e(who)}</b> — "
+            + ("a guest account" if kind == "guest" else f"signed in with {_e(provider_label or 'a provider')}")
+            + (f", {_e(account.get('email'))}" if account.get("email") else "")
+            + ".</p>"
+        )
+        if kind == "guest":
+            identity.append(
+                '<p class="small">A guest account lives in this browser. <a href="/signin">'
+                "Sign in</a> and the shortlist and this CV move with you.</p>"
+            )
+
+    suggestion_html = ""
+    if suggestions:
+        bits = []
+        if suggestions.get("home_county"):
+            bits.append(f"county {_e(suggestions['home_county'])}")
+        if suggestions.get("role_families"):
+            bits.append("role families " + _e(", ".join(suggestions["role_families"])))
+        if suggestions.get("entry_fits"):
+            levels = ", ".join(suggestions["entry_fits"]).replace("_", " ")
+            bits.append("entry level " + _e(levels))
+        suggestion_html = (
+            '<div class="whobar"><b>From your CV, we would suggest:</b> '
+            + " · ".join(bits)
+            + '. <span class="small">Suggestions only — nothing about your scope changed.</span></div>'
+        )
+
+    delete_form = ""
+    if account:
+        delete_form = (
+            '<form method="post" action="/account/forget" style="display:inline;margin-left:10px"'
+            ' onsubmit="return confirm(&quot;Delete your account, CV and identity? This cannot be undone.&quot;)">'
+            '<button type="submit" class="ghost">Delete everything</button></form>'
+        )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Account</p>
+  <h1 class="display">You</h1>
+  <p class="scopeline">What we hold, where it came from, and how to make applying
+  take five minutes instead of forty.</p>
+</div>
+{_notice(tone, notice)}
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>Identity</span></div>
+    {''.join(identity) if account else '<p>Not signed in. <a href="/signin">Sign in</a> or continue as a guest.</p>'}
+
+    <div class="section" style="margin-top:26px"><span>Your CV</span>
+      <em>{'read ' + _e(cv['created_at'][:10]) if cv else 'not uploaded'}</em></div>
+    <p class="small">Paste the text of your CV, or upload a .txt, .md or .pdf file.
+    We read it here, store the fields it states with the line each came from, and
+    nothing else. It is never shown to an employer from our side.</p>
+    <form method="post" action="/account/cv" enctype="multipart/form-data" class="subform" style="flex-direction:column;align-items:stretch">
+      <input type="file" name="cv_file" accept=".txt,.md,.pdf" aria-label="CV file">
+      <textarea name="cv_text" rows="7" placeholder="…or paste your CV text here"
+        style="font:14px/1.5 var(--font-mono);padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card);color:var(--ink)"></textarea>
+      <button type="submit">Read my CV</button>
+    </form>
+    {_cv_summary(cv)}
+    {suggestion_html}
+    <p class="small">Missing for forms: {_e(', '.join(gaps))}. A gap here is the
+    document's gap, not yours — the kit will tell you what to type rather than make
+    something up.</p>
+
+    <div class="section" style="margin-top:26px"><span>Your data</span></div>
+    <form method="post" action="/auth/signout" style="display:inline">
+      <button type="submit" class="ghost">Sign out</button>
+    </form>
+{delete_form}
+    <p class="small">Deleting removes the CV outright, blanks your name and email, and
+    keeps an anonymous tombstone so the same sign-in cannot silently recreate a
+    profile behind your back.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Why a CV</h3>
+      <p class="rail-note">So that the “fill this form” step stops being
+      forty fields of retyping. It does not change your ranking, and no employer
+      receives it.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Your scope</h3>
+      <div class="chips">
+        <span class="chip">{_e(profile.name.split(' — ')[0])}</span>
+        <span class="chip">{_e(profile.home_area or profile.home_county or 'no home area')}</span>
+        <span class="chip">{'≤ %g km' % profile.max_commute_km if profile.max_commute_km else 'no limit'}</span>
+      </div>
+      <a class="more" href="/?profile={quote(profile.id)}">Open the feed →</a>
+    </div>
+  </aside>
+</div>"""
+    return _page("You — Kazi-Kasi", body, demo=demo)
+
+
+def render_activity(
+    conn,
+    *,
+    profile,
+    now: datetime | None = None,
+    demo: bool = False,
+    tab: str = "all",
+    headers: dict | None = None,
+) -> str:
+    """Everything the person has done here: saved, applied, visited, dismissed."""
+    now = now or datetime.now(timezone.utc)
+    tabs = [("all", "Everything"), ("saved", "Saved"), ("applied", "Applied"), ("visited", "Visited")]
+    counts = {key: 0 for key, _ in tabs}
+
+    events = conn.execute(
+        """SELECT e.*, j.title, j.employer_name, j.status, j.deadline
+             FROM apply_events e JOIN jobs j ON j.id = e.job_id
+            WHERE e.profile_id = ? AND e.kind IN ('saved','unsaved','clicked_through','applied','viewed','dismissed')
+            ORDER BY e.at DESC LIMIT 400""",
+        (profile.id,),
+    ).fetchall()
+
+    # One row per job, showing the furthest thing you did with it. A job you
+    # saved, opened and applied to is one line, not three. "Unsaved" is a
+    # transition, not a state: it clears the save and leaves the rest.
+    # Oldest first, so the most recent save/unsave wins.
+    per_job: dict[str, dict] = {}
+    for event in reversed(events):
+        state = per_job.setdefault(
+            event["job_id"], {"row": dict(event), "saved": False, "applied": False,
+                              "clicked": False, "dismissed": False}
+        )
+        state["row"] = dict(event) if event["at"] >= state["row"]["at"] else state["row"]
+        if event["kind"] == "saved":
+            state["saved"] = True
+        elif event["kind"] == "unsaved":
+            state["saved"] = False
+        elif event["kind"] == "applied":
+            state["applied"] = True
+        elif event["kind"] == "clicked_through":
+            state["clicked"] = True
+        elif event["kind"] == "dismissed":
+            state["dismissed"] = True
+
+    rows = []
+    for job_id, state in per_job.items():
+        if state["applied"]:
+            group, label = "applied", "you applied"
+        elif state["clicked"]:
+            group, label = "applied", "opened the application"
+        elif state["saved"]:
+            group, label = "saved", "on your shortlist"
+        elif state["dismissed"]:
+            group, label = "visited", "dismissed"
+        elif state["row"]["kind"] == "viewed":
+            group, label = "visited", "visited"
+        else:
+            continue
+        row = state["row"]
+        closed = (row.get("deadline") or "9999") < now.date().isoformat()
+        if group == "visited" and label == "visited" and closed:
+            label = "closed since"
+        rows.append(dict(row, group=group, label=label, closed=closed))
+        counts["all"] += 1
+        counts[group] += 1
+    rows.sort(key=lambda row: row["at"], reverse=True)
+    if tab in ("saved", "applied", "visited"):
+        rows = [row for row in rows if row["group"] == tab]
+
+    def status(row) -> str:
+        tone = {
+            "you applied": "good",
+            "on your shortlist": "good",
+            "opened the application": "",
+            "visited": "",
+            "dismissed": "muted",
+            "closed since": "warn",
+        }[row["label"]]
+        return f'<span class="badge {tone}">{_e(row["label"])}</span>'
+
+    items = []
+    for row in rows:
+        when = row["at"][:16].replace("T", " ")
+        items.append(
+            '<tr>'
+            f'<td><a href="/job/{_e(row["job_id"])}?profile={quote(profile.id)}">'
+            f'{_e(row["title"])}</a><div class="small">{_e(row["employer_name"] or "")}</div></td>'
+            f"<td>{status(row)}</td>"
+            f'<td class="small">{_e(when)}</td>'
+            f'<td class="small">{_e((row.get("deadline") or "—"))}</td>'
+            "</tr>"
+        )
+
+    tabs_html = "".join(
+        f'<a class="{"on" if tab == key else ""}" href="/activity?profile={quote(profile.id)}&tab={key}">'
+        f"{_e(label)} <span class=\"count\">{counts[key]}</span></a>"
+        for key, label in tabs
+    )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Activity · {counts['all']} jobs touched</p>
+  <h1 class="display">Where you have been</h1>
+  <p class="scopeline">Saved, applied, visited and dismissed — the same record that
+  powers the ledger on your feed. Nothing here is shared with an employer.</p>
+  <div class="filters">{tabs_html}</div>
+</div>
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>{_e(dict(tabs).get(tab, 'Everything'))}</span>
+      <em>{len(rows)} items</em></div>
+    {
+        '<div class="tablewrap"><table><tr><th>Job</th><th>State</th><th>When</th><th>Closes</th></tr>'
+        + "".join(items) + "</table></div>"
+        if items
+        else '<div class="card"><h2>Nothing here yet</h2><p>Open a role, save one, or tell us '
+             'you applied, and it appears in this record.</p></div>'
+    }
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Why keep this</h3>
+      <p class="rail-note">A job hunt is thirty open tabs and a notebook. This is the
+      notebook: what you looked at, what you kept, and what you already did.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Saved jobs close</h3>
+      <p class="rail-note">Anything still open on your shortlist earns one reminder
+      48 hours before its deadline.</p>
+      <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
+    </div>
+  </aside>
+</div>"""
+    return _page(
+        "Activity — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_nav_for(_account_for(conn, headers), profile.id),
+    )
+
+
+def _dossier_block(conn, row, payload: dict) -> str:
+    row = dict(row)
+    dossier = employer.read(
+        payload.get("description_md"),
+        source_id=(graph.primary_source(conn, row["id"]) or {}).get("source_id"),
+        employer_domain=row.get("employer_domain"),
+    )
+    contacts = "".join(
+        f'<li><b>{_e(contact.kind)}</b> · {_e(contact.value)}'
+        f'<div class="small">“{_e(contact.evidence)}”</div></li>'
+        for contact in dossier.contacts
+    ) or '<li class="small">The advert names nobody and gives no contact.</li>'
+    missing = "".join(f"<li>{_e(item)}</li>" for item in dossier.missing)
+    opens = employer.opens(conn, row["id"])
+    return f"""
+<h1>Who you would be dealing with</h1>
+<p>Apply {_e("by email" if dossier.channel == "email" else "through " + dossier.channel)}. That is what the advert says, not a
+guess — applying the wrong way is a silent rejection.</p>
+{f'<div class="evidence">{_e(dossier.instructions)}</div>' if dossier.instructions else ''}
+<ul class="sources">{contacts}</ul>
+{f'<p class="small">What the advert does not tell you:</p><ul class="sources">{missing}</ul>' if missing else ''}
+<p class="small">Connects: we do not have your network and will not scrape one. If you
+know someone at {_e(row.get('employer_name') or 'this employer')}, ask them for the
+name on the advert — a referral beats a cover letter here.
+{f'{opens} people opened this page here.' if opens else 'You are the first to open this page.'}</p>
+"""
+
+
+def _kit_block(account: dict | None, cv: dict | None, profile, row, payload: dict) -> str:
+    row = dict(row)
+    if not account:
+        return """
+<h1>Fill this form in five minutes</h1>
+<p class="small">Sign in — or continue as a guest — and add your CV. We will prepare
+every field the employer's form asks for, with your own words, ready to paste.</p>
+<p><a class="apply" href="/signin">Set up the application kit</a></p>"""
+
+    fields = (cv or {}).get("fields") or {}
+    rows = autofill.kit(profile, fields, dict(row))
+    note = autofill.cover_note(profile, fields, dict(row))
+    missing = autofill.missing(fields)
+
+    cells = []
+    for item in rows:
+        value = item["value"]
+        if not value:
+            cells.append(
+                f'<tr><td>{_e(item["label"])}</td>'
+                '<td class="small">type this one — your CV does not state it</td>'
+                '<td class="small">—</td></tr>'
+            )
+            continue
+        cells.append(
+            f'<tr><td>{_e(item["label"])}</td><td>{_e(value)}</td>'
+            f'<td class="small">{_e(item["source"])}</td></tr>'
+        )
+
+    return f"""
+<h1>Fill this form in five minutes</h1>
+<p class="small">Every value below comes from your CV or the advert. Copy them into
+the employer's form; nothing is submitted from here, and no employer receives your
+CV from us.</p>
+<div class="tablewrap"><table><tr><th>Field</th><th>Your answer</th><th>Source</th></tr>
+{''.join(cells)}</table></div>
+{f'<p class="small">Still to type: {_e(", ".join(missing))}.</p>' if missing else ''}
+<h2>Cover note, from your own words</h2>
+<div class="msg">{_e(note)}</div>
+<p class="small">Three sentences, built from the advert and your CV. Edit it — it is a
+starting point, not a voice we are putting in your mouth.</p>"""
+
+
 def render_brief(
     conn,
     *,
     profile_id: str | None = None,
     now: datetime | None = None,
     demo: bool = False,
+    headers: dict | None = None,
 ) -> str:
     """The weekly brief as a page: the same numbers as the message, with the working."""
     now = now or datetime.now(timezone.utc)
@@ -1227,10 +1711,11 @@ def render_brief(
         body,
         demo=demo,
         palette=palette_index(conn, profile, now=now),
+        nav=_nav_for(_account_for(conn, headers), profile.id),
     )
 
 
-def render_pulse(conn, *, now: datetime | None = None, demo: bool = False) -> str:
+def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, headers: dict | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     data = pulse.overview(conn, now=now)
     stamp = (now + timedelta(hours=3)).strftime("%H:%M")
@@ -1305,10 +1790,15 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False) -> st
     </div>
   </aside>
 </div>"""
-    return _page("Market pulse — Kazi-Kasi", body, demo=demo)
+    return _page(
+        "Market pulse — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_public_nav(conn, headers),
+    )
 
 
-def render_salaries(conn, *, now: datetime | None = None, demo: bool = False) -> str:
+def render_salaries(conn, *, now: datetime | None = None, demo: bool = False, headers: dict | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     data = pulse.overview(conn, now=now)
     rows = "".join(
@@ -1354,10 +1844,22 @@ def render_salaries(conn, *, now: datetime | None = None, demo: bool = False) ->
     </div>
   </aside>
 </div>"""
-    return _page("Advertised pay — Kazi-Kasi", body, demo=demo)
+    return _page(
+        "Advertised pay — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_public_nav(conn, headers),
+    )
 
 
-def render_county(conn, key: str, *, now: datetime | None = None, demo: bool = False) -> str | None:
+def render_county(
+    conn,
+    key: str,
+    *,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+) -> str | None:
     """A county by slug ("nairobi") or by name ("Nairobi"). 404 when we have never seen it."""
     now = now or datetime.now(timezone.utc)
     data = pulse.county(conn, key, now=now) or pulse.by_slug(conn, key.lower(), now=now)
@@ -1403,7 +1905,12 @@ def render_county(conn, key: str, *, now: datetime | None = None, demo: bool = F
 </table></div>
 <p class="small">Pay is what the advert stated. “Not stated” is the advert's gap,
 not a judgement about the job. <a href="/salaries">Advertised pay by county →</a></p>"""
-    return _page(f"{name} — jobs — Kazi-Kasi", body, demo=demo)
+    return _page(
+        f"{name} — jobs — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_public_nav(conn, headers),
+    )
 
 
 def render_sitemap(conn, *, now: datetime | None = None) -> str:
@@ -1450,6 +1957,25 @@ def render_robots() -> str:
     )
 
 
+def _application_state(conn, profile_id: str, job_id: str) -> dict:
+    """What has this person already told us about this job?"""
+    rows = conn.execute(
+        """SELECT kind FROM apply_events
+            WHERE profile_id = ? AND job_id = ? AND kind IN ('saved','unsaved','applied')
+            ORDER BY at, id""",
+        (profile_id, job_id),
+    ).fetchall()
+    saved = applied = False
+    for row in rows:
+        if row["kind"] == "saved":
+            saved = True
+        elif row["kind"] == "unsaved":
+            saved = False
+        elif row["kind"] == "applied":
+            applied = True
+    return {"saved": saved, "applied": applied}
+
+
 def render_job(
     conn: sqlite3.Connection,
     job_id: str,
@@ -1457,6 +1983,7 @@ def render_job(
     profile_id: str | None = None,
     now: datetime | None = None,
     demo: bool = False,
+    headers: dict | None = None,
 ) -> str | None:
     now = now or datetime.now(timezone.utc)
     row = graph.job_row(conn, job_id)
@@ -1506,6 +2033,8 @@ def render_job(
         f'<li>{_e(event["kind"].replace("_", " "))} · {_e(event["at"][:10])}</li>' for event in events
     )
     structured = _job_posting(row, description)
+    account = _account_for(conn, headers)
+    cv = accounts.latest_cv(conn, account["id"]) if account else None
     flags = json.loads(row["scam_flags"])
     warning = (
         '<div class="badge danger">Flagged: '
@@ -1524,11 +2053,34 @@ def render_job(
             + "".join(f'<div class="badge warn">{_e(blocker)}</div>' for blocker in match.blockers)
         )
 
+    state = _application_state(conn, profile.id, job_id)
+    actions = [
+        '<form method="post" action="/action" style="display:inline">'
+        f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
+        f'<input type="hidden" name="job" value="{_e(job_id)}">'
+        '<input type="hidden" name="kind" value="'
+        + ("unsaved" if state["saved"] else "saved")
+        + f'"><input type="hidden" name="next" value="/job/{_e(job_id)}?profile={quote(profile.id)}">'
+        f'<button type="submit" class="ghost">{"Saved ✓ — remove" if state["saved"] else "Save for later"}</button>'
+        "</form>",
+        '<form method="post" action="/action" style="display:inline;margin-left:10px">'
+        f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
+        f'<input type="hidden" name="job" value="{_e(job_id)}">'
+        f'<input type="hidden" name="kind" value="{"unsaved" if state["applied"] else "applied"}">'
+        f'<input type="hidden" name="next" value="/job/{_e(job_id)}?profile={quote(profile.id)}">'
+        '<button type="submit" class="ghost">'
+        + ("Applied ✓ — undo" if state["applied"] else "I applied to this")
+        + "</button></form>",
+    ]
     apply_html = ""
     if source:
         apply_html = (
             f'<p><a class="apply" href="/go?profile={quote(profile.id)}&job={quote(job_id)}"'
-            f' rel="nofollow noopener" target="_blank">Apply on {_e(source["source_id"])}</a></p>'
+            f' rel="nofollow noopener" target="_blank">Apply on {_e(source["source_id"])}</a> '
+            + "".join(actions)
+            + '</p><p class="small">Applying happens on the employer’s site. '
+            "“I applied” is your note to yourself — it is what the tracker counts, "
+            "and no employer is told.</p>"
         )
 
     body = f"""
@@ -1541,6 +2093,8 @@ def render_job(
 {why_block}
 {f'<div class="evidence">“{_e(evidence)}”</div>' if evidence else ''}
 {f'<h1>About the role</h1><p>{_e(description[:1200])}</p>' if description else ''}
+{_dossier_block(conn, row, payload)}
+{_kit_block(account, cv, profile, row, payload)}
 <h1>Where this came from</h1>
 <ul class="sources">{source_items}</ul>
 <h1>History</h1>
@@ -1548,7 +2102,13 @@ def render_job(
 <p class="small">Eligibility is read from the advert text, not inferred from the title.
 Distance is straight-line between approximate area centres, not a route.</p>
 """
-    return _page(f"{row['title']} — Kazi-Kasi", body, demo=demo, head=structured)
+    return _page(
+        f"{row['title']} — Kazi-Kasi",
+        body,
+        demo=demo,
+        head=structured,
+        nav=_nav_for(account, profile.id),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1862,7 +2422,25 @@ def handle(
         return _handle_consent(conn, path, body)
     if path == "/action":
         return _handle_action(conn, body, header_map)
+    if path in ("/auth/guest", "/auth/demo", "/auth/signout", "/account/cv", "/account/forget"):
+        return _handle_account_post(conn, path, body, header_map, demo=demo, now=now)
     return Response(404, "not found", "text/plain; charset=utf-8")
+
+
+def _record_view(conn, profile_id: str, job_id: str, now: datetime) -> None:
+    """One "visited" per job per day — enough for the tracker, not a hit counter."""
+    day = (now + timedelta(hours=3)).date().isoformat()
+    existing = conn.execute(
+        """SELECT 1 FROM apply_events
+            WHERE profile_id = ? AND job_id = ? AND kind = 'viewed' AND substr(at, 1, 10) = ?""",
+        (profile_id, job_id, day),
+    ).fetchone()
+    if existing:
+        return
+    try:
+        tracking.record(conn, profile_id, job_id, "viewed", detail=day)
+    except ValueError:
+        pass
 
 
 def _handle_get(
@@ -1933,11 +2511,63 @@ def _handle_get(
             ),
         )
 
+
+    if path == "/signin":
+        return Response(
+            200,
+            render_signin(
+                conn,
+                demo=demo,
+                notice=_query_one(query, "notice"),
+                tone=_query_one(query, "tone", "warn"),
+            ),
+        )
+
+    if path == "/account":
+        account = _account_for(conn, headers)
+        profile = _profile_or_default(conn, _query_one(query, "profile") or None)
+        notice = ""
+        tone = "good"
+        if _query_one(query, "guest"):
+            notice, tone = "Guest session started. Add your CV and the kit will fill itself.", "good"
+        if _query_one(query, "saved"):
+            notice, tone = "CV read. Check the fields below before you rely on them.", "good"
+        if _query_one(query, "error"):
+            notice, tone = _query_one(query, "error"), "bad"
+        return Response(200, render_account(conn, account, profile=profile, demo=demo, notice=notice, tone=tone))
+
+    if path == "/activity":
+        profile = _profile_or_default(conn, _query_one(query, "profile") or None)
+        return Response(
+            200,
+            render_activity(
+                conn,
+                profile=profile,
+                now=now,
+                demo=demo,
+                tab=_query_one(query, "tab", "all") or "all",
+                headers=headers,
+            ),
+        )
+
+    if path.startswith("/auth/") and path.endswith("/start"):
+        provider_key = path.split("/")[2]
+        provider = accounts.PROVIDERS.get(provider_key)
+        if provider is None:
+            return Response(404, _page("Not found", "<h1>Unknown provider</h1>", demo=demo))
+        return _auth_start(conn, provider, demo=demo, now=now)
+
+    if path.startswith("/auth/") and path.endswith("/callback"):
+        provider_key = path.split("/")[2]
+        provider = accounts.PROVIDERS.get(provider_key)
+        if provider is None:
+            return Response(404, _page("Not found", "<h1>Unknown provider</h1>", demo=demo))
+        return _auth_callback(conn, provider, query, demo=demo, now=now)
     if path == "/pulse":
-        return Response(200, render_pulse(conn, now=now, demo=demo))
+        return Response(200, render_pulse(conn, now=now, demo=demo, headers=headers))
 
     if path == "/salaries":
-        return Response(200, render_salaries(conn, now=now, demo=demo))
+        return Response(200, render_salaries(conn, now=now, demo=demo, headers=headers))
 
     if path == "/sitemap.xml":
         return Response(200, render_sitemap(conn, now=now), "application/xml; charset=utf-8")
@@ -1946,7 +2576,7 @@ def _handle_get(
         return Response(200, render_robots(), "text/plain; charset=utf-8")
 
     if path.startswith("/county/"):
-        page = render_county(conn, path.rsplit("/", 1)[-1], now=now, demo=demo)
+        page = render_county(conn, path.rsplit("/", 1)[-1], now=now, demo=demo, headers=headers)
         if page is None:
             return Response(404, _page("Not found", "<h1>County not found</h1>", demo=demo))
         return Response(200, page)
@@ -1959,6 +2589,7 @@ def _handle_get(
                 profile_id=_query_one(query, "profile") or None,
                 now=now,
                 demo=demo,
+                headers=headers,
             ),
         )
 
@@ -1981,9 +2612,16 @@ def _handle_get(
             profile_id=_query_one(query, "profile") or None,
             now=now,
             demo=demo,
+            headers=headers,
         )
         if page is None:
             return Response(404, _page("Not found", "<h1>Job not found</h1>", demo=demo))
+        _record_view(
+            conn,
+            _profile_or_default(conn, _query_one(query, "profile") or None).id,
+            path.rsplit("/", 1)[-1],
+            now,
+        )
         return Response(200, page)
 
     if path in ("/", "/index.html"):
@@ -1994,6 +2632,7 @@ def _handle_get(
             now=now,
             demo=demo,
             since=seen,
+            headers=headers,
         )
         return Response(200, page, headers={"Set-Cookie": seen_cookie(now)})
 
@@ -2050,7 +2689,7 @@ def _handle_consent(conn, path: str, body: bytes) -> Response:
 
 #: A visitor may trigger these; everything else in `tracking.KINDS` is written
 #: by the system (viewed, clicked_through, applied, reminded by the scheduler).
-ACTION_KINDS = ("dismissed", "saved", "unsaved", "reminded")
+ACTION_KINDS = ("dismissed", "saved", "unsaved", "reminded", "applied")
 
 
 def _safe_next(value: str) -> str | None:
@@ -2077,6 +2716,157 @@ def _handle_action(conn, body: bytes, headers: dict) -> Response:
         return Response(200, json.dumps({"ok": True}), "application/json; charset=utf-8")
     location = back or (f"/?profile={quote(profile_id)}" if profile_id else "/")
     return Response(303, "", headers={"Location": location})
+
+
+
+def _redirect(location: str, *, cookie: str | None = None) -> Response:
+    headers = {"Location": location}
+    if cookie:
+        headers["Set-Cookie"] = cookie
+    return Response(303, "", headers=headers)
+
+
+def _auth_start(conn, provider, *, demo: bool, now: datetime, return_to: str = "/account") -> Response:
+    if not provider.configured:
+        # No client id in this build. Say so, name the variables, and offer the
+        # synthetic path so the rest of the flow can still be walked end to end.
+        body = f"""
+<div class="masthead">
+  <p class="kicker">Sign-in · not configured</p>
+  <h1 class="display">{_e(provider.label)} is not connected in this build</h1>
+  <p class="scopeline">The flow is built; the credentials are not. A deployment needs
+  two environment variables before this button can talk to {_e(provider.label)}.</p>
+</div>
+<div class="whobar">
+  <div><b>{_e(provider.client_id_env)}</b> and <b>{_e(provider.client_secret_env)}</b></div>
+  <p class="small">Register <code>{_e(_base_url())}/auth/{_e(provider.key)}/callback</code>
+  as the redirect URI, then redeploy. Nothing else changes.</p>
+</div>
+{"<form method='post' action='/auth/demo'><input type='hidden' name='provider' value='" + provider.key + "'><button type='submit' class='ghost'>Continue with a synthetic demo account</button></form><p class='small'>This creates a local member account so the flow can be tested. No provider is contacted.</p>" if demo else ""}
+<p><a href="/signin">← back</a></p>"""
+        return Response(200, _page("Sign in — Kazi-Kasi", body, demo=demo))
+
+    attempt = accounts.start(conn, provider.key, now=now, return_to=return_to)
+    url = accounts.authorize_url(
+        provider,
+        state=attempt["state"],
+        challenge=attempt["challenge"],
+        redirect_uri=f"{_base_url()}/auth/{provider.key}/callback",
+    )
+    return _redirect(url)
+
+
+def _auth_callback(conn, provider, query: dict, *, demo: bool, now: datetime) -> Response:
+    code = _query_one(query, "code")
+    state = _query_one(query, "state")
+    error = _query_one(query, "error")
+    if error:
+        return _redirect(f"/signin?notice={quote('Sign-in was cancelled: ' + error)}&tone=warn")
+    if not code or not state:
+        return _redirect(f"/signin?notice={quote('Sign-in came back incomplete.')}&tone=bad")
+    try:
+        verifier = accounts.claim_state(conn, state, provider.key, now=now)
+    except ValueError as exc:
+        return _redirect(f"/signin?notice={quote(str(exc))}&tone=warn")
+    try:
+        identity = accounts.exchange(
+            provider,
+            code=code,
+            verifier=verifier,
+            redirect_uri=f"{_base_url()}/auth/{provider.key}/callback",
+        )
+    except Exception as exc:  # noqa: BLE001 - the provider's error is the message
+        return _redirect(f"/signin?notice={quote('Sign-in failed: ' + str(exc)[:120])}&tone=bad")
+    account = accounts.sign_in(conn, provider.key, identity, now=now)
+    return _redirect("/account", cookie=accounts.session_cookie(account["id"], now))
+
+
+def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo: bool, now: datetime) -> Response:
+    if path == "/auth/guest":
+        account = accounts.guest(conn, now=now)
+        return _redirect("/account?guest=1", cookie=accounts.session_cookie(account["id"], now))
+
+    if path == "/auth/demo":
+        form = parse_qs(body.decode("utf-8", errors="replace"))
+        provider_key = _query_one(form, "provider", "google")
+        account = accounts.sign_in(
+            conn,
+            provider_key,
+            {
+                "subject": "demo-" + provider_key,
+                "email": f"demo@{provider_key}.example",
+                "email_verified": True,
+                "name": "Demo member",
+            },
+            now=now,
+        )
+        return _redirect("/account", cookie=accounts.session_cookie(account["id"], now))
+
+    if path == "/auth/signout":
+        return _redirect(
+            "/",
+            cookie="kazi_id=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        )
+
+    account = _account_for(conn, header_map)
+    if account is None:
+        return _redirect(f"/signin?notice={quote('That needs a session first.')}&tone=warn")
+
+    if path == "/account/forget":
+        accounts.forget(conn, account["id"], now=now)
+        return _redirect(
+            "/signin?notice=Deleted. Your CV is gone and your identity is blank.",
+            cookie="kazi_id=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        )
+
+    if path == "/account/cv":
+        filename, text = _cv_text(body, header_map.get("content-type", ""))
+        if not text.strip():
+            return _redirect(f"/account?error={quote('No CV text found — paste the text or upload a .txt, .md or .pdf.')}")
+        fields = autofill.parse(text)
+        accounts.store_cv(conn, account["id"], filename=filename, text=text, fields=fields, now=now)
+        accounts.touch(conn, account["id"], now=now)
+        return _redirect("/account?saved=1")
+
+    return Response(404, "not found", "text/plain; charset=utf-8")
+
+
+def _cv_text(body: bytes, content_type: str) -> tuple[str | None, str]:
+    """Either a pasted field or one uploaded file. Returns (filename, text)."""
+    if "multipart/form-data" not in (content_type or ""):
+        form = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+        return None, _query_one(form, "cv_text")
+
+    boundary = ""
+    for part in content_type.split(";"):
+        if part.strip().startswith("boundary="):
+            boundary = part.strip().split("=", 1)[1].strip('"')
+    if not boundary:
+        return None, ""
+
+    parts = body.split(b"--" + boundary.encode())
+    text_value, filename = "", None
+    for part in parts:
+        head, _, payload = part.partition(b"\r\n\r\n")
+        header_text = head.decode("utf-8", errors="replace")
+        if 'name="cv_text"' in header_text:
+            text_value = payload.rstrip(b"\r\n-").decode("utf-8", errors="replace")
+        elif 'name="cv_file"' in header_text and "filename=" in header_text:
+            match = re.search(r'filename="([^"]*)"', header_text)
+            filename = match.group(1) if match else "cv"
+            raw = payload.rstrip(b"\r\n-")
+            if filename.lower().endswith(".pdf"):
+                try:
+                    from pypdf import PdfReader
+                except ImportError:
+                    return filename, ""
+                import io
+
+                reader = PdfReader(io.BytesIO(raw))
+                text_value = "\n".join(page.extract_text() or "" for page in reader.pages)
+            else:
+                text_value = raw.decode("utf-8", errors="replace")
+    return filename, text_value or ""
 
 
 class _Handler(BaseHTTPRequestHandler):

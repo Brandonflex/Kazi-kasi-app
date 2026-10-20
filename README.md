@@ -33,7 +33,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 676 tests, no network
+python -m pytest                                    # 742 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -44,10 +44,11 @@ kazikasi load  --db ./data/kazi.db --demo            # synthetic corpus
 kazikasi match --db ./data/kazi.db --profile demo-fresher
 kazikasi stats --db ./data/kazi.db
 kazikasi slo   --db ./data/kazi.db
-kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe "0712 000 000"
+kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe "0712 000 000" --brief
 kazikasi digest --db ./data/kazi.db --profile demo-fresher --preview   # the message, unsent
 kazikasi outbox --db ./data/kazi.db --send --dry-run                   # deliver, offline
 kazikasi run   --db ./data/kazi.db --explain                           # who is due, and why
+kazikasi run   --db ./data/kazi.db --brief --send --dry-run            # the weekly brief, unsent
 kazikasi serve --db ./data/kazi.db --demo            # feed, /shortlist, /digest, webhooks on http://localhost:8765
 ```
 
@@ -68,14 +69,18 @@ The footer names the deployed commit (`demo build 718f627`) and `/api/health`
 returns it, so "is this the new build?" is one glance rather than a guess.
 
 Public surfaces: `/` (the feed), `/shortlist`, `/brief` (the weekly brief),
-`/pulse` (the market, counted), `/salaries` (advertised pay, with sample sizes),
-`/county/<slug>`, `/sitemap.xml` and `/robots.txt`. Press **⌘K** (or Ctrl-K) to
-jump to a job, a county or a page.
+`/activity` (saved, applied and visited, per job), `/pulse` (the market, counted),
+`/salaries` (advertised pay, with sample sizes), `/county/<slug>`,
+`/sitemap.xml` and `/robots.txt`. Press **⌘K** (or Ctrl-K) to jump to a job, a
+county or a page. `/job/<id>` carries the evidence, who to address, the
+application kit and the direct-apply route; `/signin` and `/account` cover
+optional sign-in and the CV that fills that kit. See
+[phase 7](./docs/phase-7-accounts.md).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
 curl -s https://kazi-kasi-app.vercel.app/api/health
-# {"ok": true, "schema": 5, "live_jobs": 28, "sources_reporting": 4, ...}
+# {"ok": true, "schema": 7, "live_jobs": 28, "sources_reporting": 4, ...}
 ```
 
 How it is wired — there is no build step and no static output:
