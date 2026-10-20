@@ -152,19 +152,25 @@ class TestTheReminder:
         assert "/job/" in text and "shortlist" in text
         assert "*" in text  # WhatsApp bold, the same convention as the digest
 
-    def test_the_page_offers_to_send_it(self, conn, jobs):
+    def test_the_page_says_where_the_reminder_will_go(self, conn, jobs):
+        """The page does not pretend to send. It shows the text and the path.
+
+        With no subscription on record the honest answer is "this needs WhatsApp",
+        not a button that marks a message as sent when nothing was sent.
+        """
         save(conn, jobs[0])
         close_in(conn, jobs[0], 36)
         body = page(conn)
         assert "reminder due now" in body
-        assert "Mark as sent" in body
+        assert "Mark as sent" not in body
+        assert "closing alerts need a subscription" in body
 
-    def test_sending_it_means_it_is_not_sent_again(self, conn, jobs):
+    def test_a_recorded_reminder_is_not_offered_twice(self, conn, jobs):
         save(conn, jobs[0])
         close_in(conn, jobs[0], 36)
         save(conn, jobs[0], kind="reminded")
         assert shortlist.reminders_due(conn, "demo-fresher", now=NOW) == []
-        assert "Mark as sent" not in page(conn)
+        assert "reminder due now" not in page(conn)
 
     def test_an_expired_deadline_never_reminds(self, conn, jobs):
         save(conn, jobs[0])

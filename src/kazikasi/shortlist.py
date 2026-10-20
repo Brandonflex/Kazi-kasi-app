@@ -31,7 +31,7 @@ EAT = timezone(timedelta(hours=3))
 DEFAULT_BASE = "https://kazi-kasi.app"
 
 
-def _deadline_at(row) -> datetime | None:
+def deadline_at(row) -> datetime | None:
     """A date deadline means "end of that day in Nairobi", never midnight UTC."""
     raw = row.get("deadline")
     if not raw:
@@ -84,7 +84,7 @@ def entries(conn, profile_id: str, *, now: datetime | None = None) -> list[dict]
             rows.append(dict(row))
 
     def closed(row) -> bool:
-        deadline = _deadline_at(row)
+        deadline = deadline_at(row)
         return bool(deadline and deadline < now) or row.get("status") not in ("open", "stale")
 
     return sorted(
@@ -112,7 +112,7 @@ def closing_soon(conn, profile_id: str, *, now: datetime, hours: int = REMINDER_
     for row in entries(conn, profile_id, now=now):
         if row.get("status") not in ("open", "stale"):
             continue
-        deadline = _deadline_at(row)
+        deadline = deadline_at(row)
         if deadline is None:
             continue
         if now <= deadline <= horizon:
@@ -123,7 +123,7 @@ def closing_soon(conn, profile_id: str, *, now: datetime, hours: int = REMINDER_
 def reminder_text(row, *, base: str | None = None) -> str:
     """The exact message a person would receive. One deadline, one link, no upsell."""
     root = (base or os.environ.get("KAZIKASI_BASE_URL") or DEFAULT_BASE).rstrip("/")
-    deadline = _deadline_at(row)
+    deadline = deadline_at(row)
     when = f"closes {deadline:%a %-d %b}, 11:59pm EAT" if deadline else ""
     employer = row.get("employer_name") or "Employer not stated"
     lines = [f"*{row.get('title') or 'Saved job'}*", employer]
@@ -165,7 +165,7 @@ def compare_fields(rows: list[dict]) -> list[tuple[str, list[str]]]:
         return row.get("county") or "not stated"
 
     def deadline(row):
-        at = _deadline_at(row)
+        at = deadline_at(row)
         return f"{at:%a %-d %b}" if at else "not stated"
 
     return [

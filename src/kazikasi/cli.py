@@ -45,6 +45,7 @@ from .ranking import explain, rank
 from . import slo as slo_module
 from . import tracking
 from . import outbox as outbox_module
+from . import alerts as alerts_module
 from . import scheduler
 from .channels import FakeTransport, transport_for
 
@@ -346,7 +347,17 @@ def cmd_match(args: argparse.Namespace) -> int:
 def cmd_apply(args: argparse.Namespace) -> int:
     conn = database.connect(args.db)
     try:
-        kind = "applied" if args.applied else ("dismissed" if args.dismiss else "clicked_through")
+        kind = (
+            "saved"
+            if getattr(args, "saved", False)
+            else "unsaved"
+            if getattr(args, "unsaved", False)
+            else "applied"
+            if args.applied
+            else "dismissed"
+            if args.dismiss
+            else "clicked_through"
+        )
         try:
             event_id = tracking.record(conn, args.profile, args.job, kind, detail=args.note)
         except ValueError as error:
@@ -513,6 +524,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 link_base=args.link_base,
                 dry_run=args.dry_run,
                 with_brief=getattr(args, "brief", False),
+                with_alerts=not getattr(args, "no_alerts", False),
             )
 
         if not args.loop:
@@ -528,6 +540,22 @@ def cmd_run(args: argparse.Namespace) -> int:
                 print(json.dumps(report, default=str), flush=True)
             time.sleep(max(5, args.interval))
     except KeyboardInterrupt:
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_alerts(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        report = alerts_module.queue(conn, hours=args.hours, dry_run=args.dry_run)
+        if args.send:
+            transports = {
+                channel: (FakeTransport() if args.dry_run else transport_for(channel))
+                for channel in ("whatsapp", "sms")
+            }
+            report["sent"] = outbox_module.send_due(conn, transports).to_dict()
+        print(json.dumps(report, indent=2, default=str))
         return 0
     finally:
         conn.close()
@@ -632,6 +660,8 @@ def main(argv: list[str] | None = None) -> int:
     p_apply.add_argument("--db", default="./data/kazi.db")
     p_apply.add_argument("--profile", required=True)
     p_apply.add_argument("--job", required=True)
+    p_apply.add_argument("--saved", action="store_true", help="add to the shortlist")
+    p_apply.add_argument("--unsaved", action="store_true", help="remove from the shortlist")
     p_apply.add_argument("--applied", action="store_true")
     p_apply.add_argument("--dismiss", action="store_true")
     p_apply.add_argument("--note", default=None)
@@ -678,6 +708,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="the scheduler: compose and send what is due")
     p_run.add_argument("--brief", action="store_true", help="also queue the weekly brief")
+    p_run.add_argument(
+        "--no-alerts", action="store_true", help="skip closing-soon alerts for saved jobs"
+    )
     p_run.add_argument("--db", default="./data/kazi.db")
     p_run.add_argument("--once", action="store_true", help="one tick (default)")
     p_run.add_argument("--loop", action="store_true", help="keep ticking")
@@ -687,6 +720,14 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--explain", action="store_true", help="why each subscriber is or is not due")
     p_run.add_argument("--link-base", default="https://kazikasi.app")
     p_run.set_defaults(func=cmd_run)
+
+    p_alerts = sub.add_parser("alerts", help="closing-soon alerts for saved jobs")
+    p_alerts.add_argument("--db", default="./data/kazi.db")
+    p_alerts.add_argument("--hours", type=int, default=None, help="window before the deadline")
+    p_alerts.add_argument("--dry-run", action="store_true", help="show the text, queue nothing")
+    p_alerts.add_argument("--send", action="store_true", help="deliver right after queueing")
+    p_alerts.add_argument("--json", action="store_true")
+    p_alerts.set_defaults(func=cmd_alerts)
 
     p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
     p_serve.add_argument("--db", default="./data/kazi.db")

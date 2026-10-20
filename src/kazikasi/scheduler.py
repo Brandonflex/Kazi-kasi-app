@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 from . import digest as digest_module
-from . import outbox
+from . import alerts, outbox
 
 #: How far inside the window the first send may be pushed, in minutes.
 JITTER_SPREAD_MINUTES = 45
@@ -139,6 +139,7 @@ def run_due(
     link_base: str | None = None,
     dry_run: bool = False,
     with_brief: bool = False,
+    with_alerts: bool = False,
 ) -> dict:
     """One tick: compose for everyone due, then try to deliver.
 
@@ -165,6 +166,12 @@ def run_due(
         except ValueError as error:  # a subscription without a profile, or bad data
             composed.append({"profile_id": decision.profile_id, "error": str(error)})
 
+    closing: dict | None = None
+    if with_alerts:
+        # Closing-soon alerts go in the same tick as the digest but through the
+        # same outbox, so consent, backoff and receipts apply to them equally.
+        closing = alerts.queue(conn, now=now, dry_run=dry_run, base=link_base)
+
     briefs: list[dict] = []
     if with_brief:
         for profile_id in outbox.brief_due(conn, now=now):
@@ -189,6 +196,7 @@ def run_due(
         "waiting": waiting,
         "composed": composed,
         "briefs": briefs,
+        "alerts": closing,
         "sent": report,
     }
 

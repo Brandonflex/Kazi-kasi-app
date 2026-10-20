@@ -282,3 +282,57 @@ def test_run_once_sends_nothing_without_send(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report["sent"] is None              # composing only, no transport
     assert "waiting" in report
+
+
+def test_apply_records_a_save_and_a_removal(tmp_path, capsys):
+    """`--saved` is how the CLI puts something on the shortlist."""
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    job = json.loads(_match(db_path))[0]["job_id"]
+    capsys.readouterr()
+
+    assert main(["apply", "--db", db_path, "--profile", "demo-fresher", "--job", job, "--saved"]) == 0
+    assert json.loads(capsys.readouterr().out)["kind"] == "saved"
+
+    assert main(["apply", "--db", db_path, "--profile", "demo-fresher", "--job", job, "--unsaved"]) == 0
+    assert json.loads(capsys.readouterr().out)["kind"] == "unsaved"
+
+
+def _match(db_path: str, *extra: str) -> str:
+    """`match --json` written to a pipe: the CLI prints to stdout."""
+    import io
+    from contextlib import redirect_stdout
+
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        main(["match", "--db", db_path, "--profile", "demo-fresher", "--limit", "3", "--json", *extra])
+    return buffer.getvalue()
+
+
+def test_alerts_dry_run_shows_the_text_and_queues_nothing(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    job = json.loads(_match(db_path))[0]["job_id"]
+    main(["apply", "--db", db_path, "--profile", "demo-fresher", "--job", job, "--saved"])
+    main(["digest", "--db", db_path, "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["alerts", "--db", db_path, "--dry-run", "--hours", "400"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["queued"] == 0
+    assert report["considered"] >= 1
+    assert report["alerts"][0]["idempotency"].startswith("closing:demo-fresher:")
+
+
+def test_alerts_queue_then_queue_again_is_a_no_op(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    job = json.loads(_match(db_path))[0]["job_id"]
+    main(["apply", "--db", db_path, "--profile", "demo-fresher", "--job", job, "--saved"])
+    main(["digest", "--db", db_path, "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["alerts", "--db", db_path, "--hours", "400"]) == 0
+    assert json.loads(capsys.readouterr().out)["queued"] == 1
+    assert main(["alerts", "--db", db_path, "--hours", "400"]) == 0
+    assert json.loads(capsys.readouterr().out)["queued"] == 0

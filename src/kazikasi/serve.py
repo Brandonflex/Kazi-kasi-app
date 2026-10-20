@@ -838,38 +838,43 @@ def render_shortlist(
             (
                 row
                 for row in rows
-                if (shortlist._deadline_at(row) and shortlist._deadline_at(row) > now)
+                if (shortlist.deadline_at(row) and shortlist.deadline_at(row) > now)
             ),
             None,
         )
         if upcoming is not None:
-            deadline = shortlist._deadline_at(upcoming)
+            deadline = shortlist.deadline_at(upcoming)
             reminder_block = (
                 f'<p class="small">No reminder due. Next: {_e(upcoming["title"])} closes '
                 f"{deadline:%a %-d %b} — one message, {shortlist.REMINDER_HOURS} hours before.</p>"
             )
     if due:
         item = due[0]
+        subscription = outbox.load_subscription(conn, profile.id)
+        delivers = bool(subscription and subscription.active)
+        if delivers:
+            delivery_note = (
+                f'Queued for your {_e(subscription.channel)} '
+                f'({_e(subscription.msisdn)}) at the next daily tick — once per job, per deadline.'
+            )
+        else:
+            delivery_note = (
+                'No message is queued: closing alerts need a subscription. '
+                f'<a href="/digest?profile={quote(profile.id)}">Turn on WhatsApp</a> '
+                'and this text sends itself.'
+            )
         reminder_block = f"""
 <div class="whobar">
   <div><b>{len(due)} reminder{'s' if len(due) != 1 else ''} due now</b>
     <span class="small">— saved jobs closing within {shortlist.REMINDER_HOURS} hours.</span></div>
   <div class="msg">{_e(item['text'])}</div>
-  <form method="post" action="/action">
-    <input type="hidden" name="profile" value="{_e(profile.id)}">
-    <input type="hidden" name="job" value="{_e(item['job']['id'])}">
-    <input type="hidden" name="kind" value="reminded">
-    <input type="hidden" name="next" value="{_e(path)}">
-    <button type="submit" class="ghost">Mark as sent</button>
-  </form>
-  <p class="small">In production the reminder job sends exactly this. It is the only
-  message a saved job ever earns, and it is sent once.</p>
+  <p class="small">{delivery_note}</p>
 </div>"""
 
     if rows:
         cards = []
         for row in rows:
-            deadline = shortlist._deadline_at(row)
+            deadline = shortlist.deadline_at(row)
             if deadline is None:
                 when, tone = "no deadline stated", ""
             elif deadline < now:
@@ -2868,7 +2873,7 @@ def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool)
             },
         )
 
-    report = scheduler.run_due(conn, transports, now=now, with_brief=True)
+    report = scheduler.run_due(conn, transports, now=now, with_brief=True, with_alerts=True)
     report["outbox"] = _outbox_counts(conn, now=now)
     return _json(200, report)
 

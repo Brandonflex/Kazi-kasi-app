@@ -51,6 +51,8 @@ kazikasi digest --db ./data/kazi.db --profile demo-fresher --preview   # the mes
 kazikasi outbox --db ./data/kazi.db --send --dry-run                   # deliver, offline
 kazikasi run   --db ./data/kazi.db --explain                           # who is due, and why
 kazikasi run   --db ./data/kazi.db --brief --send --dry-run            # the weekly brief, unsent
+kazikasi apply --db ./data/kazi.db --profile demo-fresher --job <id> --saved
+kazikasi alerts --db ./data/kazi.db --dry-run                           # closing soon, unsent
 kazikasi serve --db ./data/kazi.db --demo            # feed, /shortlist, /digest, webhooks on http://localhost:8765
 ```
 
@@ -104,7 +106,7 @@ EAT, the middle of the default evening window. A tick composes every digest and
 brief that is due, delivers through whatever transport has credentials, and
 returns the outbox counts.
 
-It refuses in three ways, in this order, and every refusal names what is missing:
+It refuses in four ways, in this order, and every refusal names what is missing:
 
 | condition | status | body |
 | --- | --- | --- |
@@ -117,6 +119,13 @@ The third is the important one. A deployment without `DATABASE_URL` serves the
 demo corpus; a cron tick there would text *fabricated vacancies* to a real
 number. So it does not. Set `KAZIKASI_ALLOW_SYNTHETIC_SEND=1` only to test
 delivery against your own phone.
+
+The tick carries two things: the daily digest and the **closing alert** for a
+saved job. A save is the strongest signal the product gets, so 48 hours before
+the deadline it earns exactly one message — one per job *per deadline*, so a
+re-run never repeats it and an employer who extends the deadline gets a new one.
+No subscription means no alert: saving a job is an in-app action, not consent to
+a text. `kazikasi alerts --dry-run` prints what would go out.
 
 How it is wired — there is no build step and no static output:
 
