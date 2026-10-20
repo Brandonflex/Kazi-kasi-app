@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from .db import _now_iso
 
-KINDS = ("viewed", "clicked_through", "applied", "dismissed", "saved")
+KINDS = ("viewed", "clicked_through", "applied", "dismissed", "saved", "unsaved", "reminded")
 
 
 def record(conn, profile_id: str, job_id: str, kind: str, *, detail: str | None = None) -> int:

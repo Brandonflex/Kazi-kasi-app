@@ -71,6 +71,9 @@ shipped:
   server-rendered page actually lives.
 - **Structured data** — every job page emits one honest `JobPosting` block
   (`directApply: false`), which is the free distribution channel in this category.
+- **The shortlist** — save from the card, compare up to four side by side, and
+  earn exactly one reminder 48 hours before the deadline (Airbnb A2, `§3.9`).
+  A save is never shared with an employer.
 
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly

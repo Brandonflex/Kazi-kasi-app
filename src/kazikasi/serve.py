@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from . import db, digest as digest_module, graph, metrics, outbox, ranking, slo, tracking, webhooks
+from . import db, digest as digest_module, graph, metrics, outbox, ranking, shortlist, slo, tracking, webhooks
 from .corpus import load_corpus
 from .profile import DEMO_PROFILES, list_profiles, seed_profiles
 
@@ -177,6 +177,14 @@ a{-webkit-tap-highlight-color:transparent}
 .card h2 a{text-underline-offset:2px;text-decoration-thickness:.06em}
 .filters a:hover{border-color:#CFC3AE;color:var(--ink)}
 .foot .apply:hover{transform:translateY(-1px)}
+.foot button.on{color:var(--forest);font-weight:600;text-decoration:none}
+.whobar button.ghost{font:inherit;font-size:14px;font-weight:600;background:var(--card);
+  color:var(--forest);border:1px solid var(--forest);border-radius:var(--radius-pill);
+  padding:9px 16px;cursor:pointer;min-height:40px}
+.whobar button.ghost:hover{background:var(--forest-soft)}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0 4px}
+.tablewrap table{min-width:520px}
+.tablewrap th a{color:var(--ink);font-weight:650}
 .ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:16px 0 0;
   padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--ink-2)}
 .ledger b{color:var(--ink);font-weight:650}
@@ -266,14 +274,16 @@ def _e(value) -> str:
 
 
 def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str = "") -> str:
+    build = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev"
     banner = (
         '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
         if demo
         else ""
     )
+    demo_line = f'<div class="small" style="margin-top:6px">demo build {_e(build)}</div>' if demo else ""
     links = nav or (
-        '<a href="/">Feed</a><a href="/digest">WhatsApp</a>'
-        '<a href="/slo">Freshness</a><a href="/review">Review</a>'
+        '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
+        '<a href="/digest">WhatsApp</a><a href="/slo">Freshness</a><a href="/review">Review</a>'
     )
     return f"""<!doctype html>
 <html lang="en-KE"><head><meta charset="utf-8">
@@ -292,7 +302,8 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
 {banner}
 <div class="wrap">{body}</div>
 <footer class="wrap">Every card says when it was last checked and why it was shown.
-Eligibility labels quote the advert. Applications happen on the employer's site, never here.</footer>
+Eligibility labels quote the advert. Applications happen on the employer's site, never here.
+{demo_line}</footer>
 </body></html>"""
 
 
@@ -416,6 +427,7 @@ def render_feed(
     now = now or datetime.now(timezone.utc)
     profile = _profile_or_default(conn, profile_id)
     matches, acted = _ranked(conn, profile, now=now, limit=limit)
+    saved = shortlist.saved_job_ids(conn, profile.id)
     summary = metrics.stats(conn, now=now)
     clock = (now + timedelta(hours=3)).strftime("%H:%M")
     if since is None:
@@ -465,6 +477,8 @@ def render_feed(
         for other in _profiles(conn)
     )
 
+    feed_path = f"/?profile={quote(profile.id)}"
+
     cards = []
     for match in matches:
         row = match.row or {}
@@ -487,6 +501,8 @@ def render_feed(
             badges.append('<span class="badge good">live</span>')
         if row.get("id") in acted:
             badges.append('<span class="badge">you applied</span>')
+        if row.get("id") in saved:
+            badges.append('<span class="badge good">saved</span>')
 
         # The deadline is already a badge; a reason that repeats it is noise.
         # Keep at least one reason so every card still says why it is here.
@@ -516,7 +532,17 @@ def render_feed(
     <form method="post" action="/action">
       <input type="hidden" name="profile" value="{_e(profile.id)}">
       <input type="hidden" name="job" value="{_e(match.job_id)}">
+      <input type="hidden" name="kind" value="{'unsaved' if match.job_id in saved else 'saved'}">
+      <input type="hidden" name="next" value="{_e(feed_path)}">
+      <button type="submit" class="{'on' if match.job_id in saved else ''}">
+        {'Saved' if match.job_id in saved else 'Save'}
+      </button>
+    </form>
+    <form method="post" action="/action">
+      <input type="hidden" name="profile" value="{_e(profile.id)}">
+      <input type="hidden" name="job" value="{_e(match.job_id)}">
       <input type="hidden" name="kind" value="dismissed">
+      <input type="hidden" name="next" value="{_e(feed_path)}">
       <button type="submit">Not for me</button>
     </form>
   </div>
@@ -543,6 +569,148 @@ def render_feed(
 {strip}
 {''.join(cards)}"""
     return _page("Kazi-Kasi — jobs for you", body, demo=demo)
+
+
+
+def render_shortlist(
+    conn: sqlite3.Connection,
+    *,
+    profile_id: str | None = None,
+    now: datetime | None = None,
+    demo: bool = False,
+) -> str:
+    """Saved jobs, the comparison, and the one reminder a save earns.
+
+    This page is the product's answer to "why would I come back?". The answer is
+    not a notification stream: it is the thing the person already said they
+    wanted, still open, with its deadline in view.
+    """
+    now = now or datetime.now(timezone.utc)
+    profile = _profile_or_default(conn, profile_id)
+    rows = shortlist.entries(conn, profile.id, now=now)
+    path = f"/shortlist?profile={quote(profile.id)}"
+    feed_path = f"/?profile={quote(profile.id)}"
+    due = shortlist.reminders_due(conn, profile.id, now=now)
+
+    reminder_block = ""
+    if not due and rows:
+        upcoming = next(
+            (
+                row
+                for row in rows
+                if (shortlist._deadline_at(row) and shortlist._deadline_at(row) > now)
+            ),
+            None,
+        )
+        if upcoming is not None:
+            deadline = shortlist._deadline_at(upcoming)
+            reminder_block = (
+                f'<p class="small">No reminder due. Next: {_e(upcoming["title"])} closes '
+                f"{deadline:%a %-d %b} — one message, {shortlist.REMINDER_HOURS} hours before.</p>"
+            )
+    if due:
+        item = due[0]
+        reminder_block = f"""
+<div class="whobar">
+  <div><b>{len(due)} reminder{'s' if len(due) != 1 else ''} due now</b>
+    <span class="small">— saved jobs closing within {shortlist.REMINDER_HOURS} hours.</span></div>
+  <div class="msg">{_e(item['text'])}</div>
+  <form method="post" action="/action">
+    <input type="hidden" name="profile" value="{_e(profile.id)}">
+    <input type="hidden" name="job" value="{_e(item['job']['id'])}">
+    <input type="hidden" name="kind" value="reminded">
+    <input type="hidden" name="next" value="{_e(path)}">
+    <button type="submit" class="ghost">Mark as sent</button>
+  </form>
+  <p class="small">In production the reminder job sends exactly this. It is the only
+  message a saved job ever earns, and it is sent once.</p>
+</div>"""
+
+    if rows:
+        cards = []
+        for row in rows:
+            deadline = shortlist._deadline_at(row)
+            if deadline is None:
+                when, tone = "no deadline stated", ""
+            elif deadline < now:
+                when, tone = f"closed {deadline:%a %-d %b}", "muted"
+            else:
+                when = f"closes {deadline:%a %-d %b}"
+                tone = "warn" if deadline - now <= timedelta(hours=shortlist.REMINDER_HOURS) else ""
+            source = graph.primary_source(conn, row["id"])
+            apply_html = (
+                f'<a class="apply" href="/go?profile={quote(profile.id)}&job={quote(row["id"])}"'
+                ' rel="nofollow noopener" target="_blank">Apply</a>'
+                if source
+                else ""
+            )
+            cards.append(
+                f"""<article class="card">
+  <h2><a href="/job/{_e(row['id'])}?profile={quote(profile.id)}">{_e(row['title'])}</a></h2>
+  <div class="employer">{_e(row.get('employer_name') or 'Employer not stated')}</div>
+  <div class="badges">
+    <span class="badge {tone}">{_e(when)}</span>
+    <span class="badge muted">{_e(row.get('county') or 'Location unstated')}</span>
+    <span class="badge">{_e((row.get('entry_fit') or 'unknown').replace('_', ' '))}</span>
+    {'' if row.get('status') in ('open', 'stale') else '<span class="badge warn">not verified yet</span>'}
+  </div>
+  <div class="foot">
+    {apply_html}
+    <form method="post" action="/action">
+      <input type="hidden" name="profile" value="{_e(profile.id)}">
+      <input type="hidden" name="job" value="{_e(row['id'])}">
+      <input type="hidden" name="kind" value="unsaved">
+      <input type="hidden" name="next" value="{_e(path)}">
+      <button type="submit">Remove</button>
+    </form>
+  </div>
+</article>"""
+            )
+
+        compare = rows[:4]
+        table = ""
+        if len(compare) > 1:
+            head = "".join(
+                f'<th><a href="/job/{_e(row["id"])}?profile={quote(profile.id)}">'
+                f"{_e(row['title'])}</a></th>"
+                for row in compare
+            )
+            body_rows = "".join(
+                f"<tr><td>{_e(label)}</td>"
+                + "".join(f"<td>{_e(cell)}</td>" for cell in cells)
+                + "</tr>"
+                for label, cells in shortlist.compare_fields(compare)
+            )
+            note = (
+                f'<p class="small">Comparing the {len(compare)} closing soonest.</p>'
+                if len(rows) > 4
+                else ""
+            )
+            table = f"""
+<h2>Side by side</h2>
+<div class="tablewrap"><table><tr><th></th>{head}</tr>{body_rows}</table></div>
+{note}"""
+
+        body = f"""
+<h1>Shortlist</h1>
+<p class="small">Jobs you saved, soonest deadline first. Nothing here is shared
+with an employer, and a save is never sold as a lead.</p>
+{reminder_block}
+{''.join(cards)}
+{''.join([table])}
+<p class="small"><a href="{_e(feed_path)}">← back to the feed</a></p>"""
+    else:
+        body = f"""
+<h1>Shortlist</h1>
+<div class="card">
+  <h2>Nothing saved yet</h2>
+  <p>Save a job from the feed and it waits here with its deadline — and earns
+  one reminder before it closes. That is the whole feature: your intent, kept for
+  you, mentioned once.</p>
+  <p><a class="apply" href="{_e(feed_path)}">Back to the feed</a></p>
+</div>"""
+
+    return _page("Shortlist — Kazi-Kasi", body, demo=demo)
 
 
 def render_job(
@@ -962,6 +1130,7 @@ def _handle_get(
                     "sources_reporting": len(summary["jobs_per_source"]),
                     "as_of": summary["as_of"],
                     "demo": demo,
+                    "build": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev",
                 },
                 indent=2,
                 default=str,
@@ -1000,6 +1169,17 @@ def _handle_get(
         if challenge is None:
             return Response(403, "verification failed", "text/plain; charset=utf-8")
         return Response(200, challenge, "text/plain; charset=utf-8")
+
+    if path == "/shortlist":
+        return Response(
+            200,
+            render_shortlist(
+                conn,
+                profile_id=_query_one(query, "profile") or None,
+                now=now,
+                demo=demo,
+            ),
+        )
 
     if path == "/digest":
         return Response(
@@ -1087,13 +1267,26 @@ def _handle_consent(conn, path: str, body: bytes) -> Response:
     return Response(303, "", headers={"Location": target})
 
 
+#: A visitor may trigger these; everything else in `tracking.KINDS` is written
+#: by the system (viewed, clicked_through, applied, reminded by the scheduler).
+ACTION_KINDS = ("dismissed", "saved", "unsaved", "reminded")
+
+
+def _safe_next(value: str) -> str | None:
+    """Only same-site paths, so a form cannot be turned into an open redirect."""
+    if not value or not value.startswith("/") or value.startswith("//"):
+        return None
+    return value
+
+
 def _handle_action(conn, body: bytes, headers: dict) -> Response:
     form = parse_qs(body.decode("utf-8", errors="replace"))
     profile_id = _query_one(form, "profile")
     job_id = _query_one(form, "job")
     kind = _query_one(form, "kind")
+    back = _safe_next(_query_one(form, "next"))
 
-    if profile_id and job_id and kind in tracking.KINDS:
+    if profile_id and job_id and kind in ACTION_KINDS:
         try:
             tracking.record(conn, profile_id, job_id, kind)
         except ValueError:
@@ -1101,7 +1294,8 @@ def _handle_action(conn, body: bytes, headers: dict) -> Response:
 
     if headers.get("accept", "").startswith("application/json"):
         return Response(200, json.dumps({"ok": True}), "application/json; charset=utf-8")
-    return Response(303, "", headers={"Location": f"/?profile={quote(profile_id)}" if profile_id else "/"})
+    location = back or (f"/?profile={quote(profile_id)}" if profile_id else "/")
+    return Response(303, "", headers={"Location": location})
 
 
 class _Handler(BaseHTTPRequestHandler):

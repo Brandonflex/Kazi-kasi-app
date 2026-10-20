@@ -33,7 +33,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 578 tests, no network
+python -m pytest                                    # 620 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -48,7 +48,7 @@ kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe "0712 000
 kazikasi digest --db ./data/kazi.db --profile demo-fresher --preview   # the message, unsent
 kazikasi outbox --db ./data/kazi.db --send --dry-run                   # deliver, offline
 kazikasi run   --db ./data/kazi.db --explain                           # who is due, and why
-kazikasi serve --db ./data/kazi.db --demo            # feed, /digest, webhooks on http://localhost:8765
+kazikasi serve --db ./data/kazi.db --demo            # feed, /shortlist, /digest, webhooks on http://localhost:8765
 ```
 
 ## The deployed surface
