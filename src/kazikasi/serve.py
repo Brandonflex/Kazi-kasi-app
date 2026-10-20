@@ -39,6 +39,7 @@ from . import (
     accounts,
     autofill,
     brief as brief_module,
+    bundle as bundle_module,
     db,
     digest as digest_module,
     dossier,
@@ -53,6 +54,7 @@ from . import (
     ranking,
     scheduler,
     search as search_module,
+    searches as searches_module,
     shortlist,
     slo,
     tracking,
@@ -454,11 +456,15 @@ def _page(
     palette: list | None = None,
 ) -> str:
     build = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev"
-    banner = (
-        '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
-        if demo
-        else ""
-    )
+    notice = bundle_module.notice()
+    if demo:
+        banner = (
+            '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
+        )
+    elif notice:
+        banner = f'<div class="banner">{_e(notice)}</div>'
+    else:
+        banner = ""
     demo_line = f'<div class="small mt6">demo build {_e(build)}</div>' if demo else ""
     palette_html = _palette_markup(palette or [])
     links = nav or (
@@ -1002,12 +1008,15 @@ with an employer, and a save is never sold as a lead.</p>
 def synthetic_build() -> bool:
     """Is the data on this instance synthetic?
 
-    True until a real store is configured (`DATABASE_URL`). Deliberately
+    True until a real store — or a published bundle — is configured
+    (`DATABASE_URL` / `KAZIKASI_BUNDLE`). Deliberately
     independent of `KAZIKASI_DEMO`, which governs session strictness: turning on
     real secret hygiene must never un-label synthetic vacancies, because the
     banner is the one thing standing between a demo corpus and a lie.
     """
-    return not (os.environ.get("DATABASE_URL") or "").strip()
+    return not any(
+        (os.environ.get(name) or "").strip() for name in ("DATABASE_URL", "KAZIKASI_BUNDLE")
+    )
 
 
 def _base_url() -> str:
@@ -1353,6 +1362,36 @@ def _pay_cell(pay: dict) -> str:
     return f"{pay['median']:,.0f}"
 
 
+def _handle_saved_search(conn, path: str, body: bytes) -> Response:
+    """Save or stop a search. A POST, because both change state."""
+    form = parse_qs(body.decode("utf-8", errors="replace"))
+
+    def field(name: str) -> str:
+        return _query_one(form, name)
+
+    profile_id = field("profile")
+    back = f"/search?profile={quote(profile_id)}" if profile_id else "/search"
+    if path == "/search/stop":
+        if profile_id and field("id"):
+            searches_module.stop(conn, profile_id, int(field("id")) if field("id").isdigit() else 0)
+        return _redirect(back)
+
+    result = searches_module.watch(
+        conn,
+        profile_id,
+        q=field("q"),
+        county=field("county"),
+        family=field("family"),
+        employment_type=field("type"),
+        deadline_days=int(field("days")) if field("days").isdigit() else None,
+        pay_floor=float(field("pay")) if field("pay").replace(".", "", 1).isdigit() else None,
+        remote=field("remote") in ("1", "on", "true"),
+    )
+    if not result.get("saved"):
+        return _redirect(f"/digest?profile={quote(profile_id)}")
+    return _redirect(back + "#saved-searches")
+
+
 def _handle_search(conn, query: dict, *, demo: bool, now: datetime, headers: dict | None) -> Response:
     """Query-string in, HTML out. Every filter is a plain GET parameter."""
 
@@ -1380,6 +1419,7 @@ def _handle_search(conn, query: dict, *, demo: bool, now: datetime, headers: dic
         pay_floor=pay if isinstance(pay, float) and pay > 0 else None,
         remote=one("remote") in ("1", "on", "true"),
         include_blocked=one("blocked") in ("1", "on", "true"),
+        stop_request=one("stop"),
         now=now,
         demo=demo,
         headers=headers,
@@ -2450,6 +2490,110 @@ def _search_card(item, profile, *, now: datetime, back: str) -> str:
 </article>"""
 
 
+def _watch_query(row: dict) -> str:
+    """The query string that reproduces a saved search, without the profile."""
+    pairs = [
+        ("q", row.get("q") or ""),
+        ("county", row.get("county") or ""),
+        ("family", row.get("family") or ""),
+        ("type", row.get("employment_type") or ""),
+        ("days", row.get("deadline_days") or ""),
+        ("pay", int(row["pay_floor"]) if row.get("pay_floor") else ""),
+        ("remote", "1" if row.get("remote") else ""),
+    ]
+    query = urlencode([(key, value) for key, value in pairs if value not in ("", 0, None)])
+    return f"&{query}" if query else ""
+
+
+def _saved_search_html(
+    conn,
+    profile,
+    *,
+    query: str,
+    county: str,
+    family: str,
+    employment_type: str,
+    deadline_days: int | None,
+    pay_floor: float | None,
+    remote: bool,
+    stop_request: str = "",
+) -> str:
+    """The "keep this search" form, the saved list, and the stop confirmation.
+
+    Consent lives here on purpose: the form is only offered to someone with an
+    active subscription, and without one the page explains the rule instead of
+    collecting an address it cannot legally message.
+    """
+    subscription = outbox.load_subscription(conn, profile.id)
+    watching = searches_module.for_profile(conn, profile.id)
+    pid = quote(profile.id)
+    blocks: list[str] = []
+
+    stop_id = str(stop_request or "").strip()
+    if stop_id:
+        target = next((item for item in watching if str(item["id"]) == stop_id), None)
+        if target is not None:
+            blocks.append(
+                '<div class="whobar"><div><b>Stop alerts for “'
+                + _e(target["label"])
+                + '”?</b> <span class="small">The search stays on this page; only the'
+                " messages stop.</span></div>"
+                '<form method="post" action="/search/stop">'
+                f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
+                f'<input type="hidden" name="id" value="{target["id"]}">'
+                "<button type=\"submit\">Stop alerts</button></form></div>"
+            )
+
+    if subscription is not None and subscription.active:
+        channel = _e(subscription.channel)
+        blocks.append(
+            '<div class="whobar"><div><b>Keep this search</b> '
+            f'<span class="small">— we send you a message when something new matches, at most '
+            f"once a day, and only while your {channel} subscription is on.</span></div>"
+            '<form method="post" action="/search/save">'
+            f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
+            f'<input type="hidden" name="q" value="{_e(query)}">'
+            f'<input type="hidden" name="county" value="{_e(county)}">'
+            f'<input type="hidden" name="family" value="{_e(family)}">'
+            f'<input type="hidden" name="type" value="{_e(employment_type)}">'
+            f'<input type="hidden" name="days" value="{deadline_days or ""}">'
+            f'<input type="hidden" name="pay" value="{int(pay_floor) if pay_floor else ""}">'
+            f'<input type="hidden" name="remote" value="{"1" if remote else ""}">'
+            '<button type="submit">Keep this search</button></form></div>'
+        )
+    elif query or county or family or employment_type or deadline_days or pay_floor or remote:
+        blocks.append(
+            '<div class="whobar"><div><b>Want this search to message you?</b> '
+            '<span class="small">Saved searches send messages, so they need a subscription '
+            "first — that is the consent rule, not a paywall.</span></div>"
+            f'<a class="chip" href="/digest?profile={pid}">Turn on WhatsApp</a></div>'
+        )
+
+    if watching:
+        items = []
+        for item in watching:
+            when = (
+                f"last checked {item['last_run_at'][:10]}"
+                if item.get("last_run_at")
+                else "not run yet"
+            )
+            items.append(
+                f'<li><a href="/search?profile={pid}{_watch_query(item)}">{_e(item["label"])}</a> '
+                f'<span class="small">— {_e(item["cadence"])}, {_e(when)}</span> '
+                '<form method="post" action="/search/stop" class="inline">'
+                f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
+                f'<input type="hidden" name="id" value="{item["id"]}">'
+                "<button type=\"submit\">Stop</button></form></li>"
+            )
+        blocks.append(
+            f'<div class="section mt26"><span>Saved searches</span>'
+            f"<em>{len(watching)}</em></div>"
+            f'<ul class="whythat">{"".join(items)}</ul>'
+        )
+
+    return "\n".join(blocks)
+
+
 def render_search(
     conn: sqlite3.Connection,
     *,
@@ -2462,6 +2606,7 @@ def render_search(
     pay_floor: float | None = None,
     remote: bool = False,
     include_blocked: bool = False,
+    stop_request: str = "",
     now: datetime | None = None,
     demo: bool = False,
     headers: dict | None = None,
@@ -2546,6 +2691,20 @@ def render_search(
     if found.is_filtered:
         chips.append(f'<a class="chip" href="/search?profile={quote(profile.id)}">clear all</a>')
 
+    saved_html = _saved_search_html(
+        conn,
+        profile,
+        query=query,
+        county=county,
+        family=family,
+        employment_type=employment_type,
+        deadline_days=deadline_days,
+        pay_floor=pay_floor,
+        remote=remote,
+        stop_request=stop_request,
+    )
+    watched_html = ""
+
     cards = "".join(_search_card(item, profile, now=now, back=back) for item in found.matches)
 
     if found.is_empty:
@@ -2628,13 +2787,15 @@ is useful; they are never mixed into the feed.</p>
     · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
 </div>
 {unstated_note}
+{saved_html}
 {cards}
 <div class="filters mt18">
   <a class="chip" href="{_e(toggle)}">{_e(toggle_label)}</a>
   <a class="chip" href="/?profile={quote(profile.id)}">Back to the feed</a>
   <a class="chip" href="/employers">Employers hiring now</a>
 </div>
-{blocked_html}"""
+{blocked_html}
+{watched_html}"""
     return _page(
         f"Search — Kazi-Kasi",
         body,
@@ -3213,6 +3374,10 @@ def handle(
         )
     if path in ("/digest/subscribe", "/digest/unsubscribe"):
         return _handle_consent(conn, path, body)
+    if path in ("/search/save", "/search/stop"):
+        if action_limiter is not None and not action_limiter.allow(client):
+            return Response(429, "too many actions", "text/plain; charset=utf-8")
+        return _handle_saved_search(conn, path, body)
     if path in ("/api/cron/run", "/api/cron"):
         return _handle_cron(conn, header_map, query, now=now, demo=demo)
     if path == "/action":
@@ -3320,7 +3485,9 @@ def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool)
             },
         )
 
-    report = scheduler.run_due(conn, transports, now=now, with_brief=True, with_alerts=True)
+    report = scheduler.run_due(
+        conn, transports, now=now, with_brief=True, with_alerts=True, with_searches=True
+    )
     report["outbox"] = _outbox_counts(conn, now=now)
     return _json(200, report)
 
@@ -3355,6 +3522,12 @@ def _handle_get(
                     # answered by KAZIKASI_DEMO (see /auth/ready).
                     "synthetic": demo,
                     "strict": accounts.strict_mode(),
+                    "corpus": {
+                        "source": bundle_module.STATE.get("source", "synthetic"),
+                        "built_at": bundle_module.STATE.get("built_at"),
+                        "count": bundle_module.STATE.get("count", 0),
+                        "error": bundle_module.STATE.get("error"),
+                    },
                     "build": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev",
                 },
                 indent=2,

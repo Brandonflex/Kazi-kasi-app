@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime, timezone
 import threading
 import traceback
 from pathlib import Path
@@ -33,7 +34,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:  # local package, not installed in the bundle
     sys.path.insert(0, str(SRC))
 
-from kazikasi import db, serve  # noqa: E402  (after the path fix)
+from kazikasi import bundle, db, serve  # noqa: E402  (after the path fix)
 
 #: One database per warm instance. Requests are serialised through this lock,
 #: which is what makes sharing a single sqlite connection safe.
@@ -46,9 +47,26 @@ ACTION_LIMITER = serve._RateLimiter(limit=serve.ACTION_RATE_LIMIT)
 
 
 def _connection():
+    """The corpus this instance serves, built once per warm container.
+
+    If `KAZIKASI_BUNDLE` points at a published sweep, that is the corpus — real
+    vacancies, with the date they were collected. If it is missing or broken, the
+    synthetic corpus stands in and `/api/health` says why. The site never 500s
+    because a bundle URL moved.
+    """
     with _LOCK:
         if _STATE["conn"] is None:
-            _STATE["conn"] = serve.demo_connection(thread_safe=True, history=True)
+            connection = None
+            if (os.environ.get("KAZIKASI_BUNDLE") or "").strip():
+                connection = bundle.build_fresh()
+            if connection is None:
+                connection = serve.demo_connection(thread_safe=True, history=True)
+                if (os.environ.get("KAZIKASI_BUNDLE") or "").strip():
+                    # The synthetic corpus is only for walking the surfaces; it
+                    # has demo history so /activity and /year are not empty, and
+                    # it never claims to be real.
+                    serve._seed_demo_history(connection, datetime.now(timezone.utc))
+            _STATE["conn"] = connection
         return _STATE["conn"]
 
 

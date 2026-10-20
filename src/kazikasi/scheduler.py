@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 from . import digest as digest_module
-from . import alerts, outbox
+from . import alerts, outbox, searches as searches_module
 
 #: How far inside the window the first send may be pushed, in minutes.
 JITTER_SPREAD_MINUTES = 45
@@ -140,6 +140,7 @@ def run_due(
     dry_run: bool = False,
     with_brief: bool = False,
     with_alerts: bool = False,
+    with_searches: bool = False,
 ) -> dict:
     """One tick: compose for everyone due, then try to deliver.
 
@@ -172,6 +173,12 @@ def run_due(
         # same outbox, so consent, backoff and receipts apply to them equally.
         closing = alerts.queue(conn, now=now, dry_run=dry_run, base=link_base)
 
+    watched: dict | None = None
+    if with_searches:
+        # A saved search is a query with a clock. It rides the same outbox, so
+        # consent, backoff and receipts apply exactly as they do to the digest.
+        watched = searches_module.queue_due(conn, now=now, dry_run=dry_run, base=link_base)
+
     briefs: list[dict] = []
     if with_brief:
         for profile_id in outbox.brief_due(conn, now=now):
@@ -197,6 +204,7 @@ def run_due(
         "composed": composed,
         "briefs": briefs,
         "alerts": closing,
+        "searches": watched,
         "sent": report,
     }
 

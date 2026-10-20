@@ -82,6 +82,20 @@ def _matches_terms(row: dict, words: list[str]) -> bool:
     return all(word in document for word in words)
 
 
+def _seen_since(row: dict, since: datetime) -> bool:
+    """First seen after the watermark. A saved search alerts on arrivals only."""
+    raw = row.get("first_seen_at")
+    if not raw:
+        return False
+    try:
+        seen = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return seen > since
+
+
 def _within(row: dict, days: int | None, now: datetime) -> bool:
     if days is None:
         return True
@@ -189,6 +203,7 @@ def run(
     pay_floor: float | None = None,
     remote: bool = False,
     include_blocked: bool = False,
+    since: datetime | None = None,
     now: datetime | None = None,
 ) -> Search:
     """One query over the live graph, ranked by the same scorer as the feed."""
@@ -225,6 +240,8 @@ def run(
     )
     for match in ranked:
         row = dict(match.row or {})
+        if since is not None and not _seen_since(row, since):
+            continue
         if not _matches_terms(row, words):
             continue
         if filters["county"] and (row.get("county") or "").lower() != filters["county"].lower():

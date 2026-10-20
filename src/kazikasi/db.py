@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -272,6 +272,24 @@ CREATE TABLE IF NOT EXISTS digest_items (
 
 -- Every outbound message, with its state machine. `attempts` and `last_error`
 -- exist so a failure is visible rather than a message that vanished.
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id      TEXT NOT NULL REFERENCES profiles(id),
+    label           TEXT NOT NULL DEFAULT '',
+    q               TEXT NOT NULL DEFAULT '',
+    county          TEXT NOT NULL DEFAULT '',
+    family          TEXT NOT NULL DEFAULT '',
+    employment_type TEXT NOT NULL DEFAULT '',
+    deadline_days   INTEGER NOT NULL DEFAULT 0,   -- 0 means "no horizon"
+    pay_floor       REAL NOT NULL DEFAULT 0,      -- 0 means "no floor"
+    remote          INTEGER NOT NULL DEFAULT 0,
+    cadence         TEXT NOT NULL DEFAULT 'daily',-- daily | weekly
+    created_at      TEXT NOT NULL,
+    last_run_at     TEXT,
+    unsubscribed_at TEXT,
+    UNIQUE (profile_id, q, county, family, employment_type, deadline_days, pay_floor, remote)
+);
+
 CREATE TABLE IF NOT EXISTS messages (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     idempotency   TEXT NOT NULL UNIQUE,

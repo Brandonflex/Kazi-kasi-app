@@ -46,7 +46,9 @@ from . import slo as slo_module
 from . import tracking
 from . import outbox as outbox_module
 from . import alerts as alerts_module
+from . import bundle as bundle_module
 from . import scheduler
+from . import searches as searches_module
 from .channels import FakeTransport, transport_for
 
 
@@ -525,6 +527,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 dry_run=args.dry_run,
                 with_brief=getattr(args, "brief", False),
                 with_alerts=not getattr(args, "no_alerts", False),
+                with_searches=not getattr(args, "no_searches", False),
             )
 
         if not args.loop:
@@ -556,6 +559,83 @@ def cmd_alerts(args: argparse.Namespace) -> int:
             }
             report["sent"] = outbox_module.send_due(conn, transports).to_dict()
         print(json.dumps(report, indent=2, default=str))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_bundle(args: argparse.Namespace) -> int:
+    """Build, verify or describe a bundle — the deployment's corpus."""
+    if args.action == "build":
+        conn = database.connect(args.db)
+        try:
+            payload = bundle_module.write(conn, args.out, now=_now())
+        finally:
+            conn.close()
+        if args.json:
+            print(json.dumps(payload, indent=2, default=str))
+        else:
+            print(f"built {payload['count']} candidates → {payload['path']} ({payload['bytes']:,} bytes)")
+            print(f"sources: {', '.join(payload['sources']) or 'none'}")
+        return 0
+
+    source = args.url or args.out
+    bundle = (
+        bundle_module.from_url(source)
+        if str(source).startswith("https://")
+        else bundle_module.from_file(source)
+    )
+    stale = bundle.is_stale(now=_now())
+    payload = {**bundle.to_dict(), "stale": stale, "source": source}
+    if args.json:
+        print(json.dumps(payload, indent=2, default=str))
+    else:
+        print(f"bundle      {source}")
+        print(f"built       {bundle.built_at.isoformat() if bundle.built_at else 'unknown'}"
+              f"{'  (STALE)' if stale else ''}")
+        print(f"candidates  {bundle.count}  (skipped {bundle.skipped})")
+        print(f"sources     {', '.join(bundle.sources) or 'none'}")
+        print(f"sha256      {payload['sha256']}")
+    return 0
+
+
+def cmd_searches(args: argparse.Namespace) -> int:
+    """Saved searches, from a terminal: watch, stop, list or run one tick."""
+    conn = database.connect(args.db)
+    try:
+        seed_profiles(conn)
+        if args.watch:
+            result = searches_module.watch(
+                conn,
+                args.profile,
+                q=args.q,
+                county=args.county,
+                family=args.family,
+                employment_type=args.employment_type,
+                deadline_days=args.days,
+                pay_floor=args.pay,
+                remote=args.remote,
+                cadence=args.cadence,
+                now=_now(),
+            )
+            print(json.dumps(result, indent=2, default=str))
+            return 0 if result.get("saved") else 1
+        if args.stop is not None:
+            stopped = searches_module.stop(conn, args.profile, args.stop, now=_now())
+            print(json.dumps({"stopped": stopped, "id": args.stop}, indent=2))
+            return 0
+        if args.run:
+            report = searches_module.queue_due(conn, now=_now(), dry_run=args.dry_run)
+            print(json.dumps(report, indent=2, default=str))
+            return 0
+        rows = searches_module.for_profile(conn, args.profile)
+        if args.json:
+            print(json.dumps(rows, indent=2, default=str))
+        else:
+            if not rows:
+                print("no saved searches")
+            for row in rows:
+                print(f"{row['id']:>3}  {row['label']}  ({row['cadence']}, last run {row['last_run_at'] or 'never'})")
         return 0
     finally:
         conn.close()
@@ -711,6 +791,9 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument(
         "--no-alerts", action="store_true", help="skip closing-soon alerts for saved jobs"
     )
+    p_run.add_argument(
+        "--no-searches", action="store_true", help="skip saved-search alerts"
+    )
     p_run.add_argument("--db", default="./data/kazi.db")
     p_run.add_argument("--once", action="store_true", help="one tick (default)")
     p_run.add_argument("--loop", action="store_true", help="keep ticking")
@@ -728,6 +811,32 @@ def main(argv: list[str] | None = None) -> int:
     p_alerts.add_argument("--send", action="store_true", help="deliver right after queueing")
     p_alerts.add_argument("--json", action="store_true")
     p_alerts.set_defaults(func=cmd_alerts)
+
+    p_bundle = sub.add_parser("bundle", help="a corpus in a file, for deployments without a database")
+    p_bundle.add_argument("action", choices=("build", "verify", "show"), nargs="?", default="build")
+    p_bundle.add_argument("--db", default="./data/kazi.db")
+    p_bundle.add_argument("--out", default="data/bundle.jsonl")
+    p_bundle.add_argument("--url", default=None, help="verify or show a published bundle")
+    p_bundle.add_argument("--json", action="store_true")
+    p_bundle.set_defaults(func=cmd_bundle)
+
+    p_searches = sub.add_parser("searches", help="saved searches: watch, stop, list, run")
+    p_searches.add_argument("--db", default="./data/kazi.db")
+    p_searches.add_argument("--profile", default="demo-fresher")
+    p_searches.add_argument("--q", default="")
+    p_searches.add_argument("--county", default="")
+    p_searches.add_argument("--family", default="")
+    p_searches.add_argument("--type", dest="employment_type", default="")
+    p_searches.add_argument("--days", type=int, default=None)
+    p_searches.add_argument("--pay", type=float, default=None)
+    p_searches.add_argument("--remote", action="store_true")
+    p_searches.add_argument("--cadence", choices=("daily", "weekly"), default="daily")
+    p_searches.add_argument("--watch", action="store_true", help="save the search described by the flags")
+    p_searches.add_argument("--stop", type=int, default=None, help="stop alerts for a saved search id")
+    p_searches.add_argument("--run", action="store_true", help="queue what is due now")
+    p_searches.add_argument("--dry-run", action="store_true")
+    p_searches.add_argument("--json", action="store_true")
+    p_searches.set_defaults(func=cmd_searches)
 
     p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
     p_serve.add_argument("--db", default="./data/kazi.db")

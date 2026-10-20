@@ -54,6 +54,9 @@ kazikasi run   --db ./data/kazi.db --explain                           # who is 
 kazikasi run   --db ./data/kazi.db --brief --send --dry-run            # the weekly brief, unsent
 kazikasi apply --db ./data/kazi.db --profile demo-fresher --job <id> --saved
 kazikasi alerts --db ./data/kazi.db --dry-run                           # closing soon, unsent
+kazikasi bundle build --db ./data/kazi.db --out data/bundle.jsonl      # a corpus for a deployment
+kazikasi searches --db ./data/kazi.db --profile demo-fresher --watch --q software
+kazikasi searches --db ./data/kazi.db --run --dry-run                  # what would be sent, unsent
 kazikasi serve --db ./data/kazi.db --demo            # feed, /shortlist, /digest, webhooks on http://localhost:8765
 ```
 
@@ -88,8 +91,9 @@ sign-in configuration as JSON, without secrets. See
 [phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md),
 [phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md),
 [phase 11](./docs/phase-11-cron.md) (the scheduled tick),
-[phase 12](./docs/phase-12-search.md) (search) and
-[phase 13](./docs/phase-13-hardening.md) (the response policy).
+[phase 12](./docs/phase-12-search.md) (search),
+[phase 13](./docs/phase-13-hardening.md) (the response policy) and
+[phase 14](./docs/phase-14-saved-searches.md) (saved searches).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
@@ -125,8 +129,10 @@ demo corpus; a cron tick there would text *fabricated vacancies* to a real
 number. So it does not. Set `KAZIKASI_ALLOW_SYNTHETIC_SEND=1` only to test
 delivery against your own phone.
 
-The tick carries two things: the daily digest and the **closing alert** for a
-saved job. A save is the strongest signal the product gets, so 48 hours before
+The tick carries three things: the daily digest, the **closing alert** for a
+saved job, and any **saved search** with something new. A saved search is a query
+with a clock: it only ever sends through an active subscription, it only announces
+roles first seen since it last ran, and silence means nothing changed. A save is the strongest signal the product gets, so 48 hours before
 the deadline it earns exactly one message — one per job *per deadline*, so a
 re-run never repeats it and an employer who extends the deadline gets a new one.
 No subscription means no alert: saving a job is an in-app action, not consent to
