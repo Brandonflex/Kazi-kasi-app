@@ -95,7 +95,7 @@ D5 was confirmed after the session (web feed + WhatsApp digest) and is now recor
 | **Question** | Do we build on "Kazi-Kasi"? |
 | **Options** | (a) Keep, with a trademark/domain check · (b) Rename before launch · (c) Keep for beta, rename for market |
 | **Recommendation** | **(a)** — but the check is not optional |
-| **Why** | "Kazi" (work) + "kasi" (speed/rate) is a strong, locally legible name. But at least four Kenyan products already use the prefix — **KaziChat, KaziKit, KaziNest, SwiftKazi**. Confusion is a real risk in a market this small |
+| **Why** | "Kazi" (work) + "kasi" (speed/rate) is a strong, locally legible name, but the field is crowded: **KaziNow** (MTN App of the Year 2021), **Kazi** (kaziapp.co.ke), **KaziSasa** and **KaziConnect** are all in or beside Kenyan job search, on top of KaziChat, KaziKit, KaziNest and SwiftKazi. Full findings and the KIPI cost path: [`06-brand-ip-check.md`](./06-brand-ip-check.md) |
 | **What it changes** | Domain, social handles, trademark filing, all copy |
 | **Your call** | — |
 
@@ -149,7 +149,7 @@ Write these down before building, so the decision to stop is a judgement, not a 
 | D9 | Matching | Constraints → relevance → utility | Pending confirmation | — |
 | D10 | Apply | Link out + track | Pending confirmation | — |
 | D11 | Revenue | Undecided; schema kept open | Session | 2026-10-20 |
-| D12 | Brand | Kazi-Kasi, pending IP check | Pending check | — |
+| D12 | Brand | Kazi-Kasi as working name; public launch gated on KIPI search + `.co.ke` | Drafted in [`06`](./06-brand-ip-check.md) | 2026-10-20 |
 
 ---
 
@@ -296,14 +296,14 @@ Short answers are fine.
 1. **Do you have any of these:** a BrighterMonday/MyJobMag contact, a Kenyan lawyer, a hosting account in Kenya, or beta users lined up? Any one of them changes the first month.
 2. **D6:** confirm the source set — 4 boards + PSC/one county + ReliefWeb. (Recommendation: yes.)
 3. **D8–D10:** confirm published freshness, constraints→relevance→utility matching, and link-out apply. (Recommendation: yes to all three.)
-4. **D12:** want me to draft the IP and domain check list for the brand, and a shortlist of fallback names?
+4. **D12:** drafted — see [`06-brand-ip-check.md`](./06-brand-ip-check.md). Needs your yes/no on the launch gate.
 5. **Anything in §3 assumptions** you want to overrule — especially "free through beta" and "no native app"?
 
 ---
 
 ## 8. Immediate next actions
 
-1. Confirm D6, D8–D10 and D12 — or accept the recommendations and I will record them.
+1. Confirm D6 and D8–D10 — or accept the recommendations and I will record them. D12 is drafted and needs a yes/no.
 2. Start ODPC registration and pick a Kenyan host (one afternoon, unblocks Phase 1).
 3. Apply for a ReliefWeb `appname` (a single form, but it gates one whole lane).
 4. Read the BrighterMonday and MyJobMag terms; email both about partnership.

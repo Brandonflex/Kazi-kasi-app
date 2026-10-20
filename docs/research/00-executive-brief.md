@@ -93,7 +93,7 @@ These share one engine. The difference is cadence and framing: the Feed pushes *
 
 ### Brand note (act on this early)
 
-There are at least four Kenyan products using the "Kazi" prefix: **KaziChat, KaziKit, KaziNest, SwiftKazi**. "Kazi-Kasi" is distinctive in combination and the Swahili meaning (work + speed/rate) is strong — but before printing anything, run a trademark and domain check in Kenya. See D12.
+The "Kazi" prefix is crowded in Kenya, and not only at the edges: **KaziNow** (MTN App of the Year 2021), **Kazi** (kaziapp.co.ke, since 2017), **KaziSasa** and **KaziConnect** all sit in or beside the jobs category, alongside KaziChat, KaziKit, KaziNest and SwiftKazi. "Kazi-Kasi" is likely registrable as a coined compound, but the distinctive element is weak. Treat it as a **working name**: run a KIPI compliance search in classes 35 and 42 and register `kazikasi.co.ke` before any public launch. Findings, costs and fallback names: [`06-brand-ip-check.md`](./06-brand-ip-check.md). See D12.
 
 ---
 
@@ -185,7 +185,7 @@ Guardrails: false scam accusations are a trust event and a potential defamation 
 | 5 | Data residency (s50) adds cost and complexity | High | Medium | Choose a Kenyan host for the primary store from the start; replicate outward, not inward |
 | 6 | Monetisation unclear (undecided) | High | Medium | Keep schema open for B2B; no employer-paid ranking in the feed, ever |
 | 7 | Incumbent response (BrighterMonday/Fuzu) | Low | Medium | They are optimising for employer revenue and AI data ops, not verification — move fast on the trust layer |
-| 8 | Brand collision with existing "Kazi\*" products | Medium | Medium | Trademark/domain check before launch (D12) |
+| 8 | Brand collision with existing "Kazi\*" products | **High** | Medium | KIPI search + domain before launch; name kept in config (D12, [`06`](./06-brand-ip-check.md)) |
 | 9 | Informal-market expectations ("where are the kazi za mtaa?") | High | Medium | Be explicit about scope; add a clearly-labelled informal signals lane later |
 
 ---

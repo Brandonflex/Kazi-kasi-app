@@ -1,6 +1,6 @@
 # Kazi-Kasi — Research Pack (Kenya)
 
-Research-only round. **No product code yet** — by design. The purpose of this folder is to argue the idea into a shape worth building, using evidence rather than enthusiasm.
+Research pack, settled. This folder exists to argue the idea into a shape worth building, using evidence rather than enthusiasm — and then to keep the evidence next to the code. The Phase 1 build is recorded separately in [`../phase-1-build.md`](../phase-1-build.md).
 
 **Status:** draft v0.2 · 2026-10-20 · Kenya-first
 **v0.1 was Romania-first and is superseded.** The architecture survived the pivot; the market, sources, law and geography did not.
@@ -17,6 +17,7 @@ Research-only round. **No product code yet** — by design. The purpose of this 
 | 3 | [`03-refinement-session.md`](./03-refinement-session.md) | Decisions taken, decisions open, kill criteria, prompt pack | ~15 min |
 | 4 | [`04-expansion-path.md`](./04-expansion-path.md) | Kenya → East Africa → Africa, and what must be rebuilt | ~8 min |
 | 5 | [`05-evidence-log.md`](./05-evidence-log.md) | Every claim, its source, and its confidence | reference |
+| 6 | [`06-brand-ip-check.md`](./06-brand-ip-check.md) | The name, who else uses it, and the KIPI path (D12) | ~6 min |
 
 ---
 
@@ -70,4 +71,4 @@ That layer is boring, local, and hard. It is also the only thing in this market 
 
 ## Immediate next step
 
-Answer D5, D6, D8–D10 and D12 in [`03-refinement-session.md`](./03-refinement-session.md), and the Phase 1 build brief is ready to run.
+D6 and D8–D10 are the only open confirmations left in [`03-refinement-session.md`](./03-refinement-session.md). D12 has a draft answer in [`06`](./06-brand-ip-check.md).

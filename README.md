@@ -2,7 +2,8 @@
 
 A geo-anchored hiring radar for Kenya: complete, verified, reachable job discovery — starting with Nairobi.
 
-> **Current phase: research.** No product code yet — intentionally. See [`docs/research/`](./docs/research/README.md).
+> **Current phase: Phase 1 build.** The research pack is settled; the ingestion spine is
+> built and tested offline. See [`docs/phase-1-build.md`](./docs/phase-1-build.md).
 
 ## Start here
 
@@ -13,6 +14,18 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 - [Refinement session](./docs/research/03-refinement-session.md) — decisions taken, decisions open, prompt pack
 - [Expansion path](./docs/research/04-expansion-path.md) — Kenya → East Africa → Africa
 - [Evidence log](./docs/research/05-evidence-log.md) — every claim and its source
+- [Brand and IP check](./docs/research/06-brand-ip-check.md) — the name, the crowding, and the KIPI path
+- [Phase 1 build](./docs/phase-1-build.md) — what the ingestion spine does, and how to run it
+
+## Run it
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest                 # 101 tests, no network
+kazikasi sources
+kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
+kazikasi replay --source brightermonday --store ./data/raw
+```
 
 ## Scope in one line
 
