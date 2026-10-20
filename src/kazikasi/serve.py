@@ -27,7 +27,7 @@ import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
@@ -163,12 +163,92 @@ footer{padding:30px 0 44px;font-size:13px;color:var(--muted)}
   .foot .apply{width:100%;justify-content:center}
   .brand nav a{padding:7px 8px}
 }
+/* --- craft layer -------------------------------------------------------
+   Premium here is mostly restraint: one hairline that warms on hover, 1px of
+   lift, a 160ms ease-out, tabular figures, and a focus ring that is the only
+   thing allowed to shout. Nothing bounces, nothing loops, nothing decorates. */
+::selection{background:var(--forest-soft);color:var(--ink)}
+a{-webkit-tap-highlight-color:transparent}
+.card,.filters a,.badge,.foot .apply,.subform button,header,nav a{
+  transition:border-color .16s ease-out,background-color .16s ease-out,
+             color .16s ease-out,transform .16s ease-out,box-shadow .16s ease-out}
+.card:hover{border-color:#D8CBB6;transform:translateY(-1px)}
+.card:focus-within{border-color:var(--forest)}
+.card h2 a{text-underline-offset:2px;text-decoration-thickness:.06em}
+.filters a:hover{border-color:#CFC3AE;color:var(--ink)}
+.foot .apply:hover{transform:translateY(-1px)}
+.ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:16px 0 0;
+  padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--ink-2)}
+.ledger b{color:var(--ink);font-weight:650}
+.ledger .quiet{color:var(--muted)}
+.strip b,.ledger b,table td{font-variant-numeric:tabular-nums}
+.small,.badge{font-variant-numeric:tabular-nums}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
 
 def _constant_time_equal(left: str, right: str) -> bool:
     return _hmac.compare_digest((left or "").encode(), (right or "").encode())
+
+
+# --------------------------------------------------------------------------
+# The ledger: what changed since this visitor last looked.
+#
+# The single most valuable thing this product can say is a diff. It needs one
+# fact — when the person was last here — and it must not become an identity:
+# the value is a timestamp, signed so it cannot be forged into "you last looked
+# in 1970", and readable by nothing but us.
+# --------------------------------------------------------------------------
+
+SEEN_COOKIE = "kazi_seen"
+SEEN_MAX_AGE = 60 * 60 * 24 * 30
+
+
+def _ledger_key() -> bytes:
+    return (os.environ.get("KAZIKASI_SECRET") or "kazi-kasi-demo").encode()
+
+
+def _sign_seen(stamp: str) -> str:
+    return _hmac.new(_ledger_key(), stamp.encode(), "sha256").hexdigest()[:20]
+
+
+def seen_cookie(now: datetime) -> str:
+    """The cookie that makes tomorrow's feed able to say what changed."""
+    stamp = now.replace(microsecond=0).isoformat()
+    return (
+        f"{SEEN_COOKIE}={stamp}.{_sign_seen(stamp)}; Path=/; "
+        f"Max-Age={SEEN_MAX_AGE}; HttpOnly; SameSite=Lax"
+    )
+
+
+def read_seen(headers: dict | None) -> datetime | None:
+    """Parse and verify the last-look timestamp. Anything doubtful is ignored."""
+    raw = ""
+    for key, value in (headers or {}).items():
+        if str(key).lower() != "cookie":
+            continue
+        for part in str(value).split(";"):
+            name, _, val = part.strip().partition("=")
+            if name == SEEN_COOKIE:
+                raw = val
+    stamp, _, signature = raw.rpartition(".")
+    if not stamp or not signature:
+        return None
+    if not _hmac.compare_digest(signature, _sign_seen(stamp)):
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _as_dt(value) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 SCOPE_MARK = """<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
@@ -185,7 +265,7 @@ def _e(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
 
-def _page(title: str, body: str, *, demo: bool = False, nav: str = "") -> str:
+def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str = "") -> str:
     banner = (
         '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
         if demo
@@ -200,7 +280,7 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "") -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#FBF8F2">
 <meta name="description" content="Kazi-Kasi — jobs you can reach, checked today.">
-<title>{_e(title)}</title><style>{STYLE}</style></head>
+<title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
 <body>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi — jobs you can reach">
@@ -214,6 +294,79 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "") -> str:
 <footer class="wrap">Every card says when it was last checked and why it was shown.
 Eligibility labels quote the advert. Applications happen on the employer's site, never here.</footer>
 </body></html>"""
+
+
+# --------------------------------------------------------------------------
+# Structured data
+# --------------------------------------------------------------------------
+
+_EMPLOYMENT_TYPE = {
+    "full_time": "FULL_TIME",
+    "part_time": "PART_TIME",
+    "contract": "CONTRACTOR",
+    "internship": "INTERN",
+    "temporary": "TEMPORARY",
+    "volunteer": "VOLUNTEER",
+}
+_PAY_UNIT = {"hour": "HOUR", "day": "DAY", "week": "WEEK", "month": "MONTH", "year": "YEAR"}
+
+
+def _job_posting(row, description: str) -> str:
+    """One schema.org JobPosting for a job page, or nothing at all.
+
+    Google's rules are unusually concrete: exactly one block per page, on the
+    page that shows that job, with a description that is more than the title,
+    and no markup for a job that has no way to apply. We emit nothing rather
+    than emit something thin — a page that lies in its markup is worse than a
+    page that is simply not rich.
+
+    `directApply` is false on purpose: the application happens on the employer's
+    site, and Google asks for the honest answer.
+    """
+    text = (description or "").strip()
+    if len(text) < 80 or not row["title"]:
+        return ""
+
+    posting: dict = {
+        "@context": "https://schema.org/",
+        "@type": "JobPosting",
+        "title": row["title"],
+        "description": text,
+        "datePosted": str(row["first_seen_at"])[:10],
+        "directApply": False,
+        "identifier": {"@type": "PropertyValue", "name": "Kazi-Kasi", "value": row["id"]},
+        "hiringOrganization": {
+            "@type": "Organization",
+            "name": row["employer_name"] or "Employer not stated",
+        },
+    }
+    if row["deadline"]:
+        posting["validThrough"] = f'{row["deadline"]}T23:59+03:00'
+    if row["county"]:
+        posting["jobLocation"] = {
+            "@type": "Place",
+            "address": {
+                "@type": "PostalAddress",
+                "addressLocality": row["sub_county"] or row["county"],
+                "addressRegion": row["county"],
+                "addressCountry": "KE",
+            },
+        }
+    if row["work_mode"] == "remote":
+        posting["jobLocationType"] = "TELECOMMUTE"
+        posting["applicantLocationRequirements"] = {"@type": "Country", "name": "Kenya"}
+    kind = _EMPLOYMENT_TYPE.get(row["employment_type"])
+    if kind:
+        posting["employmentType"] = kind
+    unit = _PAY_UNIT.get(str(row["pay_period"] or "").lower())
+    if row["pay_min"] and unit:
+        value: dict = {"@type": "QuantitativeValue", "unitText": unit, "minValue": row["pay_min"]}
+        if row["pay_max"] and row["pay_max"] != row["pay_min"]:
+            value["maxValue"] = row["pay_max"]
+        posting["baseSalary"] = {"@type": "MonetaryAmount", "currency": "KES", "value": value}
+
+    payload = json.dumps(posting, ensure_ascii=False).replace("</", "<\\/")
+    return f'<script type="application/ld+json">{payload}</script>'
 
 
 # --------------------------------------------------------------------------
@@ -258,11 +411,40 @@ def render_feed(
     now: datetime | None = None,
     demo: bool = False,
     limit: int = 40,
+    since: datetime | None = None,
 ) -> str:
     now = now or datetime.now(timezone.utc)
     profile = _profile_or_default(conn, profile_id)
     matches, acted = _ranked(conn, profile, now=now, limit=limit)
     summary = metrics.stats(conn, now=now)
+    clock = (now + timedelta(hours=3)).strftime("%H:%M")
+    if since is None:
+        ledger = (
+            '<p class="ledger"><b>First look.</b> We keep what you saw, so next '
+            "time we can tell you exactly what changed.</p>"
+        )
+    else:
+        # Compare at second resolution: the cookie is stored to the second, so a
+        # job first seen in the same second as the visit is not "new".
+        boundary = since.replace(microsecond=0)
+        new_count = sum(
+            1 for match in matches
+            if (
+                (_as_dt((match.row or {}).get("first_seen_at")) or boundary)
+                .replace(microsecond=0)
+                > boundary
+            )
+        )
+        when = (
+            "earlier today"
+            if since.astimezone(timezone.utc).date() == now.astimezone(timezone.utc).date()
+            else f"{since:%a} {since.day} {since:%b}"
+        )
+        lead = f"<b>{new_count} new</b> since {when}" if new_count else f"<b>Nothing new</b> since {when}"
+        ledger = (
+            f'<p class="ledger">{lead} · {summary["closing_within_7_days"]} closing this week · '
+            f"checked {clock} EAT</p>"
+        )
 
     chips = "".join(
         f'<span class="chip">{_e(family)}</span>' for family in profile.role_families
@@ -357,6 +539,7 @@ def render_feed(
   <div class="chips">{limit_chip}{pay_chip}{chips}</div>
 </div>
 <div class="filters">{switcher}</div>
+{ledger}
 {strip}
 {''.join(cards)}"""
     return _page("Kazi-Kasi — jobs for you", body, demo=demo)
@@ -417,6 +600,7 @@ def render_job(
     event_items = "".join(
         f'<li>{_e(event["kind"].replace("_", " "))} · {_e(event["at"][:10])}</li>' for event in events
     )
+    structured = _job_posting(row, description)
     flags = json.loads(row["scam_flags"])
     warning = (
         '<div class="badge danger">Flagged: '
@@ -459,7 +643,7 @@ def render_job(
 <p class="small">Eligibility is read from the advert text, not inferred from the title.
 Distance is straight-line between approximate area centres, not a route.</p>
 """
-    return _page(f"{row['title']} — Kazi-Kasi", body, demo=demo)
+    return _page(f"{row['title']} — Kazi-Kasi", body, demo=demo, head=structured)
 
 
 # --------------------------------------------------------------------------
@@ -742,7 +926,7 @@ def handle(
     method = method.upper()
 
     if method == "GET":
-        return _handle_get(conn, path, query, demo=demo, now=now)
+        return _handle_get(conn, path, query, demo=demo, now=now, headers=header_map)
     if method != "POST":
         return Response(405, "method not allowed", "text/plain; charset=utf-8")
 
@@ -760,7 +944,9 @@ def handle(
     return Response(404, "not found", "text/plain; charset=utf-8")
 
 
-def _handle_get(conn, path: str, query: dict, *, demo: bool, now: datetime) -> Response:
+def _handle_get(
+    conn, path: str, query: dict, *, demo: bool, now: datetime, headers: dict | None = None
+) -> Response:
     if path == "/healthz":
         return Response(200, "ok", "text/plain; charset=utf-8")
 
@@ -840,10 +1026,15 @@ def _handle_get(conn, path: str, query: dict, *, demo: bool, now: datetime) -> R
         return Response(200, page)
 
     if path in ("/", "/index.html"):
-        return Response(
-            200,
-            render_feed(conn, profile_id=_query_one(query, "profile") or None, now=now, demo=demo),
+        seen = read_seen(headers)
+        page = render_feed(
+            conn,
+            profile_id=_query_one(query, "profile") or None,
+            now=now,
+            demo=demo,
+            since=seen,
         )
+        return Response(200, page, headers={"Set-Cookie": seen_cookie(now)})
 
     return Response(404, _page("Not found", "<h1>Not found</h1>", demo=demo))
 

@@ -88,6 +88,10 @@ Wanjiru — IT graduate, 0 years        ← whose feed this is
 
 - **The constraint bar is not a settings screen.** It is the argument for why
   this feed looks like this, visible on every visit.
+- **The ledger sits under the filters** — one line, computed from the last
+  visit: "3 new since Tue 13 Oct · 4 closing this week · checked 12:42 EAT".
+  A first visit says "First look" instead of inventing a number. See
+  [04 §6](./04-market-teardowns.md).
 - Profile switching is a row of first names, not an account menu, because
   accounts do not exist yet.
 - The stat strip answers "is this thing alive?" before the first card.

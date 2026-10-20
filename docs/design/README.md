@@ -4,7 +4,7 @@
 **Researched:** October 2026 · **Sources:** [research log](./03-research-log.md)
 
 This folder narrows the look, the voice, the features and the brand from
-"a job app for Kenya" into something that can be built against. Three documents:
+"a job app for Kenya" into something that can be built against. Five documents:
 
 | Doc | Answers |
 |---|---|
@@ -12,6 +12,7 @@ This folder narrows the look, the voice, the features and the brand from
 | [01-visual-system](./01-visual-system.md) | The tokens: colour roles, type, spacing, components, accessibility contract |
 | [02-product-surface-design](./02-product-surface-design.md) | The screens, the hierarchy, the features we are **not** building, and the open questions |
 | [03-research-log](./03-research-log.md) | What was read, and what it changed |
+| [04-market-teardowns](./04-market-teardowns.md) | Ten platforms, thirty borrowings, the premium rules, and the retention model |
 
 ---
 
@@ -53,3 +54,25 @@ This folder narrows the look, the voice, the features and the brand from
 
 Those are the next conversation, and they are listed with trade-offs in
 [02 §7](./02-product-surface-design.md).
+
+## What the market study added
+
+[04-market-teardowns](./04-market-teardowns.md) is a separate axis: not what we
+look like, but what we borrow from products that already work, and what we
+refuse to take. It produced one build instruction and one css-sized one, both
+shipped:
+
+- **The ledger** — the feed now remembers the last visit (a signed, timestamp-only
+  cookie) and opens with the diff: *"3 new since Tue 13 Oct · 4 closing this week"*.
+  This is the first implementation of the "mentally calculated experience";
+  a first visit says so instead of inventing a number.
+- **The craft layer** — 160ms hover/lift, a warming hairline, tabular figures and
+  a `prefers-reduced-motion` override, which is where most of the "premium" in a
+  server-rendered page actually lives.
+- **Structured data** — every job page emits one honest `JobPosting` block
+  (`directApply: false`), which is the free distribution channel in this category.
+
+The document also narrows the earlier "no gamification" rule rather than
+reversing it: no points, badges, mascots or leaderboards — but yes to a weekly
+ritual with forgiveness, because the evidence that rituals drive returns is
+overwhelming and the brief asked for one.
