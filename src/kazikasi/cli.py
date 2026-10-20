@@ -4,6 +4,12 @@
     kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
     kazikasi replay --source brightermonday --store ./data/raw
     kazikasi canary --source all
+
+    kazikasi init  --db ./data/kazi.db
+    kazikasi load  --db ./data/kazi.db --demo          # synthetic corpus
+    kazikasi stats --db ./data/kazi.db
+    kazikasi review --db ./data/kazi.db
+    kazikasi serve --db ./data/kazi.db --demo
 """
 
 from __future__ import annotations
@@ -12,7 +18,13 @@ import argparse
 import json
 import sys
 
+from . import db as database
 from .canary import run as run_canary
+from .corpus import load_corpus
+from .graph import apply_liveness, open_reviews, upsert_candidate
+from .metrics import health as metrics_health
+from .metrics import stats as metrics_stats
+from .models import JobCandidate
 from .pipeline import HttpFetcher, ingest, write_jsonl
 from .rawstore import FileRawStore
 from .replay import replay, write_report
@@ -55,6 +67,7 @@ def cmd_sources(_: argparse.Namespace) -> int:
 def cmd_ingest(args: argparse.Namespace) -> int:
     store = FileRawStore(args.store)
     fetcher = HttpFetcher(min_interval=args.min_interval)
+    conn = database.connect(args.db) if args.db else None
     summaries = []
     failed = False
     try:
@@ -65,12 +78,22 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             summary = report.summary()
             if args.out:
                 summary["written"] = write_jsonl(report.candidates, args.out)
+            if conn is not None:
+                actions: dict[str, int] = {}
+                for candidate in report.candidates:
+                    action = upsert_candidate(conn, candidate).action
+                    actions[action] = actions.get(action, 0) + 1
+                summary["graph"] = actions
             summaries.append(summary)
             failed = failed or bool(report.errors)
             for error in report.errors[:5]:
                 print(f"  {name} error: {error}", file=sys.stderr)
     finally:
         fetcher.close()
+        if conn is not None:
+            liveness = apply_liveness(conn)
+            summaries.append({"liveness": liveness})
+            conn.close()
 
     print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
     return 1 if failed else 0
@@ -98,6 +121,84 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    counts = database.table_counts(conn)
+    conn.close()
+    print(json.dumps({"db": args.db, "tables": counts}, indent=2))
+    return 0
+
+
+def cmd_load(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        if args.demo:
+            print(json.dumps(load_corpus(conn), indent=2))
+            return 0
+        if not args.from_jsonl:
+            raise SystemExit("load: pass --demo or --from <jobs.jsonl>")
+        actions: dict[str, int] = {}
+        with open(args.from_jsonl, encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                candidate = JobCandidate.from_dict(json.loads(line))
+                action = upsert_candidate(conn, candidate).action
+                actions[action] = actions.get(action, 0) + 1
+        print(json.dumps({"loaded": actions, "liveness": apply_liveness(conn)}, indent=2))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_stats(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        payload = metrics_stats(conn)
+        payload["sources"] = metrics_health(conn)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"live jobs           {payload['live_jobs']}  (of {payload['jobs']} jobs)")
+            print(f"observations        {payload['observations']}  → duplication rate {payload['duplication_rate']:.0%}")
+            print(f"closing in 7 days   {payload['closing_within_7_days']}")
+            print(f"open to freshers    {payload['entry_fit_share_open_to_freshers']:.0%} of live jobs")
+            print(f"review queue        {payload['review_queue_open']} open")
+            print(f"stale               {payload['stale_jobs']}")
+            print("counties            " + ", ".join(f"{c['county']} {c['jobs']}" for c in payload["counties"]))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        pairs = open_reviews(conn, limit=args.limit)
+        if args.json:
+            print(json.dumps(pairs, indent=2))
+            return 0
+        if not pairs:
+            print("review queue empty")
+            return 0
+        for pair in pairs:
+            print(
+                f"[{pair['id']}] {pair['score']:.2f}  {pair['incoming_title']} "
+                f"({pair['incoming_source']})  vs  {pair['job_title']}  ({pair['job_employer']})"
+            )
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .serve import serve
+
+    serve(args.db, host=args.host, port=args.port, demo=args.demo)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kazikasi", description="Kazi-Kasi ingestion spine")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -112,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--pages", type=int, default=1)
     p_ingest.add_argument("--limit", type=int, default=None)
     p_ingest.add_argument("--min-interval", type=float, default=1.0)
+    p_ingest.add_argument("--db", default=None, help="also write the graph into this SQLite file")
     p_ingest.set_defaults(func=cmd_ingest)
 
     p_replay = sub.add_parser("replay", help="re-parse stored payloads offline")
@@ -125,6 +227,34 @@ def main(argv: list[str] | None = None) -> int:
     p_canary.add_argument("--sample", type=int, default=1)
     p_canary.add_argument("--min-interval", type=float, default=1.0)
     p_canary.set_defaults(func=cmd_canary)
+
+    p_init = sub.add_parser("init", help="create or migrate the job graph database")
+    p_init.add_argument("--db", default="./data/kazi.db")
+    p_init.set_defaults(func=cmd_init)
+
+    p_load = sub.add_parser("load", help="load candidates into the graph")
+    p_load.add_argument("--db", default="./data/kazi.db")
+    p_load.add_argument("--from", dest="from_jsonl", default=None)
+    p_load.add_argument("--demo", action="store_true", help="load the synthetic corpus")
+    p_load.set_defaults(func=cmd_load)
+
+    p_stats = sub.add_parser("stats", help="pipeline health and coverage")
+    p_stats.add_argument("--db", default="./data/kazi.db")
+    p_stats.add_argument("--json", action="store_true")
+    p_stats.set_defaults(func=cmd_stats)
+
+    p_review = sub.add_parser("review", help="list ambiguous pairs waiting for a decision")
+    p_review.add_argument("--db", default="./data/kazi.db")
+    p_review.add_argument("--limit", type=int, default=50)
+    p_review.add_argument("--json", action="store_true")
+    p_review.set_defaults(func=cmd_review)
+
+    p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
+    p_serve.add_argument("--db", default="./data/kazi.db")
+    p_serve.add_argument("--host", default="0.0.0.0")
+    p_serve.add_argument("--port", type=int, default=8765)
+    p_serve.add_argument("--demo", action="store_true", help="label the feed as synthetic data")
+    p_serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)
     return args.func(args)

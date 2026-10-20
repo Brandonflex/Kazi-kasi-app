@@ -1,17 +1,23 @@
-"""Identity: deciding when two observations are the same job.
+"""The identity keys, and what each one is allowed to prove.
 
-Stage 1 only (deterministic). Probabilistic matching lands in Phase 2 and must
-be evaluated against a labelled golden set before it can merge anything.
+The distinction this module exists to make:
 
-The strongest key in this market is not the title — it is the *apply target*:
-the email address, portal URL, or reference number (PSC ``V/No``, county ref)
-that every copy of the same advert points at.
+* an **exclusive** key identifies a posting — a reference number, an ATS
+  requisition, or the full cultural key (employer + title + county + deadline);
+* a **shared** key identifies an employer or a campaign — a careers inbox, a
+  "apply here" URL. A large employer posts twenty jobs all telling you to write
+  to ``careers@company.co.ke``. Treating that inbox as identity would collapse
+  twenty vacancies into one, which is the single worst thing this system can do.
+
+Shared keys therefore only *corroborate*: they can merge two observations when
+the titles agree, and otherwise they are ignored.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
+from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from .extract import normalize_title
@@ -32,6 +38,20 @@ _LEGAL_SUFFIXES = (
     "limited", "ltd", "plc", "inc", "llc", "co", "company", "sacco",
     "group", "holdings", "kenya", "east africa", "africa",
 )
+
+#: Roman numerals and trailing digits distinguish real, separate requisitions
+#: ("Analyst" vs "Analyst II"). They must never be normalised away.
+GRADE_MARKER = re.compile(r"\b(i{1,3}|iv|v|vi|[0-9]{1,2})\b\s*$")
+
+
+@dataclass(frozen=True)
+class IdentityKey:
+    kind: str
+    value: str
+    exclusive: bool
+
+    def __str__(self) -> str:  # pragma: no cover - debugging aid
+        return f"{self.kind}:{self.value}"
 
 
 def canonicalize_url(url: str) -> str:
@@ -76,15 +96,6 @@ def employer_key(name: str | None, domain: str | None = None) -> str:
     return "name:" + " ".join(tokens).strip()
 
 
-def source_job_id_from_url(url: str) -> str | None:
-    """Extract a provider-stable id from a posting URL."""
-    path = urlparse(url).path.rstrip("/")
-    tail = path.rsplit("/", 1)[-1] if path else ""
-    if tail and re.fullmatch(r"[\w\-]{4,}", tail):
-        return tail
-    return None
-
-
 def ats_requisition(url: str) -> tuple[str, str] | None:
     for pattern in ATS_ID_PATTERNS:
         match = pattern.search(url or "")
@@ -94,10 +105,12 @@ def ats_requisition(url: str) -> tuple[str, str] | None:
 
 
 def apply_target(candidate: JobCandidate) -> str:
-    """The strongest cross-source identity signal available for this posting.
+    """The strongest single form of "where this application goes".
 
     Ordered by precision: reference number > apply email > ATS requisition >
-    canonical apply URL > canonical source URL.
+    canonical apply URL > canonical source URL. Used as a display/debug value
+    and as the apply link identity — **not** as proof that two postings are the
+    same job. See ``identity_keys`` for that.
     """
     if candidate.reference:
         return "ref:" + candidate.reference.lower()
@@ -127,10 +140,45 @@ def dedupe_key(candidate: JobCandidate) -> str:
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
 
 
+def identity_keys(candidate: JobCandidate) -> list[IdentityKey]:
+    """Every key this candidate offers, tagged with what it is allowed to prove."""
+    keys: list[IdentityKey] = [IdentityKey("dedupe", dedupe_key(candidate), True)]
+
+    if candidate.reference:
+        keys.append(IdentityKey("ref", candidate.reference.lower(), True))
+
+    if candidate.apply_url:
+        requisition = ats_requisition(candidate.apply_url)
+        if requisition:
+            keys.append(IdentityKey("ats", f"{requisition[0]}:{requisition[1]}", True))
+        else:
+            keys.append(IdentityKey("apply_url", canonicalize_url(candidate.apply_url), False))
+
+    for email in candidate.apply_emails:
+        # A careers inbox is an employer signal, not a job id.
+        keys.append(IdentityKey("email", email.lower(), False))
+
+    url = canonicalize_url(candidate.source_url)
+    if url:
+        keys.append(IdentityKey("source_url", url, False))
+
+    return keys
+
+
 def same_job_stage1(a: JobCandidate, b: JobCandidate) -> bool:
     """Conservative deterministic equality. False is always safe; True must be right."""
     if a.source_id == b.source_id and a.source_job_id == b.source_job_id:
         return True
-    if apply_target(a) == apply_target(b) and not apply_target(a).startswith("url:"):
+    if dedupe_key(a) == dedupe_key(b):
         return True
-    return dedupe_key(a) == dedupe_key(b)
+    if a.reference and b.reference and a.reference.lower() == b.reference.lower():
+        return True
+    # A shared inbox only counts when the titles agree as well.
+    if set(a.apply_emails) & set(b.apply_emails) and normalize_title(a.title) == normalize_title(b.title):
+        return True
+    return False
+
+
+def grade_marker(title: str | None) -> str | None:
+    match = GRADE_MARKER.search(normalize_title(title or ""))
+    return match.group(1) if match else None

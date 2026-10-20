@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields as dataclass_fields
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -197,6 +197,23 @@ class JobCandidate:
             if isinstance(data[key], date):
                 data[key] = data[key].isoformat()
         return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "JobCandidate":
+        """Inverse of ``to_dict``. Tolerates extra keys, so a stored payload
+        written by an older version still loads after the model grows."""
+        payload = dict(data)
+        if isinstance(payload.get("pay"), dict):
+            payload["pay"] = JobPay(**payload["pay"])
+        for key in ("date_posted_claimed", "deadline"):
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                payload[key] = date.fromisoformat(value[:10])
+        value = payload.get("first_seen_at")
+        if isinstance(value, str) and value:
+            payload["first_seen_at"] = datetime.fromisoformat(value)
+        known = {f.name for f in dataclass_fields(cls)}
+        return cls(**{k: v for k, v in payload.items() if k in known})
 
     def provenance(self) -> Provenance:
         return Provenance(
