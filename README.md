@@ -44,6 +44,7 @@ kazikasi replay --source brightermonday --store ./data/raw
 kazikasi document --file advert.pdf --source psc     # one advert → its posts
 kazikasi load  --db ./data/kazi.db --demo            # synthetic corpus
 kazikasi match --db ./data/kazi.db --profile demo-fresher
+kazikasi serve --db ./data/kazi.db --demo   # then /search?q=software&county=Nairobi
 kazikasi stats --db ./data/kazi.db
 kazikasi slo   --db ./data/kazi.db
 kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe "0712 000 000" --brief
@@ -72,7 +73,9 @@ The preview alias is stable: push to the branch and the same URL rebuilds.
 The footer names the deployed commit (`demo build 718f627`) and `/api/health`
 returns it, so "is this the new build?" is one glance rather than a guess.
 
-Public surfaces: `/` (the feed), `/shortlist`, `/brief` (the weekly brief),
+Public surfaces: `/` (the feed), `/search` (every live role, narrowed by words,
+county, pay floor and deadline horizon — server-rendered, no JavaScript),
+`/shortlist`, `/brief` (the weekly brief),
 `/activity` (saved, applied and visited, per job), `/year` (a private recap),
 `/employers` and `/employer/<slug>` (a dossier from their own adverts),
 `/pulse` (the market, counted),
@@ -83,8 +86,9 @@ application kit and the direct-apply route; `/signin` and `/account` cover
 optional sign-in and the CV that fills that kit; `/auth/ready` reports the
 sign-in configuration as JSON, without secrets. See
 [phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md),
-[phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md) and
-[phase 11](./docs/phase-11-cron.md) (the scheduled tick).
+[phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md),
+[phase 11](./docs/phase-11-cron.md) (the scheduled tick) and
+[phase 12](./docs/phase-12-search.md) (search).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash

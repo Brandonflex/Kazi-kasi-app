@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from . import (
     accounts,
@@ -52,6 +52,7 @@ from . import (
     pulse,
     ranking,
     scheduler,
+    search as search_module,
     shortlist,
     slo,
     tracking,
@@ -240,6 +241,27 @@ main{padding-bottom:40px}
 .rail-card .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 10px;
   font-size:12px;color:var(--ink-2);background:var(--sunken);white-space:nowrap}
+.filters a.chip{padding:6px 12px;min-height:32px;background:transparent}
+.filters a.chip.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft)}
+.filters a.chip .num{color:var(--ink-3);font-variant-numeric:tabular-nums;margin-left:2px}
+.searchform{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;
+  margin:22px 0 0;align-items:end}
+.searchform label{display:flex;flex-direction:column;gap:5px;font-size:10.5px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
+.searchform input,.searchform select{font:inherit;font-size:14px;padding:10px 11px;width:100%;
+  border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
+  min-height:42px;appearance:none}
+.searchform input:focus,.searchform select:focus{outline:2px solid var(--forest);
+  outline-offset:1px;border-color:var(--forest)}
+.searchform label.check{flex-direction:row;align-items:center;gap:8px;font-size:12.5px;
+  letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:400;min-height:42px}
+.searchform label.check input{width:16px;height:16px;min-height:0;margin:0}
+.searchform button{font:inherit;font-size:13.5px;font-weight:650;padding:11px 18px;
+  border-radius:10px;border:1px solid var(--forest);background:var(--forest);
+  color:#FBF8F2;min-height:42px;cursor:pointer}
+.searchform button:hover{background:#0F3F22}
+@media (max-width:640px){.searchform{grid-template-columns:1fr 1fr}
+  .searchform label:first-of-type{grid-column:1/-1}}
 .mini{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
   border-bottom:1px solid var(--line);font-size:13px;line-height:1.35}
 .mini:last-of-type{border-bottom:none}
@@ -775,6 +797,8 @@ def render_feed(
 <div class="layout">
   <div class="feedcol">
     <div class="section"><span>The feed</span><em>{len(matches)} roles</em></div>
+    <p class="small"><a href="/search?profile={quote(profile.id)}">Search every live role →</a>
+    — words, county, pay floor, deadline horizon.</p>
     {''.join(cards)}
     <p class="endnote">That's all of them. We will tell you when that changes.</p>
     {_wildcard_html(conn, profile, now=now)}
@@ -1038,7 +1062,11 @@ PALETTE_JS = """
     setTimeout(function(){ input.focus(); },0);
   }
   function close(){ dialog.hidden=true; }
-  function go(){ if(shown[active]) window.location.href=shown[active].href; }
+  function go(){
+    if(shown[active]){ window.location.href=shown[active].href; return; }
+    var q=(input.value||'').trim();
+    if(q){ window.location.href='/search?q='+encodeURIComponent(q); }
+  }
 
   document.addEventListener('keydown', function(event){
     var key=event.key;
@@ -1120,6 +1148,13 @@ def palette_index(conn, profile, *, now: datetime) -> list:
                 "href": f"/county/{pulse.slug(item['county'])}",
             }
         )
+    index.append(
+        {
+            "label": "Search every live role",
+            "meta": "page · words, county, pay, deadline",
+            "href": f"/search?profile={quote(profile.id)}",
+        }
+    )
     for entry in dossier.index(conn, now=now, limit=8):
         index.append(
             {
@@ -1245,6 +1280,40 @@ def _pay_cell(pay: dict) -> str:
     return f"{pay['median']:,.0f}"
 
 
+def _handle_search(conn, query: dict, *, demo: bool, now: datetime, headers: dict | None) -> Response:
+    """Query-string in, HTML out. Every filter is a plain GET parameter."""
+
+    def one(key: str, default: str = "") -> str:
+        return (_query_one(query, key) or default).strip()
+
+    def number(key: str):
+        raw = one(key).replace(",", "").replace("_", "")
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return int(value) if value.is_integer() and key == "days" else value
+
+    days = number("days")
+    pay = number("pay")
+    html = render_search(
+        conn,
+        profile_id=one("profile") or None,
+        query=one("q"),
+        county=one("county"),
+        family=one("family"),
+        employment_type=one("type"),
+        deadline_days=int(days) if isinstance(days, int) and days >= 0 else None,
+        pay_floor=pay if isinstance(pay, float) and pay > 0 else None,
+        remote=one("remote") in ("1", "on", "true"),
+        include_blocked=one("blocked") in ("1", "on", "true"),
+        now=now,
+        demo=demo,
+        headers=headers,
+    )
+    return Response(200, html, "text/html; charset=utf-8")
+
+
 def render_employers(conn, *, now: datetime | None = None, demo: bool = False, headers: dict | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     rows = dossier.index(conn, now=now)
@@ -1280,7 +1349,7 @@ def render_employers(conn, *, now: datetime | None = None, demo: bool = False, h
 </table></div>
 <p class="small">An employer page shows what we have seen them advertise, how often
 they publish pay, and how long they leave an advert open. It is a record, not a
-rating, and it is not for sale.</p>"""
+rating, and it is not for sale. <a href="/search">Search every live role →</a></p>"""
     return _page(
         "Employers hiring now — Kazi-Kasi",
         body,
@@ -2200,12 +2269,306 @@ def render_county(
   {rows}
 </table></div>
 <p class="small">Pay is what the advert stated. “Not stated” is the advert's gap,
-not a judgement about the job. <a href="/salaries">Advertised pay by county →</a></p>"""
+not a judgement about the job. <a href="/salaries">Advertised pay by county →</a> ·
+<a href="/search?county={quote(name)}">Search within {_e(name)} →</a></p>"""
     return _page(
         f"{name} — jobs — Kazi-Kasi",
         body,
         demo=demo,
         nav=_public_nav(conn, headers),
+    )
+
+
+def _search_href(
+    profile_id: str,
+    *,
+    query: str = "",
+    county: str = "",
+    family: str = "",
+    employment_type: str = "",
+    deadline_days: int | None = None,
+    pay_floor: float | None = None,
+    remote: bool = False,
+    include_blocked: bool = False,
+    **overrides,
+) -> str:
+    """A search URL that keeps every filter. Facet links must not reset the query."""
+    values = {
+        "profile": profile_id,
+        "q": query,
+        "county": county,
+        "family": family,
+        "type": employment_type,
+        "days": deadline_days,
+        "pay": int(pay_floor) if pay_floor else "",
+        "remote": "1" if remote else "",
+        "blocked": "1" if include_blocked else "",
+    }
+    values.update(overrides)
+    pairs = [(key, value) for key, value in values.items() if value not in ("", None, 0, False)]
+    return "/search" + ("?" + urlencode(pairs) if pairs else "")
+
+
+def _pay_text(row) -> str:
+    low, high = row.get("pay_min"), row.get("pay_max")
+    if low and high and low != high:
+        return f"KES {low:,.0f}–{high:,.0f}"
+    if low:
+        return f"KES {low:,.0f}"
+    return "pay not stated"
+
+
+def _search_card(item, profile, *, now: datetime, back: str) -> str:
+    match, row = item.match, item.row
+    place = row.get("sub_county") or row.get("county") or "location unstated"
+    label, stamp, tone = _deadline_view(row, now)
+    badges = [f'<span class="badge muted">{_e(place)}</span>']
+    entry = ENTRY_FIT_LABEL.get(row.get("entry_fit"), "")
+    if entry:
+        badges.append(f'<span class="badge {ENTRY_FIT_TONE.get(row.get("entry_fit"), "muted")}">{_e(entry)}</span>')
+    if row.get("work_mode") in ("remote", "hybrid"):
+        badges.append(f'<span class="badge good">{_e(row["work_mode"].title())}</span>')
+    if row.get("status") == "stale":
+        badges.append('<span class="badge warn">not re-checked recently</span>')
+    if item.applied:
+        badges.append('<span class="badge">you applied</span>')
+    if item.saved:
+        badges.append('<span class="badge good">saved</span>')
+    if item.blocked:
+        badges.append('<span class="badge warn">outside your scope</span>')
+
+    why = "".join(f"<li>{_e(reason)}</li>" for reason in (match.reasons or [])[:2])
+    blockers = ""
+    if item.blocked and match.blockers:
+        blockers = (
+            '<p class="small">Out of reach because: '
+            + "; ".join(_e(blocker) for blocker in match.blockers)
+            + ".</p>"
+        )
+    return f"""<article class="card">
+  <div class="card-top">
+    <div>
+      <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
+      <div class="employer">{_e(match.employer or "Employer not stated")}</div>
+    </div>
+    <div class="deadline {tone}"><span class="dl-label">{_e(label)}</span><span class="dl-date">{_e(stamp)}</span></div>
+  </div>
+  <div class="badges">{''.join(badges)}</div>
+  {f'<ul class="whythat">{why}</ul>' if why else ''}
+  {blockers}
+  <div class="foot">
+    <span>{_e(_pay_text(row))}</span>
+    <span>{_e(graph.freshness_band(row, now=now))}</span>
+    <form method="post" action="/action">
+      <input type="hidden" name="profile" value="{_e(profile.id)}">
+      <input type="hidden" name="job" value="{_e(match.job_id)}">
+      <input type="hidden" name="kind" value="{'unsaved' if item.saved else 'saved'}">
+      <input type="hidden" name="next" value="{_e(back)}">
+      <button type="submit" class="{'on' if item.saved else ''}">{'Saved' if item.saved else 'Save'}</button>
+    </form>
+    <form method="post" action="/action">
+      <input type="hidden" name="profile" value="{_e(profile.id)}">
+      <input type="hidden" name="job" value="{_e(match.job_id)}">
+      <input type="hidden" name="kind" value="dismissed">
+      <input type="hidden" name="next" value="{_e(back)}">
+      <button type="submit">Not for me</button>
+    </form>
+  </div>
+</article>"""
+
+
+def render_search(
+    conn: sqlite3.Connection,
+    *,
+    profile_id: str | None = None,
+    query: str = "",
+    county: str = "",
+    family: str = "",
+    employment_type: str = "",
+    deadline_days: int | None = None,
+    pay_floor: float | None = None,
+    remote: bool = False,
+    include_blocked: bool = False,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+) -> str:
+    """Every live role, narrowed by hand. Server-rendered; works without JS."""
+    now = now or datetime.now(timezone.utc)
+    profile = _profile_or_default(conn, profile_id)
+    found = search_module.run(
+        conn,
+        profile,
+        query=query,
+        county=county,
+        family=family,
+        employment_type=employment_type,
+        deadline_days=deadline_days,
+        pay_floor=pay_floor,
+        remote=remote,
+        include_blocked=include_blocked,
+        now=now,
+    )
+
+    def keep(**overrides) -> str:
+        params = {
+            "query": query,
+            "county": county,
+            "family": family,
+            "employment_type": employment_type,
+            "deadline_days": deadline_days,
+            "pay_floor": pay_floor,
+            "remote": remote,
+            "include_blocked": include_blocked,
+        }
+        params.update(overrides)
+        return _search_href(profile.id, **params)
+
+    back = keep()
+    county_options = "".join(
+        f'<option value="{_e(name)}"{" selected" if county.lower() == name.lower() else ""}>'
+        f"{_e(name)} ({count})</option>"
+        for name, count in found.counties
+    )
+    family_options = "".join(
+        f'<option value="{_e(name)}"{" selected" if family == name else ""}>'
+        f"{_e(name)} ({count})</option>"
+        for name, count in found.families
+    )
+    types = sorted(
+        {item.row.get("employment_type") for item in found.matches if item.row.get("employment_type")}
+    )
+    type_options = "".join(
+        f'<option value="{_e(kind)}"{" selected" if employment_type == kind else ""}>'
+        f"{_e(kind.replace('_', ' ').title())}</option>"
+        for kind in types
+    )
+
+    chips = []
+    for name, count, label, key in (
+        *[(name, count, name, "county") for name, count in found.counties[:6]],
+        *[(name, count, name, "family") for name, count in found.families[:6]],
+    ):
+        active = county.lower() == name.lower() if key == "county" else family == name
+        if active:
+            chips.append(
+                f'<a class="chip on" href="{_e(keep(**{key: ""}))}">{_e(label)} ×</a>'
+            )
+        else:
+            chips.append(
+                f'<a class="chip" href="{_e(keep(**{key: name}))}">{_e(label)} '
+                f'<span class="num">{count}</span></a>'
+            )
+    if remote:
+        chips.append(f'<a class="chip on" href="{_e(keep(remote=False))}">remote or hybrid ×</a>')
+    if deadline_days:
+        chips.append(
+            f'<a class="chip on" href="{_e(keep(deadline_days=None))}">'
+            f"closes within {deadline_days} days ×</a>"
+        )
+    if pay_floor:
+        chips.append(
+            f'<a class="chip on" href="{_e(keep(pay_floor=None))}">≥ KES {pay_floor:,.0f} ×</a>'
+        )
+    if found.is_filtered:
+        chips.append(f'<a class="chip" href="/search?profile={quote(profile.id)}">clear all</a>')
+
+    cards = "".join(_search_card(item, profile, now=now, back=back) for item in found.matches)
+
+    if found.is_empty:
+        suggestions = []
+        for name, count in found.counties[:3]:
+            suggestions.append(
+                f'<a href="{_e(keep(county=name, query=""))}">every live role in {_e(name)} ({count})</a>'
+            )
+        for name, count in found.families[:3]:
+            suggestions.append(
+                f'<a href="{_e(keep(family=name, query=""))}">{_e(name)} roles ({count})</a>'
+            )
+        if deadline_days:
+            suggestions.append(
+                f'<a href="{_e(keep(deadline_days=None))}">drop the {deadline_days}-day horizon</a>'
+            )
+        if pay_floor:
+            suggestions.append(f'<a href="{_e(keep(pay_floor=None))}">drop the pay floor</a>')
+        cards = f"""<div class="card">
+  <h2>Nothing matches that</h2>
+  <p>Every word has to appear, and every filter has to hold. This corpus is small
+  enough that a narrow search is often empty — that is a fact about the market,
+  not a reason to fill the page with roles that do not fit.</p>
+  <ul class="whythat">{''.join(f'<li>{item}</li>' for item in suggestions)}</ul>
+</div>"""
+
+    blocked_html = ""
+    if include_blocked and found.blocked:
+        blocked_cards = "".join(
+            _search_card(item, profile, now=now, back=back) for item in found.blocked
+        )
+        blocked_html = f"""
+<div class="section"><span>Outside your constraints</span><em>{len(found.blocked)} roles</em></div>
+<p class="small">These advertised roles fail something in your profile — the years asked
+for, the distance, or the pay floor. They are here because seeing the edge of the market
+is useful; they are never mixed into the feed.</p>
+{blocked_cards}"""
+
+    toggle = keep(include_blocked=not include_blocked)
+    toggle_label = (
+        "Hide roles outside my constraints"
+        if include_blocked
+        else f"Show {found.blocked_count} role{'s' if found.blocked_count != 1 else ''} "
+        "outside my constraints"
+    )
+
+    unstated_note = (
+        f'<p class="small">{found.pay_unstated} of these do not state pay, so the floor '
+        "cannot include or exclude them. They are shown, labelled.</p>"
+        if found.pay_unstated
+        else ""
+    )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Search · {_e(profile.name.split(' — ')[0])}</p>
+  <h1 class="display">Find the role you meant</h1>
+  <p class="scopeline">Every live advert in the graph, narrowed by your words and your
+  filters — ranked by the same scorer as the feed.</p>
+  <form method="get" action="/search" class="searchform">
+    <input type="hidden" name="profile" value="{_e(profile.id)}">
+    <label>Words <input type="search" name="q" value="{_e(query)}"
+      placeholder="software nairobi" autocomplete="off"></label>
+    <label>County <select name="county"><option value="">any</option>{county_options}</select></label>
+    <label>Family <select name="family"><option value="">any</option>{family_options}</select></label>
+    <label>Type <select name="type"><option value="">any</option>{type_options}</select></label>
+    <label>Closes in <input type="number" name="days" min="0" max="365" step="1"
+      value="{deadline_days if deadline_days else ''}" placeholder="any"></label>
+    <label>Pay at least <input type="number" name="pay" min="0" step="1000"
+      value="{int(pay_floor) if pay_floor else ''}" placeholder="any"></label>
+    <label class="check"><input type="checkbox" name="remote" value="1"
+      {'checked' if remote else ''}> remote or hybrid</label>
+    <label class="check"><input type="checkbox" name="blocked" value="1"
+      {'checked' if include_blocked else ''}> include roles outside my scope</label>
+    <button type="submit">Search</button>
+  </form>
+  <div class="filters">{''.join(chips)}</div>
+  <p class="ledger"><b>{found.narrowed}</b> of {found.considered} live roles match ·
+    {len(found.matches)} in your scope · {found.blocked_count} outside it
+    · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
+</div>
+{unstated_note}
+{cards}
+<div class="filters" style="margin-top:18px">
+  <a class="chip" href="{_e(toggle)}">{_e(toggle_label)}</a>
+  <a class="chip" href="/?profile={quote(profile.id)}">Back to the feed</a>
+  <a class="chip" href="/employers">Employers hiring now</a>
+</div>
+{blocked_html}"""
+    return _page(
+        f"Search — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_nav_for(_account_for(conn, headers), profile.id),
+        head='<meta name="robots" content="noindex">',
+        palette=palette_index(conn, profile, now=now),
     )
 
 
@@ -2246,6 +2609,7 @@ def render_robots() -> str:
             "Disallow: /review",
             "Disallow: /digest",
             "Disallow: /action",
+            "Disallow: /search",
             "Disallow: /webhooks/",
             "Disallow: /api/",
             "",
@@ -2959,6 +3323,9 @@ def _handle_get(
         )
 
 
+
+    if path == "/search":
+        return _handle_search(conn, query, demo=demo, now=now, headers=headers)
 
     if path == "/employers":
         return Response(200, render_employers(conn, now=now, demo=demo, headers=headers))
