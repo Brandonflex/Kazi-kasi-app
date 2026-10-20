@@ -14,7 +14,16 @@ def test_connect_creates_the_schema_and_records_a_version(tmp_path):
         version = conn.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()["v"]
         assert version == db.SCHEMA_VERSION
         counts = db.table_counts(conn)
-        assert set(counts) == {"observations", "jobs", "job_keys", "job_members", "job_events", "review_queue"}
+        assert set(counts) == {
+            "observations",
+            "jobs",
+            "job_keys",
+            "job_members",
+            "job_events",
+            "review_queue",
+            "profiles",
+            "apply_events",
+        }
         assert all(value == 0 for value in counts.values())
     finally:
         conn.close()
@@ -28,6 +37,29 @@ def test_migrate_is_idempotent(tmp_path):
     rows = first.execute("SELECT COUNT(*) AS c FROM schema_version").fetchone()["c"]
     first.close()
     assert rows == 1
+
+
+def test_an_older_database_upgrades_in_place(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    legacy = sqlite3.connect(path)
+    legacy.executescript(
+        """
+        CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+        INSERT INTO schema_version VALUES (2, '2026-10-20T00:00:00+00:00');
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    conn = db.connect(path)
+    try:
+        versions = [row["version"] for row in conn.execute("SELECT version FROM schema_version ORDER BY version")]
+        assert versions == [2, db.SCHEMA_VERSION]
+        assert db.table_counts(conn)["profiles"] == 0
+    finally:
+        conn.close()
 
 
 def test_foreign_keys_are_enforced(tmp_path):

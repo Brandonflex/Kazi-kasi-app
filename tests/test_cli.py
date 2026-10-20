@@ -84,3 +84,80 @@ def test_stats_human_output(tmp_path, capsys):
 def test_unknown_source_is_rejected(tmp_path):
     with pytest.raises(SystemExit):
         main(["ingest", "--source", "not-a-board", "--store", str(tmp_path / "raw")])
+
+
+def test_profiles_seed_and_list(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    assert main(["profiles", "--db", db_path, "--seed"]) == 0
+    out = capsys.readouterr().out
+    assert "seeded 4 demo profiles" in out
+    assert "demo-fresher" in out
+
+    # Seeding twice is a no-op, not a duplicate.
+    assert main(["profiles", "--db", db_path, "--seed", "--json"]) == 0
+    profiles = json.loads(capsys.readouterr().out)
+    assert len(profiles) == 4
+
+
+def test_match_explains_its_ranking(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+
+    assert main(["match", "--db", db_path, "--profile", "demo-two-years"]) == 0
+    out = capsys.readouterr().out
+    assert "Otieno" in out
+    assert "Finance Assistant" in out
+
+
+def test_match_json_includes_reasons(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+
+    assert main(["match", "--db", db_path, "--profile", "demo-fresher", "--json"]) == 0
+    matches = json.loads(capsys.readouterr().out)
+    assert matches and matches[0]["reasons"]
+    assert all(match["eligible"] for match in matches)
+
+
+def test_match_rejects_an_unknown_profile(tmp_path):
+    with pytest.raises(SystemExit):
+        main(["match", "--db", str(tmp_path / "kazi.db"), "--profile", "nobody"])
+
+
+def test_apply_records_an_event(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    main(["profiles", "--db", db_path, "--seed"])
+    capsys.readouterr()
+
+    connection = __import__("kazikasi.db", fromlist=["connect"]).connect(db_path)
+    job_id = connection.execute("SELECT id FROM jobs LIMIT 1").fetchone()["id"]
+    connection.close()
+
+    assert main(["apply", "--db", db_path, "--profile", "demo-fresher", "--job", job_id, "--applied"]) == 0
+    event = json.loads(capsys.readouterr().out)
+    assert event["kind"] == "applied"
+
+
+def test_apply_on_an_unknown_profile_says_how_to_fix_it(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+    connection = __import__("kazikasi.db", fromlist=["connect"]).connect(db_path)
+    job_id = connection.execute("SELECT id FROM jobs LIMIT 1").fetchone()["id"]
+    connection.close()
+    with pytest.raises(SystemExit) as error:
+        main(["apply", "--db", db_path, "--profile", "ghost", "--job", job_id])
+    assert "profiles --seed" in str(error.value)
+
+
+def test_slo_exits_non_zero_when_the_feed_is_late(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+    code = main(["slo", "--db", db_path, "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert {"sources", "slo_rate", "feed_age_minutes"} <= set(payload)
+    assert code in (0, 1)

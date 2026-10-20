@@ -12,6 +12,11 @@
     kazikasi stats --db ./data/kazi.db
     kazikasi review --db ./data/kazi.db
     kazikasi serve --db ./data/kazi.db --demo
+
+    kazikasi profiles --db ./data/kazi.db --seed
+    kazikasi match --db ./data/kazi.db --profile demo-fresher
+    kazikasi apply --db ./data/kazi.db --profile demo-fresher --job <id> --applied
+    kazikasi slo --db ./data/kazi.db
 """
 
 from __future__ import annotations
@@ -25,9 +30,14 @@ from . import db as database
 from .canary import run as run_canary
 from .corpus import load_corpus
 from .documents import DocumentError, document_to_candidates
+from . import graph
 from .graph import apply_liveness, open_reviews, upsert_candidate
 from .metrics import health as metrics_health
 from .metrics import stats as metrics_stats
+from .profile import list_profiles, load_profile, seed_profiles
+from .ranking import explain, rank
+from . import slo as slo_module
+from . import tracking
 from .models import JobCandidate
 from .pipeline import HttpFetcher, ingest, write_jsonl
 from .rawstore import FileRawStore
@@ -250,6 +260,74 @@ def cmd_review(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def cmd_profiles(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        added = seed_profiles(conn) if args.seed else 0
+        profiles = list_profiles(conn)
+        if args.json:
+            print(json.dumps([profile.to_dict() for profile in profiles], indent=2))
+        else:
+            if added:
+                print(f"seeded {added} demo profiles")
+            for profile in profiles:
+                print(f"{profile.id:22} {profile.name}  ·  {profile.describe()}")
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_match(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        seed_profiles(conn)
+        profile = load_profile(conn, args.profile)
+        if profile is None:
+            raise SystemExit(f"unknown profile {args.profile!r}; run `kazikasi profiles`")
+        rows = [dict(row) for row in graph.feed(conn, limit=1000, include_stale=True)]
+        matches = rank(rows, profile, limit=args.limit, include_blocked=args.include_blocked)
+        if args.json:
+            print(json.dumps([match.to_dict() for match in matches], indent=2, default=str))
+            return 0
+        print(profile.name)
+        for match in matches:
+            print("  " + explain(match))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        kind = "applied" if args.applied else ("dismissed" if args.dismiss else "clicked_through")
+        try:
+            event_id = tracking.record(conn, args.profile, args.job, kind, detail=args.note)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        print(json.dumps({"event_id": event_id, "kind": kind, "job": args.job}, indent=2))
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_slo(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        payload = slo_module.report(conn)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"feed last updated: {payload['feed_last_updated'] or 'never'}")
+            print(f"sources within target: {payload['sources_meeting_slo']}/{payload['sources_reporting']}")
+            for source in payload["sources"]:
+                age = "—" if source["age_minutes"] is None else f"{source['age_minutes']:.0f} min"
+                print(f"  {source['source_id']:16} {source['state']:14} {age:>10} (target {source['target_minutes']} min)")
+        return 0 if payload["slo_rate"] >= args.min_rate else 1
+    finally:
+        conn.close()
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .serve import serve
 
@@ -316,6 +394,35 @@ def main(argv: list[str] | None = None) -> int:
     p_review.add_argument("--limit", type=int, default=50)
     p_review.add_argument("--json", action="store_true")
     p_review.set_defaults(func=cmd_review)
+
+    p_profiles = sub.add_parser("profiles", help="list jobseeker profiles (constraints)")
+    p_profiles.add_argument("--db", default="./data/kazi.db")
+    p_profiles.add_argument("--seed", action="store_true", help="insert the demo profiles if missing")
+    p_profiles.add_argument("--json", action="store_true")
+    p_profiles.set_defaults(func=cmd_profiles)
+
+    p_match = sub.add_parser("match", help="rank live jobs for one profile")
+    p_match.add_argument("--db", default="./data/kazi.db")
+    p_match.add_argument("--profile", default="demo-fresher")
+    p_match.add_argument("--limit", type=int, default=10)
+    p_match.add_argument("--include-blocked", action="store_true", help="show excluded jobs and why")
+    p_match.add_argument("--json", action="store_true")
+    p_match.set_defaults(func=cmd_match)
+
+    p_apply = sub.add_parser("apply", help="record that you clicked through, applied, or passed")
+    p_apply.add_argument("--db", default="./data/kazi.db")
+    p_apply.add_argument("--profile", required=True)
+    p_apply.add_argument("--job", required=True)
+    p_apply.add_argument("--applied", action="store_true")
+    p_apply.add_argument("--dismiss", action="store_true")
+    p_apply.add_argument("--note", default=None)
+    p_apply.set_defaults(func=cmd_apply)
+
+    p_slo = sub.add_parser("slo", help="freshness per source, measured")
+    p_slo.add_argument("--db", default="./data/kazi.db")
+    p_slo.add_argument("--min-rate", type=float, default=0.999)
+    p_slo.add_argument("--json", action="store_true")
+    p_slo.set_defaults(func=cmd_slo)
 
     p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
     p_serve.add_argument("--db", default="./data/kazi.db")

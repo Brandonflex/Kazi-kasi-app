@@ -548,6 +548,28 @@ def job_sources(conn, job_id: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def primary_source(conn, job_id: str) -> dict | None:
+    """The observation a card links out to.
+
+    Preference order: the primary observation, then the most recent sighting.
+    The apply link must always point at the original advert, never at us.
+    """
+    row = conn.execute(
+        """SELECT o.source_id, o.source_url, o.fetched_at
+           FROM jobs j JOIN observations o ON o.id = j.primary_observation_id
+           WHERE j.id = ?""",
+        (job_id,),
+    ).fetchone()
+    if row is None:
+        row = conn.execute(
+            """SELECT o.source_id, o.source_url, o.fetched_at
+               FROM job_members m JOIN observations o ON o.id = m.observation_id
+               WHERE m.job_id = ? ORDER BY o.fetched_at DESC LIMIT 1""",
+            (job_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def job_events(conn, job_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT kind, at, detail FROM job_events WHERE job_id = ? ORDER BY at", (job_id,)

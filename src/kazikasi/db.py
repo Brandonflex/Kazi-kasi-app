@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -122,6 +122,44 @@ CREATE TABLE IF NOT EXISTS review_queue (
 );
 
 CREATE INDEX IF NOT EXISTS idx_review_open ON review_queue (resolved_at, score DESC);
+
+-- ---------------------------------------------------------------------------
+-- v3: the product surface. Constraints in, ranked feed out, applies tracked.
+-- ---------------------------------------------------------------------------
+
+-- One jobseeker's constraints. Stored, not inferred: the whole promise of the
+-- product is that it is tailored to *these* limits, and a user must be able to
+-- see and change them.
+CREATE TABLE IF NOT EXISTS profiles (
+    id                TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    home_county       TEXT,
+    home_area         TEXT,
+    max_commute_km    REAL,
+    role_families     TEXT NOT NULL DEFAULT '[]',
+    entry_fits        TEXT NOT NULL DEFAULT '["open_to_freshers","some_experience"]',
+    employment_types  TEXT NOT NULL DEFAULT '[]',
+    work_modes        TEXT NOT NULL DEFAULT '[]',
+    min_monthly_pay   REAL,
+    deadline_within_days INTEGER,
+    include_remote    INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
+-- Append-only. An apply click is evidence that the feed did its job; a "closed
+-- the tab" is evidence that it did not. Never inferred from page views.
+CREATE TABLE IF NOT EXISTS apply_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT NOT NULL REFERENCES profiles(id),
+    job_id     TEXT NOT NULL REFERENCES jobs(id),
+    kind       TEXT NOT NULL,   -- viewed | clicked_through | applied | dismissed | saved
+    at         TEXT NOT NULL,
+    detail     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_apply_events_job ON apply_events (job_id, at);
+CREATE INDEX IF NOT EXISTS idx_apply_events_profile ON apply_events (profile_id, at);
 """
 
 
@@ -141,12 +179,28 @@ def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
     return conn
 
 
-def migrate(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+def _current_version(conn: sqlite3.Connection) -> int:
     row = conn.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()
-    if row is None or row["v"] is None:
-        from datetime import datetime, timezone
+    return int(row["v"]) if row and row["v"] is not None else 0
 
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Apply pending migrations in order and record each one.
+
+    Every statement is additive and ``IF NOT EXISTS``, so re-running is safe and
+    an existing database from an earlier phase upgrades in place rather than
+    needing a rebuild.
+    """
+    from datetime import datetime, timezone
+
+    conn.executescript(SCHEMA)
+    current = _current_version(conn)
+    if current == 0:
+        conn.execute(
+            "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+            (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
+        )
+    elif current < SCHEMA_VERSION:
         conn.execute(
             "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
             (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
@@ -154,6 +208,22 @@ def migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _now_iso() -> str:
+    """One timestamp format for every table, in UTC."""
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
-    names = ("observations", "jobs", "job_keys", "job_members", "job_events", "review_queue")
+    names = (
+        "observations",
+        "jobs",
+        "job_keys",
+        "job_members",
+        "job_events",
+        "review_queue",
+        "profiles",
+        "apply_events",
+    )
     return {name: conn.execute(f"SELECT COUNT(*) AS c FROM {name}").fetchone()["c"] for name in names}
