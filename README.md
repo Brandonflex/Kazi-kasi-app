@@ -33,7 +33,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 742 tests, no network
+python -m pytest                                    # 779 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -69,13 +69,15 @@ The footer names the deployed commit (`demo build 718f627`) and `/api/health`
 returns it, so "is this the new build?" is one glance rather than a guess.
 
 Public surfaces: `/` (the feed), `/shortlist`, `/brief` (the weekly brief),
-`/activity` (saved, applied and visited, per job), `/pulse` (the market, counted),
+`/activity` (saved, applied and visited, per job), `/year` (a private recap),
+`/employers` and `/employer/<slug>` (a dossier from their own adverts),
+`/pulse` (the market, counted),
 `/salaries` (advertised pay, with sample sizes), `/county/<slug>`,
 `/sitemap.xml` and `/robots.txt`. Press **⌘K** (or Ctrl-K) to jump to a job, a
 county or a page. `/job/<id>` carries the evidence, who to address, the
 application kit and the direct-apply route; `/signin` and `/account` cover
 optional sign-in and the CV that fills that kit. See
-[phase 7](./docs/phase-7-accounts.md).
+[phase 7](./docs/phase-7-accounts.md) and [phase 8](./docs/phase-8-market.md).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash

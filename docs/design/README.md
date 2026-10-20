@@ -105,6 +105,14 @@ shipped:
   showing the furthest thing done. The same `apply_events` the ledger already
   used, so the product has one history rather than two.
 
+- **Employer dossiers** (`/employers`, `/employer/<slug>`) — BrighterMonday's B2
+  idea, candidate-side and free: what they advertise, the pay they publish with
+  `n`, the median run to deadline, and what the advert does not say. Merged names
+  are listed; nothing about ordering is for sale.
+- **Your year in the market** (`/year`) — Spotify's recap without the confetti:
+  private, `noindex`, no rejection count, no interview rate, and a shareable card
+  that cannot name an employer you applied to.
+
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly
 ritual with forgiveness, because the evidence that rituals drive returns is

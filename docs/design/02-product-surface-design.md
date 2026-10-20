@@ -218,6 +218,8 @@ The earlier passes designed the finding. This one designs the **acting**:
 | `/job/<id>` | the advert's own words, quoted | invented hiring-team names or guessed emails |
 | the kit | copy-ready values, each labelled with its source | submitting anything on the person's behalf |
 | `/activity` | one row per job, furthest state first | streaks, scores, or a count that shames |
+| `/employer/<slug>` | figures with `n` on the same line | a rating, a trust score, or a "featured" slot |
+| `/year` | counts of what we recorded, `noindex` | an outcome, a rejection, or a named employer on the card |
 
 The typographic rules hold: figures in Georgia, no red on an action, no amber
 badge that reads as a warning when it means "unsaved". The tracker's badges are

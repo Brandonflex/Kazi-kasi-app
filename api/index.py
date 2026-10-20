@@ -46,7 +46,7 @@ LIMITER = serve._RateLimiter()
 def _connection():
     with _LOCK:
         if _STATE["conn"] is None:
-            _STATE["conn"] = serve.demo_connection(thread_safe=True)
+            _STATE["conn"] = serve.demo_connection(thread_safe=True, history=True)
         return _STATE["conn"]
 
 

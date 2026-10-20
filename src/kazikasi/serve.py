@@ -41,8 +41,10 @@ from . import (
     brief as brief_module,
     db,
     digest as digest_module,
+    dossier,
     employer,
     graph,
+    recap,
     metrics,
     momentum,
     outbox,
@@ -250,6 +252,15 @@ main{padding-bottom:40px}
 .filters a:hover{border-color:#CFC3AE;color:var(--ink);text-decoration:none}
 .filters a.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft);
   font-weight:650}
+
+/* ---- employer and year pages --------------------------------------- */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;margin-bottom:8px}
+.two .tablewrap{margin:0}
+.fig{font-family:var(--font-display);font-size:32px;line-height:1;margin:6px 0 8px;
+  font-variant-numeric:tabular-nums}
+pre.msg{white-space:pre-wrap;font:13.5px/1.6 var(--font-mono);background:var(--sunken);
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px;margin:0 0 8px}
+@media (max-width:900px){.two{grid-template-columns:1fr;gap:14px}}
 
 /* ---- panels used by the ops pages --------------------------------- */
 .whobar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
@@ -783,6 +794,7 @@ def render_feed(
       <h3>Shortlist</h3>
       <p class="rail-note">{len(saved)} saved — kept for you, never sent to an employer.</p>
       <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
+      <a class="more" href="/year?profile={quote(profile.id)}">Your year in the market →</a>
     </div>
   </aside>
 </div>"""
@@ -1088,6 +1100,14 @@ def palette_index(conn, profile, *, now: datetime) -> list:
                 "href": f"/county/{pulse.slug(item['county'])}",
             }
         )
+    for entry in dossier.index(conn, now=now, limit=8):
+        index.append(
+            {
+                "label": entry["name"],
+                "meta": f"employer · {entry['live']} live",
+                "href": f"/employer/{quote(entry['slug'])}",
+            }
+        )
     index.extend(
         [
             {"label": "The feed", "meta": "page", "href": f"/?profile={quote(profile.id)}"},
@@ -1095,6 +1115,9 @@ def palette_index(conn, profile, *, now: datetime) -> list:
             {"label": "Weekly brief", "meta": "page", "href": f"/brief?profile={quote(profile.id)}"},
             {"label": "Market pulse", "meta": "page", "href": "/pulse"},
             {"label": "Advertised pay", "meta": "page", "href": "/salaries"},
+            {"label": "Employers hiring now", "meta": "page", "href": "/employers"},
+            {"label": "Your year", "meta": "page", "href": f"/year?profile={quote(profile.id)}"},
+            {"label": "Your record", "meta": "page", "href": f"/activity?profile={quote(profile.id)}"},
             {"label": "WhatsApp digest", "meta": "page", "href": f"/digest?profile={quote(profile.id)}"},
         ]
     )
@@ -1188,6 +1211,245 @@ def _notice(kind: str, message: str) -> str:
         return ""
     tone = {"good": "good", "warn": "warn", "bad": "danger"}.get(kind, "")
     return f'<div class="whobar"><span class="badge {tone}">{_e(message)}</span></div>'
+
+
+
+# --------------------------------------------------------------------------
+# Employers and the year
+# --------------------------------------------------------------------------
+
+
+def _pay_cell(pay: dict) -> str:
+    if not pay.get("median"):
+        return "never stated"
+    return f"{pay['median']:,.0f}"
+
+
+def render_employers(conn, *, now: datetime | None = None, demo: bool = False, headers: dict | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    rows = dossier.index(conn, now=now)
+    live = sum(row["live"] for row in rows)
+    paid = [row["median_pay"] for row in rows if row["median_pay"]]
+    lines = []
+    for row in rows:
+        counties = ", ".join(row["counties"][:2]) or "county not stated"
+        lines.append(
+            f"""<tr>
+  <td><a href="/employer/{_e(row['slug'])}">{_e(row['name'])}</a></td>
+  <td>{row['live']}</td>
+  <td>{f"{row['median_pay']:,.0f}" if row['median_pay'] else "never stated"}</td>
+  <td class="small">{_e(counties)}</td>
+</tr>"""
+        )
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Employers · {len(rows)} hiring now</p>
+  <h1 class="display">Who is actually hiring</h1>
+  <p class="scopeline">Every employer with a live advert, and what their own
+  adverts say about pay. Ranked by open roles, then alphabetically — never by
+  anything an employer can buy.</p>
+</div>
+<div class="strip">
+  <div><b>{len(rows)}</b><span>employers with live adverts</span></div>
+  <div><b>{live}</b><span>open roles between them</span></div>
+  <div><b>{f"{round(sum(paid) / len(paid)):,.0f}" if paid else "—"}</b><span>median of employer medians (n={len(paid)})</span></div>
+</div>
+<div class="tablewrap" style="margin-top:26px"><table>
+  <tr><th>Employer</th><th>Open now</th><th>Median advertised minimum (KES)</th><th>Where</th></tr>
+  {''.join(lines)}
+</table></div>
+<p class="small">An employer page shows what we have seen them advertise, how often
+they publish pay, and how long they leave an advert open. It is a record, not a
+rating, and it is not for sale.</p>"""
+    return _page(
+        "Employers hiring now — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_public_nav(conn, headers),
+    )
+
+
+def render_employer(
+    conn,
+    key: str,
+    *,
+    profile_id: str | None = None,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+) -> str | None:
+    now = now or datetime.now(timezone.utc)
+    profile = _profile_or_default(conn, profile_id)
+    data = dossier.report(conn, key, now=now)
+    if data is None:
+        return None
+
+    pay, closing = data.pay, data.closing
+    jobs = "".join(
+        f"""<tr>
+  <td><a href="/job/{_e(job['id'])}?profile={quote(profile.id)}">{_e(job['title'])}</a></td>
+  <td>{_e(job['county'] or '—')}</td>
+  <td>{_e(job['deadline'] or '—')}</td>
+  <td>{f"KES {job['pay_min']:,.0f}" if job.get('pay_min') else 'not stated'}</td>
+</tr>"""
+        for job in data.jobs
+    )
+    families = "".join(
+        f'<tr><td>{_e(family.replace("_", " "))}</td><td>{count}</td></tr>'
+        for family, count in data.families
+    )
+    counties = "".join(f"<li>{_e(name)} · {count}</li>" for name, count in data.counties)
+    checks = "".join(
+        f'<tr><td>{_e(check["label"])}</td><td>{_e(check["value"])}</td>'
+        f'<td class="small">{"" if check["ok"] else "worth a second look"}</td></tr>'
+        for check in data.checks
+    )
+    merged = ""
+    if len(data.variants) > 1:
+        merged = (
+            '<p class="small">This page merges the names '
+            + _e(", ".join(data.variants))
+            + ", because they normalise to the same employer. If that is wrong, "
+            "tell us and it gets split.</p>"
+        )
+    cadence = (
+        f"a new advert roughly every {data.cadence_days:g} days"
+        if data.cadence_days
+        else "too few adverts to see a rhythm"
+    )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Employer · last checked {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
+  <h1 class="display">{_e(data.name)}</h1>
+  <p class="scopeline">{_e(dossier.line(data))}. Everything below is read from their
+  own adverts, with the sample size attached.</p>
+</div>
+<div class="strip">
+  <div><b>{data.live}</b><span>open now</span></div>
+  <div><b>{data.total}</b><span>adverts we have seen</span></div>
+  <div><b>{_pay_cell(pay)}</b><span>median advertised minimum (n={pay['stated']})</span></div>
+  <div><b>{f"{closing['median_days']} days" if closing['median_days'] is not None else "—"}</b><span>median run to deadline (n={closing['n']})</span></div>
+</div>
+{merged}
+<h2>Open roles</h2>
+{
+    f'<div class="tablewrap"><table><tr><th>Role</th><th>Where</th><th>Closes</th><th>Pay</th></tr>{jobs}</table></div>'
+    if jobs
+    else '<p>No live adverts from this employer right now. Their history is below.</p>'
+}
+<h2>What they advertise</h2>
+<div class="two">
+  <div class="tablewrap"><table><tr><th>Family</th><th>Adverts</th></tr>{families or '<tr><td>—</td><td>0</td></tr>'}</table></div>
+  <div>
+    <p class="small">Where these roles are:</p>
+    <ul class="sources">{counties or '<li>county not stated</li>'}</ul>
+    <p class="small">{_e(cadence)}.</p>
+  </div>
+</div>
+<h2>What we can check</h2>
+<div class="tablewrap"><table><tr><th>Check</th><th>Result</th><th></th></tr>{checks}</table></div>
+<h2>What we cannot tell you</h2>
+<p>Whether they reply, how many people applied, or what they offered anyone. We do
+not have that data and will not estimate it. {"They never state pay, so the median above is a market figure only if it says so." if not pay["stated"] else f"Pay is stated in {pay['stated']} of {data.total} adverts."}</p>
+<p class="small">This dossier is candidate-side and free. Employers cannot pay to
+change it, and no ordering on Kazi-Kasi is for sale. If that ever changes it will
+be labelled in the same type size as the job.</p>
+<p class="small"><a href="/employers">← all employers hiring now</a></p>"""
+    return _page(
+        f"{data.name} — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_nav_for(_account_for(conn, headers), profile.id),
+        head='<meta name="robots" content="noindex">' if False else "",
+    )
+
+
+def render_year(
+    conn,
+    *,
+    profile_id: str | None = None,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+    year: int | None = None,
+) -> str:
+    now = now or datetime.now(timezone.utc)
+    profile = _profile_or_default(conn, profile_id)
+    data = recap.build(conn, profile, now=now, year=year)
+    card = recap.card_lines(data)
+    months = " ".join(
+        f'<span class="chip">{_e(recap._month_name(int(month[5:7]))[:3])} {count}</span>'
+        for month, count in data.months
+    )
+    almost = ""
+    if data.almost:
+        almost = f"""
+<div class="card">
+  <p class="tagline">{"Closed without an application" if data.almost["closed"] else "Still open — still unapplied"}</p>
+  <h2><a href="/job/{_e(data.almost['job_id'])}?profile={quote(profile.id)}">{_e(data.almost['title'])}</a></h2>
+  <p class="small">{_e(data.almost['employer'] or 'employer not stated')} · closes
+  {_e(data.almost['deadline'] or 'no deadline stated')} ·
+  {("you opened it " + str(data.almost["opened"]) + (" times" if data.almost["opened"] != 1 else " time")) if data.almost["opened"] else "you kept it and never sent anything"}</p>
+</div>"""
+    bands = ""
+    if data.band_aimed or data.band_in_scope:
+        bands = f"""
+<h2>The band</h2>
+<div class="two">
+  <div class="rail-card" style="margin:0">
+    <p class="small">Band you kept choosing</p>
+    <p class="fig">{f"{data.band_aimed:,.0f}" if data.band_aimed else "—"}</p>
+    <p class="small">median advertised minimum across {data.band_aimed_n} role{'s' if data.band_aimed_n != 1 else ''} you kept or applied to</p>
+  </div>
+  <div class="rail-card" style="margin:0">
+    <p class="small">Band around you today</p>
+    <p class="fig">{f"{data.band_in_scope:,.0f}" if data.band_in_scope else "—"}</p>
+    <p class="small">median across {data.band_in_scope_n} role{'s' if data.band_in_scope_n != 1 else ''} inside your scope</p>
+  </div>
+</div>
+<p class="small">Both are advertised minimums, in KES a month. We never learn what
+anyone was offered, so this is not an outcome comparison — it is the range you
+were looking at, next to the range that was looking at you.</p>"""
+    share = ""
+    if card:
+        share = f"""
+<h2>One card you can share</h2>
+<pre id="yearcard" class="msg">{_e(chr(10).join(card))}</pre>
+<p class="small">Counts, a month and a band. No employer you applied to is named on
+it, and no outcome is claimed. <a href="/activity?profile={quote(profile.id)}">See the
+whole record →</a></p>"""
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Your year · {data.year} · private</p>
+  <h1 class="display">{_e(recap.headline(data))}</h1>
+  <p class="scopeline">{_e(recap.note(data))}</p>
+</div>
+<div class="strip">
+  <div><b>{data.seen}</b><span>roles you opened</span></div>
+  <div><b>{data.saved}</b><span>kept</span></div>
+  <div><b>{data.applied}</b><span>applied to</span></div>
+  <div><b>{data.closed_while_saved}</b><span>closed while kept</span></div>
+</div>
+{f'<p class="small" style="margin-top:10px">Months you were here: {months}</p>' if months else ''}
+{almost}
+{bands}
+{share}
+<h2>What this page will never say</h2>
+<p>No rejection count, no interview rate, no score out of ten. We do not ask what
+happened after you applied, so any number like that would be invented — and a year
+review is the last place to invent a number about someone's life.</p>
+<p class="small">This page is not linked from anywhere public, is not in the
+sitemap and asks search engines to ignore it. <a href="/activity?profile={quote(profile.id)}">Your
+record →</a></p>"""
+    return _page(
+        f"Your {data.year} in the market — Kazi-Kasi",
+        body,
+        demo=demo,
+        nav=_nav_for(_account_for(conn, headers), profile.id),
+        head='<meta name="robots" content="noindex">',
+    )
 
 
 def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
@@ -1539,6 +1801,7 @@ def render_activity(
       <p class="rail-note">Anything still open on your shortlist earns one reminder
       48 hours before its deadline.</p>
       <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
+      <a class="more" href="/year?profile={quote(profile.id)}">Your year in the market →</a>
     </div>
   </aside>
 </div>"""
@@ -1787,6 +2050,7 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
       <h3>Your turn</h3>
       <p class="rail-note">A count is not a shortlist.</p>
       <a class="more" href="/">See what fits you →</a>
+      <a class="more" href="/employers">Who is hiring now →</a>
     </div>
   </aside>
 </div>"""
@@ -1921,6 +2185,8 @@ def render_sitemap(conn, *, now: datetime | None = None) -> str:
         (f"{base}/pulse", now),
         (f"{base}/salaries", now),
     ]
+    for item in dossier.index(conn, now=now):
+        entries.append((f"{base}/employer/{item['slug']}", now))
     for item in pulse.overview(conn, now=now)["counties"]:
         entries.append((f"{base}/county/{pulse.slug(item['county'])}", now))
     for row in pulse.live_rows(conn):
@@ -2090,6 +2356,7 @@ def render_job(
 <div class="badges">{warning}</div>
 {apply_html}
 <dl>{''.join(f'<dt>{_e(label)}</dt><dd>{_e(value)}</dd>' for label, value in facts)}</dl>
+{f'<p class="small"><a href="/employer/{_e(dossier.slug(row["employer_name"]))}">Everything {_e(row["employer_name"])} has advertised →</a></p>' if row["employer_name"] else ''}
 {why_block}
 {f'<div class="evidence">“{_e(evidence)}”</div>' if evidence else ''}
 {f'<h1>About the role</h1><p>{_e(description[:1200])}</p>' if description else ''}
@@ -2341,7 +2608,47 @@ def _spread_first_seen(conn, now: datetime) -> None:
     conn.commit()
 
 
-def demo_connection(*, thread_safe: bool = False, now: datetime | None = None) -> sqlite3.Connection:
+def _seed_demo_history(conn, now: datetime) -> None:
+    """Give the demo build a past.
+
+    `/activity` and `/year` are only meaningful with history, and a demo link that
+    opens on "nothing here yet" demonstrates nothing. These events are synthetic
+    like the rest of the corpus, deterministic (same ids, same days) and only ever
+    written into an in-memory demo database — never into a real one.
+    """
+    rows = conn.execute(
+        "SELECT id FROM jobs WHERE status = 'open' ORDER BY id LIMIT 12"
+    ).fetchall()
+    if len(rows) < 8:
+        return
+    ids = [row["id"] for row in rows]
+    plan = [
+        ("demo-fresher", 6, "viewed", 64),
+        ("demo-fresher", 0, "saved", 62),
+        ("demo-fresher", 2, "viewed", 47),
+        ("demo-fresher", 2, "saved", 46),
+        ("demo-fresher", 1, "applied", 30),
+        ("demo-fresher", 3, "viewed", 22),
+        ("demo-fresher", 4, "saved", 21),
+        ("demo-fresher", 5, "viewed", 15),
+        ("demo-fresher", 0, "applied", 14),
+        ("demo-fresher", 5, "dismissed", 9),
+        ("demo-fresher", 6, "viewed", 2),
+        ("demo-remote", 7, "saved", 12),
+        ("demo-remote", 7, "viewed", 11),
+    ]
+    for profile_id, index, kind, days_ago in plan:
+        stamp = (now - timedelta(days=days_ago)).replace(hour=10, minute=0, second=0, microsecond=0)
+        conn.execute(
+            "INSERT INTO apply_events (profile_id, job_id, kind, at, detail) VALUES (?,?,?,?,?)",
+            (profile_id, ids[index], kind, stamp.isoformat(), "demo"),
+        )
+    conn.commit()
+
+
+def demo_connection(
+    *, thread_safe: bool = False, now: datetime | None = None, history: bool = False
+) -> sqlite3.Connection:
     """An in-memory database with the synthetic corpus and the demo profiles.
 
     This is what a serverless deployment serves: no file to mount, no write to
@@ -2353,6 +2660,8 @@ def demo_connection(*, thread_safe: bool = False, now: datetime | None = None) -
     load_corpus(conn, now=moment)
     seed_profiles(conn)
     _spread_first_seen(conn, moment)
+    if history:
+        _seed_demo_history(conn, moment)
     return conn
 
 
@@ -2511,6 +2820,36 @@ def _handle_get(
             ),
         )
 
+
+
+    if path == "/employers":
+        return Response(200, render_employers(conn, now=now, demo=demo, headers=headers))
+
+    if path.startswith("/employer/"):
+        page = render_employer(
+            conn,
+            path.split("/", 2)[2],
+            profile_id=_query_one(query, "profile") or None,
+            now=now,
+            demo=demo,
+            headers=headers,
+        )
+        if page is None:
+            return Response(404, _page("Not found", "<h1>Employer not found</h1>", demo=demo))
+        return Response(200, page)
+
+    if path == "/year":
+        return Response(
+            200,
+            render_year(
+                conn,
+                profile_id=_query_one(query, "profile") or None,
+                now=now,
+                demo=demo,
+                headers=headers,
+                year=int(_query_one(query, "year")) if _query_one(query, "year").isdigit() else None,
+            ),
+        )
 
     if path == "/signin":
         return Response(
