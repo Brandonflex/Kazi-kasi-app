@@ -20,17 +20,18 @@ class CanaryResult:
     source_id: str
     listing_links: int = 0
     detail_ok: bool = False
+    posts: int = 0
     fields_present: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
     def ok(self) -> bool:
-        # A source is healthy if it yields links and a detail page with at least
-        # a title and *either* an employer or a location.
+        # A source is healthy if it yields links and at least one parsed post
+        # with a title and *either* an employer or a location.
         has_identity = len({"title", "employer_name"} & set(self.fields_present)) == 2
         has_place = "county" in self.fields_present or "location_raw" in self.fields_present
-        return self.listing_links > 0 and self.detail_ok and has_identity and has_place
+        return self.listing_links > 0 and self.detail_ok and self.posts > 0 and has_identity and has_place
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +39,7 @@ class CanaryResult:
             "ok": self.ok,
             "listing_links": self.listing_links,
             "detail_ok": self.detail_ok,
+            "posts": self.posts,
             "fields_present": self.fields_present,
             "missing": self.missing,
             "error": self.error,
@@ -52,7 +54,7 @@ def run(adapter: Adapter, fetcher, *, sample: int = 1) -> CanaryResult:
     listing_url = adapter.listing_urls(1)[0]
     try:
         page = fetcher.get(listing_url)
-        links = adapter.parse_listing(page.body, listing_url)
+        links = adapter.parse_listing_payload(page, listing_url)
     except Exception as exc:  # noqa: BLE001 - the canary reports, it does not raise
         result.error = f"listing: {exc!r}"
         return result
@@ -65,11 +67,16 @@ def run(adapter: Adapter, fetcher, *, sample: int = 1) -> CanaryResult:
     for url in links[:sample]:
         try:
             detail = fetcher.get(url)
-            candidate = adapter.parse_detail(detail.body, url)
+            candidates = adapter.parse_payload(detail, url)
         except Exception as exc:  # noqa: BLE001
             result.error = f"detail: {exc!r}"
             return result
         result.detail_ok = True
+        result.posts = len(candidates)
+        if not candidates:
+            result.error = "detail produced zero candidates"
+            return result
+        candidate = candidates[0]
         result.fields_present = [name for name in FIELD_ORDER if getattr(candidate, name)]
 
     result.missing = [name for name in FIELD_ORDER if name not in result.fields_present]

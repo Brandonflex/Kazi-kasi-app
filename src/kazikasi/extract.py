@@ -42,12 +42,25 @@ def clean_text(value: str | None) -> str:
 
 
 def html_to_text(markup: str | None) -> str:
+    """HTML → text that keeps paragraph structure.
+
+    Line structure is not cosmetic here: bulletin adverts are read by heading
+    and by line ("Salary: …", "VACANCY NO. …"). Collapsing them to one line
+    turns a five-post advert into one unreadable blob.
+    """
     if not markup:
         return ""
     soup = BeautifulSoup(markup, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
-    return clean_text(soup.get_text("\n"))
+    for br in soup.find_all("br"):
+        br.replace_with("\n")
+
+    raw = html_lib.unescape(soup.get_text("\n"))
+    raw = re.sub(r"[ \t\u00a0]+", " ", raw)
+    lines = [line.strip() for line in raw.splitlines()]
+    text = "\n".join(lines)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 _STOPWORDS = {"the", "a", "an", "and", "or", "of", "for", "to", "in", "at", "on"}
@@ -99,7 +112,7 @@ _RELATIVE = re.compile(r"(\d+)\s*(day|week|month)s?\s*(?:ago|old)", re.I)
 
 _DEADLINE_LABEL = re.compile(
     r"(?:deadline|closing\s*date|closing\s*on|applications?\s*close[sd]?|apply\s*(?:on\s*or\s*)?before)"
-    r"[^\n]{0,40}",
+    r"[^\n]{0,80}",
     re.I,
 )
 
@@ -328,6 +341,8 @@ _FRESH_PHRASES = (
     "recent graduates",
     "no experience required",
     "no prior experience",
+    "no prior work experience",
+    "no work experience",
     "no experience necessary",
     "entry level",
     "entry-level",

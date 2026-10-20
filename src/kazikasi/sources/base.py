@@ -14,6 +14,30 @@ from ..models import JobCandidate
 
 
 @dataclass(frozen=True)
+class Payload:
+    """Raw bytes plus the URL they came from.
+
+    Bytes, not text: advert PDFs are a first-class source here, and decoding
+    them as UTF-8 is how a document lane silently stops working.
+    """
+
+    url: str
+    raw: bytes
+    content_type: str = "text/html"
+
+    @property
+    def text(self) -> str:
+        try:
+            return self.raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return self.raw.decode("latin-1", errors="replace")
+
+    @property
+    def is_pdf(self) -> bool:
+        return self.raw[:5] == b"%PDF-" or "pdf" in self.content_type.lower()
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     label: str
@@ -26,15 +50,6 @@ class Manifest:
     supports: tuple[str, ...] = ()
     listing_urls: tuple[str, ...] = ()
     notes: str = ""
-
-
-@dataclass
-class FetchResult:
-    url: str
-    status: int
-    body: str
-    content_type: str = "text/html"
-    from_cache: bool = False
 
 
 class Adapter:
@@ -60,6 +75,19 @@ class Adapter:
     def parse_detail(self, html: str, url: str) -> JobCandidate:
         """Return exactly one candidate from a detail page."""
         raise NotImplementedError
+
+    # -- payload-level interface (defaults leave the HTML adapters unchanged) --
+
+    def parse_listing_payload(self, payload: Payload, base_url: str) -> list[str]:
+        return self.parse_listing(payload.text, base_url)
+
+    def parse_payload(self, payload: Payload, url: str) -> list[JobCandidate]:
+        """Return every candidate in one payload.
+
+        A list, not a single object, because a public-sector advert is usually
+        several posts under one heading and one closing date.
+        """
+        return [self.parse_detail(payload.text, url)]
 
     def parser_version(self) -> str:
         return f"{self.manifest.id}.phase1.0"

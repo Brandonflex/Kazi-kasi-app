@@ -5,6 +5,8 @@
     kazikasi replay --source brightermonday --store ./data/raw
     kazikasi canary --source all
 
+    kazikasi document --file advert.pdf --source psc     # one advert → its posts
+
     kazikasi init  --db ./data/kazi.db
     kazikasi load  --db ./data/kazi.db --demo          # synthetic corpus
     kazikasi stats --db ./data/kazi.db
@@ -17,10 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import db as database
 from .canary import run as run_canary
 from .corpus import load_corpus
+from .documents import DocumentError, document_to_candidates
 from .graph import apply_liveness, open_reviews, upsert_candidate
 from .metrics import health as metrics_health
 from .metrics import stats as metrics_stats
@@ -119,6 +123,60 @@ def cmd_replay(args: argparse.Namespace) -> int:
         write_report(report, args.report)
     print(json.dumps(report.to_dict(), indent=2))
     return 0
+
+
+def cmd_document(args: argparse.Namespace) -> int:
+    """Parse one advert document from disk. No network, no source needed."""
+    path = Path(args.file)
+    if not path.exists():
+        raise SystemExit(f"no such file: {path}")
+    content_type = "application/pdf" if path.suffix.lower() == ".pdf" else "text/html"
+    try:
+        candidates = document_to_candidates(
+            path.read_bytes(),
+            source_id=args.source,
+            source_url=args.url or f"file://{path.resolve()}",
+            content_type=content_type,
+            employer=args.employer,
+            county=args.county,
+        )
+    except DocumentError as exc:
+        print(f"document error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.out:
+        write_jsonl(candidates, args.out)
+    if args.db:
+        conn = database.connect(args.db)
+        try:
+            actions = [upsert_candidate(conn, candidate).action for candidate in candidates]
+        finally:
+            conn.close()
+    else:
+        actions = []
+
+    print(
+        json.dumps(
+            {
+                "file": str(path),
+                "posts": len(candidates),
+                "actions": actions,
+                "candidates": [
+                    {
+                        "title": candidate.title,
+                        "reference": candidate.reference,
+                        "entry_fit": candidate.entry_fit,
+                        "deadline": candidate.deadline.isoformat() if candidate.deadline else None,
+                        "pay": [candidate.pay.min_amount, candidate.pay.max_amount, candidate.pay.period],
+                    }
+                    for candidate in candidates
+                ],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    return 0 if candidates else 1
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -227,6 +285,16 @@ def main(argv: list[str] | None = None) -> int:
     p_canary.add_argument("--sample", type=int, default=1)
     p_canary.add_argument("--min-interval", type=float, default=1.0)
     p_canary.set_defaults(func=cmd_canary)
+
+    p_document = sub.add_parser("document", help="parse one advert document (PDF/HTML) into posts")
+    p_document.add_argument("--file", required=True)
+    p_document.add_argument("--source", default="document")
+    p_document.add_argument("--url", default=None)
+    p_document.add_argument("--employer", default=None)
+    p_document.add_argument("--county", default=None)
+    p_document.add_argument("--out", default=None, help="write candidates as JSONL")
+    p_document.add_argument("--db", default=None, help="also write into the graph")
+    p_document.set_defaults(func=cmd_document)
 
     p_init = sub.add_parser("init", help="create or migrate the job graph database")
     p_init.add_argument("--db", default="./data/kazi.db")

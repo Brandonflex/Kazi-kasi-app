@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .models import JobCandidate
 from .rawstore import RawStore
-from .sources.base import Adapter
+from .sources.base import Adapter, Payload
 
 
 @dataclass
@@ -57,22 +57,32 @@ def replay(adapter: Adapter, store: RawStore, source_id: str | None = None) -> R
         if meta.get("kind") != "detail":
             continue
         report.payloads += 1
+        url = meta.get("url", "")
         try:
-            body = store.get(sha256).decode("utf-8", errors="replace")
-            candidate = adapter.parse_detail(body, meta.get("url", ""))
+            payload = Payload(
+                url=url,
+                raw=store.get(sha256),
+                content_type=meta.get("content_type", "text/html"),
+            )
+            candidates = adapter.parse_payload(payload, url)
         except Exception as exc:  # noqa: BLE001
             report.failed += 1
-            report.errors.append({"url": meta.get("url"), "error": repr(exc)})
+            report.errors.append({"url": url, "error": repr(exc)})
             continue
-        report.parsed += 1
-        report.candidates.append(candidate)
-        for name in REQUIRED_FIELDS:
-            if getattr(candidate, name):
-                report.field_fill[name] += 1
-        if candidate.entry_fit != "unknown":
-            report.field_fill["entry_fit"] += 1
-        if candidate.pay.source != "unknown":
-            report.field_fill["pay"] += 1
+        if not candidates:
+            report.failed += 1
+            report.errors.append({"url": url, "error": "no candidates"})
+            continue
+        report.parsed += len(candidates)
+        for candidate in candidates:
+            report.candidates.append(candidate)
+            for name in REQUIRED_FIELDS:
+                if getattr(candidate, name):
+                    report.field_fill[name] += 1
+            if candidate.entry_fit != "unknown":
+                report.field_fill["entry_fit"] += 1
+            if candidate.pay.source != "unknown":
+                report.field_fill["pay"] += 1
 
     return report
 

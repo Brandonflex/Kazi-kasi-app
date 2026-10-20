@@ -23,7 +23,7 @@ import httpx
 
 from .models import JobCandidate
 from .rawstore import PARSER_VERSION, RawStore
-from .sources.base import Adapter
+from .sources.base import Adapter, Payload
 
 USER_AGENT = (
     "KaziKasiBot/0.1 (+https://github.com/Brandonflex/Kazi-kasi-app; "
@@ -32,15 +32,7 @@ USER_AGENT = (
 
 
 class Fetcher(Protocol):
-    def get(self, url: str, *, json_body: dict | None = None) -> "Fetched": ...
-
-
-@dataclass
-class Fetched:
-    url: str
-    status: int
-    body: str
-    content_type: str = "text/html"
+    def get(self, url: str, *, json_body: dict | None = None) -> Payload: ...
 
 
 class HttpFetcher:
@@ -63,14 +55,15 @@ class HttpFetcher:
             time.sleep(self.min_interval - elapsed)
         self._last[host] = time.monotonic()
 
-    def get(self, url: str, *, json_body: dict | None = None) -> Fetched:
+    def get(self, url: str, *, json_body: dict | None = None) -> Payload:
         self._throttle(url)
         if json_body is not None:
             response = self._client.post(url, json=json_body)
         else:
             response = self._client.get(url)
         content_type = response.headers.get("content-type", "text/html").split(";")[0]
-        return Fetched(url=url, status=response.status_code, body=response.text, content_type=content_type)
+        # Bytes, not text: a PDF decoded as a string is unrecoverable.
+        return Payload(url=url, raw=response.content, content_type=content_type)
 
     def close(self) -> None:
         self._client.close()
@@ -87,13 +80,17 @@ class FixtureFetcher:
         self.mapping = {k: Path(v) for k, v in mapping.items()}
         self.calls: list[str] = []
 
-    def get(self, url: str, *, json_body: dict | None = None) -> Fetched:
+    def get(self, url: str, *, json_body: dict | None = None) -> Payload:
         self.calls.append(url)
         if url not in self.mapping:
             raise KeyError(f"No fixture for {url}; tests must never touch the network")
         path = self.mapping[url]
-        content_type = "application/json" if path.suffix == ".json" else "text/html"
-        return Fetched(url=url, status=200, body=path.read_text(encoding="utf-8"), content_type=content_type)
+        content_type = {
+            ".json": "application/json",
+            ".pdf": "application/pdf",
+            ".txt": "text/plain",
+        }.get(path.suffix, "text/html")
+        return Payload(url=url, raw=path.read_bytes(), content_type=content_type)
 
 
 @dataclass
@@ -102,6 +99,7 @@ class IngestReport:
     listing_pages: int = 0
     detail_urls: int = 0
     parsed: int = 0
+    payloads: int = 0
     stored: int = 0
     errors: list[dict] = field(default_factory=list)
     candidates: list[JobCandidate] = field(default_factory=list)
@@ -112,6 +110,7 @@ class IngestReport:
             "source_id": self.source_id,
             "listing_pages": self.listing_pages,
             "detail_urls": self.detail_urls,
+            "payloads": self.payloads,
             "parsed": self.parsed,
             "stored": self.stored,
             "errors": len(self.errors),
@@ -156,20 +155,19 @@ def ingest(
                 continue
             report.listing_pages += 1
             store.put(
-                fetched.body.encode("utf-8"),
+                fetched.raw,
                 fetched.content_type,
                 {
                     "source_id": adapter.manifest.id,
                     "url": listing_url,
                     "kind": "listing",
-                    "status": fetched.status,
                     "fetched_at": datetime.now(timezone.utc).isoformat(),
                     "parser_version": PARSER_VERSION,
                 },
             )
             report.stored += 1
             try:
-                detail_urls.extend(adapter.parse_listing(fetched.body, listing_url))
+                detail_urls.extend(adapter.parse_listing_payload(fetched, listing_url))
             except Exception as exc:  # noqa: BLE001
                 report.errors.append({"stage": "parse_listing", "url": listing_url, "error": repr(exc)})
 
@@ -191,14 +189,14 @@ def ingest(
             report.errors.append({"stage": "detail", "url": url, "error": repr(exc)})
             continue
 
-        ref = store.put(
-            fetched.body.encode("utf-8"),
+        report.payloads += 1
+        store.put(
+            fetched.raw,
             fetched.content_type,
             {
                 "source_id": adapter.manifest.id,
                 "url": url,
                 "kind": "detail",
-                "status": fetched.status,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
                 "parser_version": adapter.parser_version(),
             },
@@ -206,15 +204,20 @@ def ingest(
         report.stored += 1
 
         try:
-            candidate = adapter.parse_detail(fetched.body, url)
+            candidates = adapter.parse_payload(fetched, url)
         except Exception as exc:  # noqa: BLE001
             report.errors.append({"stage": "parse_detail", "url": url, "error": repr(exc)})
             continue
 
-        report.parsed += 1
-        if verify_records:
-            verify(candidate)
-        report.candidates.append(candidate)
+        if not candidates:
+            report.errors.append({"stage": "parse_detail", "url": url, "error": "no candidates"})
+            continue
+
+        report.parsed += len(candidates)
+        for candidate in candidates:
+            if verify_records:
+                verify(candidate)
+            report.candidates.append(candidate)
 
     return report
 
