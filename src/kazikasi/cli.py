@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -132,6 +133,30 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
     print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
     return 1 if failed else 0
+
+
+def cmd_auth(args: argparse.Namespace) -> int:
+    """Is sign-in actually ready? Prints configuration, never secrets."""
+    from . import accounts
+
+    payload = accounts.readiness(base_url=args.base_url)
+    if args.live:
+        for key, item in payload["providers"].items():
+            if not item["configured"]:
+                item["jwks_reachable"] = None
+                continue
+            try:
+                keys = accounts.jwks(
+                    accounts.PROVIDERS[key],
+                    transport=accounts.urllib_transport,
+                )
+                item["jwks_reachable"] = True
+                item["jwks_keys"] = len(keys)
+            except Exception as error:  # noqa: BLE001 - reported, not raised
+                item["jwks_reachable"] = False
+                item["jwks_error"] = str(error)[:160]
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["ready"] else 1
 
 
 def cmd_canary(args: argparse.Namespace) -> int:
@@ -542,6 +567,15 @@ def main(argv: list[str] | None = None) -> int:
     p_replay.add_argument("--store", default="./data/raw")
     p_replay.add_argument("--report", default=None)
     p_replay.set_defaults(func=cmd_replay)
+
+    p_auth = sub.add_parser("auth", help="check sign-in configuration (no secrets shown)")
+    p_auth.add_argument(
+        "action", nargs="?", default="check", choices=["check"],
+        help="what to check (only 'check' for now)",
+    )
+    p_auth.add_argument("--base-url", default=os.environ.get("KAZIKASI_BASE_URL"))
+    p_auth.add_argument("--live", action="store_true", help="also fetch each provider's signing keys")
+    p_auth.set_defaults(func=cmd_auth)
 
     p_canary = sub.add_parser("canary", help="check that a source still parses (network)")
     p_canary.add_argument("--source", default="all")

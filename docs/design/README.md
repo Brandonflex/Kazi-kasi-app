@@ -113,6 +113,10 @@ shipped:
   private, `noindex`, no rejection count, no interview rate, and a shareable card
   that cannot name an employer you applied to.
 
+- **Sign-in that verifies** — id_token signatures checked against the provider's
+  published keys in pure integer arithmetic, with issuer/audience/lifetime checks;
+  the JWKS fetch fails closed, and strict mode refuses to sign sessions with the
+  demo secret. `/auth/ready` says what is configured without leaking a value.
 - **Cheap sources, gated sources** — a new board is a manifest, a URL pattern and
   optional selectors (`StructuredSource`), and a source that has never parsed a
   live page is `unverified` and cannot ingest by default. Coverage should grow by

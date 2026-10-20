@@ -50,6 +50,10 @@ class Provider:
     client_id_env: str
     client_secret_env: str
     response_mode: str | None = None
+    #: Where the provider publishes the keys its id_tokens are signed with.
+    jwks: str = ""
+    #: Every issuer string this provider is allowed to put in `iss`.
+    issuers: tuple[str, ...] = ()
 
     @property
     def client_id(self) -> str | None:
@@ -74,6 +78,8 @@ PROVIDERS: dict[str, Provider] = {
         scope="openid email profile",
         client_id_env="GOOGLE_CLIENT_ID",
         client_secret_env="GOOGLE_CLIENT_SECRET",
+        jwks="https://www.googleapis.com/oauth2/v3/certs",
+        issuers=("https://accounts.google.com", "accounts.google.com"),
     ),
     "apple": Provider(
         key="apple",
@@ -85,6 +91,8 @@ PROVIDERS: dict[str, Provider] = {
         client_id_env="APPLE_CLIENT_ID",
         client_secret_env="APPLE_CLIENT_SECRET",
         response_mode="form_post",
+        jwks="https://appleid.apple.com/auth/keys",
+        issuers=("https://appleid.apple.com",),
     ),
     "linkedin": Provider(
         key="linkedin",
@@ -95,6 +103,8 @@ PROVIDERS: dict[str, Provider] = {
         scope="openid profile email",
         client_id_env="LINKEDIN_CLIENT_ID",
         client_secret_env="LINKEDIN_CLIENT_SECRET",
+        jwks="https://www.linkedin.com/oauth/openid/jwks",
+        issuers=("https://www.linkedin.com",),
     ),
 }
 
@@ -111,8 +121,32 @@ WHY = {
 # --------------------------------------------------------------------------
 
 
+#: The secret this build ships with. Named, not hidden — a placeholder that
+#: pretends to be a secret is worse than one that says what it is.
+DEMO_SECRET = "kazi-kasi-demo"
+
+
+def strict_mode() -> bool:
+    """True unless this is explicitly a demo build.
+
+    Strict mode is what turns the two deployment mistakes that matter — shipping
+    the demo session secret, or shipping without one — into loud failures instead
+    of a quietly forgeable cookie.
+    """
+    return (os.environ.get("KAZIKASI_DEMO", "1") or "1").strip() != "1"
+
+
 def _key() -> bytes:
-    return (os.environ.get("KAZIKASI_SECRET") or "kazi-kasi-demo").encode()
+    secret = (os.environ.get("KAZIKASI_SECRET") or "").strip()
+    if secret and secret != DEMO_SECRET:
+        return secret.encode()
+    if strict_mode():
+        raise RuntimeError(
+            "KAZIKASI_SECRET is not set (or is the demo value) while KAZIKASI_DEMO=0. "
+            "Sessions signed with a known key are forgeable; set a random secret "
+            "before serving real accounts. `kazikasi auth check` prints the state."
+        )
+    return DEMO_SECRET.encode()
 
 
 def signature(payload: str) -> str:
@@ -153,6 +187,47 @@ def read_session(headers: dict | None) -> str | None:
     if age > SESSION_DAYS * 86400 or age < -3600:
         return None
     return account_id
+
+
+def readiness(*, base_url: str | None = None) -> dict:
+    """What is configured, what is missing, and what must be true before real use.
+
+    No secrets are returned — only whether a variable is present, because the
+    point of the page is to be safe to look at.
+    """
+    strict = strict_mode()
+    secret = (os.environ.get("KAZIKASI_SECRET") or "").strip()
+    providers = {}
+    for key, provider in PROVIDERS.items():
+        missing = [
+            env
+            for env in (provider.client_id_env, provider.client_secret_env)
+            if not (os.environ.get(env) or "").strip()
+        ]
+        providers[key] = {
+            "label": provider.label,
+            "configured": not missing,
+            "missing": missing,
+            "authorize": provider.authorize,
+            "jwks": provider.jwks,
+            "issuers": list(provider.issuers),
+            "redirect_uri": f"{base_url.rstrip('/')}/auth/{key}/callback" if base_url else None,
+        }
+    return {
+        "demo": not strict,
+        "session": {
+            "secret_set": bool(secret),
+            "uses_demo_secret": not secret or secret == DEMO_SECRET,
+            "strict": strict,
+        },
+        "providers": providers,
+        "ready": any(item["configured"] for item in providers.values()),
+        "notes": [
+            "Register the redirect URI the provider shows below; it must match exactly.",
+            "Requests: name, email and an identifier. No contacts, no connections.",
+            "Set KAZIKASI_SECRET to a random value before KAZIKASI_DEMO=0.",
+        ],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -238,13 +313,11 @@ def urllib_transport(method: str, url: str, *, data: dict | None = None, headers
         return {key: value[0] for key, value in urllib.parse.parse_qs(payload).items()}
 
 
-def _claims(id_token: str) -> dict:
-    """Read the id_token's claims.
+def read_claims(id_token: str) -> dict:
+    """Decode an id_token's payload **without trusting it**.
 
-    The token came from our own server-to-server call to the provider's token
-    endpoint over TLS, which is the trust boundary; we do not re-verify the
-    signature here because we do not have the provider's keys offline. This is
-    recorded rather than hidden: see `docs/phase-7-accounts.md`.
+    Useful for diagnostics (which email did the provider say?) and for nothing
+    else. Any decision about identity goes through :func:`verify_id_token`.
     """
     try:
         payload = id_token.split(".")[1]
@@ -254,6 +327,138 @@ def _claims(id_token: str) -> dict:
         return {}
 
 
+# Backwards-compatible alias: the old name was honest about what it did, and the
+# old behaviour (trusting these claims) is exactly what this phase removed.
+_claims = read_claims
+
+#: DER prefix for `DigestInfo(SHA-256)` in PKCS#1 v1.5 signatures.
+_SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
+
+#: JWKS responses are cached for an hour per provider. Keys rotate rarely and a
+#: fetch on every sign-in would make the provider a hard dependency of login.
+_JWKS_TTL_SECONDS = 3600
+_JWKS_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _b64url_int(value: str) -> int:
+    padded = value + "=" * (-len(value) % 4)
+    return int.from_bytes(base64.urlsafe_b64decode(padded), "big")
+
+
+def rsa_sha256_verify(signing_input: bytes, signature: bytes, modulus: str, exponent: str) -> bool:
+    """Verify an RS256 signature with nothing but integer arithmetic.
+
+    Why not a library: the deployed function imports only the standard library
+    (there is no `requirements.txt`, deliberately — see `docs/phase-7-accounts.md`).
+    PKCS#1 v1.5 verification is small enough to do correctly here, and doing it
+    correctly is the whole point of this function.
+    """
+    n = _b64url_int(modulus)
+    e = _b64url_int(exponent)
+    k = (n.bit_length() + 7) // 8
+    if len(signature) != k:
+        return False
+    message = int.from_bytes(signature, "big")
+    if message >= n:
+        return False
+    encoded = pow(message, e, n).to_bytes(k, "big")
+    digest = hashlib.sha256(signing_input).digest()
+    padding = k - 3 - len(_SHA256_DIGEST_INFO) - len(digest)
+    if padding < 8:
+        return False
+    expected = (
+        b"\x00\x01" + b"\xff" * padding + b"\x00" + _SHA256_DIGEST_INFO + digest
+    )
+    return hmac.compare_digest(encoded, expected)
+
+
+def jwks(provider: Provider, *, transport=urllib_transport, now: float | None = None) -> list[dict]:
+    """The provider's signing keys, cached for an hour."""
+    moment = now if now is not None else time.time()
+    cached = _JWKS_CACHE.get(provider.key)
+    if cached and moment - cached[0] < _JWKS_TTL_SECONDS:
+        return cached[1].get("keys", [])
+    payload = transport("GET", provider.jwks, headers={"Accept": "application/json"})
+    _JWKS_CACHE[provider.key] = (moment, payload if isinstance(payload, dict) else {})
+    keys = payload.get("keys", []) if isinstance(payload, dict) else []
+    return [key for key in keys if isinstance(key, dict)]
+
+
+def verify_id_token(
+    id_token: str,
+    provider: Provider,
+    *,
+    transport=urllib_transport,
+    now: datetime | None = None,
+    leeway_seconds: int = 120,
+    keys: list[dict] | None = None,
+) -> dict:
+    """Verify an OIDC id_token and return its claims, or raise.
+
+    Checks, in order: shape, `alg` is RS256 (never `none`), `kid` resolves to a
+    published key, the RS256 signature verifies, `iss` is one this provider may
+    use, `aud` is our client id, and the token is inside its lifetime.
+
+    **Fails closed.** If the keys cannot be fetched, this raises — a sign-in that
+    "works" because verification was skipped is worse than a sign-in that does
+    not work.
+    """
+    parts = (id_token or "").split(".")
+    if len(parts) != 3:
+        raise ValueError("the provider returned a malformed id_token")
+
+    try:
+        header = json.loads(base64.urlsafe_b64decode(parts[0] + "=" * (-len(parts[0]) % 4)))
+    except (ValueError, json.JSONDecodeError) as error:
+        raise ValueError("the provider returned a malformed id_token header") from error
+
+    if str(header.get("alg", "")).upper() != "RS256":
+        raise ValueError(f"unsupported id_token algorithm {header.get('alg')!r}")
+
+    published = keys if keys is not None else jwks(provider, transport=transport)
+    kid = header.get("kid")
+    candidates = [key for key in published if key.get("kid") == kid] or (
+        published if len(published) == 1 else []
+    )
+    if not candidates:
+        raise ValueError("the id_token was signed with a key the provider does not publish")
+
+    try:
+        signature = base64.urlsafe_b64decode(parts[2] + "=" * (-len(parts[2]) % 4))
+    except ValueError as error:
+        raise ValueError("the provider returned a malformed signature") from error
+
+    signing_input = f"{parts[0]}.{parts[1]}".encode()
+    verified = any(
+        rsa_sha256_verify(signing_input, signature, key.get("n", ""), key.get("e", ""))
+        for key in candidates
+        if key.get("kty", "RSA") == "RSA"
+    )
+    if not verified:
+        raise ValueError("the id_token signature did not verify")
+
+    claims = read_claims(id_token)
+    if provider.issuers and claims.get("iss") not in provider.issuers:
+        raise ValueError(f"unexpected issuer {claims.get('iss')!r}")
+
+    audience = claims.get("aud")
+    audiences = audience if isinstance(audience, list) else [audience]
+    if provider.client_id and provider.client_id not in audiences:
+        raise ValueError("the id_token was issued for a different client")
+
+    moment = time.time() if now is None else now.timestamp()
+    expires = claims.get("exp")
+    if not isinstance(expires, (int, float)):
+        raise ValueError("the id_token has no expiry")
+    if moment > expires + leeway_seconds:
+        raise ValueError("the id_token has expired")
+    issued = claims.get("iat")
+    if isinstance(issued, (int, float)) and issued > moment + leeway_seconds:
+        raise ValueError("the id_token is dated in the future")
+
+    return claims
+
+
 def exchange(
     provider: Provider,
     *,
@@ -261,8 +466,14 @@ def exchange(
     verifier: str,
     redirect_uri: str,
     transport=urllib_transport,
+    now: datetime | None = None,
 ) -> dict:
-    """Trade the code for an identity: {subject, email, email_verified, name}."""
+    """Trade the code for an identity: {subject, email, email_verified, name}.
+
+    The **id_token is verified** (signature, issuer, audience, lifetime) before
+    any of its claims are used. The userinfo endpoint is used only to fill gaps,
+    never to override the verified claims.
+    """
     token = transport(
         "POST",
         provider.token,
@@ -277,7 +488,9 @@ def exchange(
         headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
     )
     access = token.get("access_token")
-    claims = _claims(token.get("id_token") or "")
+    claims = {}
+    if token.get("id_token"):
+        claims = verify_id_token(token["id_token"], provider, transport=transport, now=now)
 
     info = {}
     if provider.userinfo and access:
@@ -285,7 +498,7 @@ def exchange(
             "GET", provider.userinfo, headers={"Authorization": f"Bearer {access}", "Accept": "application/json"}
         )
 
-    merged = {**claims, **{k: v for k, v in info.items() if v}}
+    merged = {**{k: v for k, v in info.items() if v}, **claims}
     subject = str(merged.get("sub") or "")
     if not subject:
         raise ValueError("the provider did not return an identity")

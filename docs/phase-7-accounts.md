@@ -48,13 +48,13 @@ the names of the variables that are missing. In the demo deployment it also
 offers a **synthetic account**, so the whole flow — session, account page, CV,
 kit, tracker — can be walked end to end without a provider.
 
-### Known limit, stated rather than hidden
+### Verified tokens (updated in phase 10)
 
-`exchange()` reads the `id_token` claims and the userinfo endpoint but **does not
-re-verify the id_token signature**. That is acceptable only because the token
-arrives over TLS directly from the provider's token endpoint in response to our
-own client-authenticated request — the standard code-flow argument. If a second
-consumer of those claims ever appears, this is the line to fix first.
+`exchange()` used to read the `id_token` claims without re-verifying the
+signature, on the standard code-flow argument. That is now gone: every id_token is
+verified against the provider's published keys (RS256), with issuer, audience and
+lifetime checks, and the JWKS fetch fails **closed**. See
+[phase 10](./phase-10-signin.md).
 
 ### Deleting is one click and it means it
 

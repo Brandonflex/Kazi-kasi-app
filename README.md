@@ -33,10 +33,11 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 803 tests, no network
+python -m pytest                                    # 838 tests, no network
 
 kazikasi sources                                    # registered sources, with status
 kazikasi canary --source tsc --live                  # does a source still parse? (network)
+kazikasi auth check --live                           # is sign-in configured? (and are the keys there?)
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
 kazikasi replay --source brightermonday --store ./data/raw
 
@@ -77,9 +78,10 @@ Public surfaces: `/` (the feed), `/shortlist`, `/brief` (the weekly brief),
 `/sitemap.xml` and `/robots.txt`. Press **⌘K** (or Ctrl-K) to jump to a job, a
 county or a page. `/job/<id>` carries the evidence, who to address, the
 application kit and the direct-apply route; `/signin` and `/account` cover
-optional sign-in and the CV that fills that kit. See
+optional sign-in and the CV that fills that kit; `/auth/ready` reports the
+sign-in configuration as JSON, without secrets. See
 [phase 7](./docs/phase-7-accounts.md), [phase 8](./docs/phase-8-market.md) and
-[phase 9](./docs/phase-9-sources.md).
+[phase 9](./docs/phase-9-sources.md) and [phase 10](./docs/phase-10-signin.md).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash

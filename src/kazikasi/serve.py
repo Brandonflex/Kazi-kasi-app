@@ -1470,6 +1470,17 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
             "</form>"
         )
 
+    none_ready = not any(configured.values())
+    config_note = (
+        ""
+        if not none_ready
+        else '<div class="whobar"><div><b>No provider is connected in this deployment.</b>'
+        "<p class='small'>The flow is built and the buttons are real; the credentials are not. "
+        "A deployment needs a client id and secret per provider — <code>kazikasi auth check</code> "
+        "lists them, and <a href='/auth/ready'>/auth/ready</a> shows the same state as JSON. "
+        "Guest accounts work right now.</p></div></div>"
+    )
+
     body = f"""
 <div class="masthead">
   <p class="kicker">Optional · takes ten seconds</p>
@@ -1479,6 +1490,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
   already contains — nothing else.</p>
 </div>
 {_notice(tone, notice)}
+{config_note}
 <div class="layout">
   <div class="feedcol">
     <div class="section"><span>Continue with</span><em>we ask for a name and an email</em></div>
@@ -2853,6 +2865,13 @@ def _handle_get(
             ),
         )
 
+    if path == "/auth/ready":
+        return Response(
+            200,
+            json.dumps(accounts.readiness(base_url=_base_url()), indent=2),
+            "application/json; charset=utf-8",
+        )
+
     if path == "/signin":
         return Response(
             200,
@@ -3081,7 +3100,12 @@ def _auth_start(conn, provider, *, demo: bool, now: datetime, return_to: str = "
 <div class="whobar">
   <div><b>{_e(provider.client_id_env)}</b> and <b>{_e(provider.client_secret_env)}</b></div>
   <p class="small">Register <code>{_e(_base_url())}/auth/{_e(provider.key)}/callback</code>
-  as the redirect URI, then redeploy. Nothing else changes.</p>
+  as the redirect URI, then redeploy. Nothing else changes. Run
+  <code>kazikasi auth check --base-url {_e(_base_url())}</code> to see every
+  provider's state at once, and <a href="/auth/ready">/auth/ready</a> for the JSON.</p>
+  <p class="small">The callback verifies the provider's id_token signature against
+  their published keys, and checks the issuer, the audience and the lifetime before
+  it trusts a single claim.</p>
 </div>
 {"<form method='post' action='/auth/demo'><input type='hidden' name='provider' value='" + provider.key + "'><button type='submit' class='ghost'>Continue with a synthetic demo account</button></form><p class='small'>This creates a local member account so the flow can be tested. No provider is contacted.</p>" if demo else ""}
 <p><a href="/signin">← back</a></p>"""
