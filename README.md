@@ -2,9 +2,9 @@
 
 A geo-anchored hiring radar for Kenya: complete, verified, reachable job discovery — starting with Nairobi.
 
-> **Current phase: Phase 3 build.** The research pack is settled; the ingestion spine, the job
-> graph and the document lane are built and tested offline. See the phase notes:
-> [1](./docs/phase-1-build.md) · [2](./docs/phase-2-build.md) · [3](./docs/phase-3-build.md).
+> **Current phase: Phase 4 build.** The research pack is settled; ingestion, the job graph, the
+> document lane and the tailored feed are built and tested offline. See the phase notes:
+> [1](./docs/phase-1-build.md) · [2](./docs/phase-2-build.md) · [3](./docs/phase-3-build.md) · [4](./docs/phase-4-build.md).
 
 ## Start here
 
@@ -19,12 +19,13 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 - [Phase 1 build](./docs/phase-1-build.md) — what the ingestion spine does, and how to run it
 - [Phase 2 build](./docs/phase-2-build.md) — the job graph: identity rules, liveness, metrics, and the internal feed
 - [Phase 3 build](./docs/phase-3-build.md) — the document lane: advert PDFs, "one advert, N posts", PSC and a county source
+- [Phase 4 build](./docs/phase-4-build.md) — constraints → relevance → utility, distance bands, the freshness page, apply tracking
 
 ## Run it
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 192 tests, no network
+python -m pytest                                    # 286 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -32,7 +33,9 @@ kazikasi replay --source brightermonday --store ./data/raw
 
 kazikasi document --file advert.pdf --source psc     # one advert → its posts
 kazikasi load  --db ./data/kazi.db --demo            # synthetic corpus
+kazikasi match --db ./data/kazi.db --profile demo-fresher
 kazikasi stats --db ./data/kazi.db
+kazikasi slo   --db ./data/kazi.db
 kazikasi serve --db ./data/kazi.db --demo            # feed on http://localhost:8765
 ```
 

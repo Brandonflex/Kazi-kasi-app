@@ -138,11 +138,10 @@ date). The PDFs are committed because the bytes are the test.
 
 ## 8. Next
 
-1. **Run the canary on `psc` and `nairobi_county` daily for a week** and fix the
-   selectors from what it reports. This is the step that turns "adapter written"
-   into "source covered".
-2. **Add a second county** once Nairobi's shape is stable — Mombasa and Kiambu
-   are the obvious next two by posting volume.
-3. **Load a real PSC bulletin into the graph** and check the duplication rate
-   against the boards; public-sector adverts are widely republished by MyJobMag,
-   so this is where the identity rules earn their keep.
+Next up was the product surface, which is now [Phase 4](./phase-4-build.md):
+constraints → relevance → utility, distance bands, the freshness page and apply
+tracking.
+
+Still outstanding for this phase: **run the canary on `psc` and `nairobi_county`
+daily for a week** and fix the selectors from what it reports, then add a second
+county (Mombasa and Kiambu are the obvious next two by posting volume).
