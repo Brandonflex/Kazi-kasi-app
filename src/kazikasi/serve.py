@@ -2751,7 +2751,14 @@ def handle(
         return Response(429, "too many requests", "text/plain; charset=utf-8")
 
     if path in ("/webhooks/whatsapp", "/webhooks/sms"):
-        return _handle_webhook(conn, path, query, body, header_map, demo=demo)
+        return _handle_webhook(
+            conn,
+            path,
+            query,
+            body,
+            header_map,
+            strict=accounts.strict_mode() or not demo,
+        )
     if path in ("/digest/subscribe", "/digest/unsubscribe"):
         return _handle_consent(conn, path, body)
     if path == "/action":
@@ -3010,15 +3017,20 @@ def _handle_get(
     return Response(404, _page("Not found", "<h1>Not found</h1>", demo=demo))
 
 
-def _handle_webhook(conn, path: str, query: dict, raw: bytes, headers: dict, *, demo: bool) -> Response:
-    """Inbound replies and receipts. Fails closed on an unverified sender."""
+def _handle_webhook(conn, path: str, query: dict, raw: bytes, headers: dict, *, strict: bool) -> Response:
+    """Inbound replies and receipts. Fails closed on an unverified sender.
+
+    The posture is "production", not "synthetic data": a local `serve` without
+    --demo, or a deployment with KAZIKASI_DEMO=0, fails closed when no shared
+    secret is configured — otherwise anyone could POST a fake receipt.
+    """
     if path == "/webhooks/whatsapp":
         secret = os.environ.get("WHATSAPP_APP_SECRET")
         signature = headers.get(webhooks.SIGNATURE_HEADER.lower())
         if secret:
             if not webhooks.verify_signature(raw, signature, secret):
                 return Response(403, "bad signature", "text/plain; charset=utf-8")
-        elif not demo:
+        elif strict:
             # No secret and not a demo: we cannot tell Meta from anyone.
             return Response(503, "webhook not configured", "text/plain; charset=utf-8")
         result = webhooks.handle_meta(conn, webhooks.parse_json(raw))
@@ -3028,7 +3040,7 @@ def _handle_webhook(conn, path: str, query: dict, raw: bytes, headers: dict, *, 
     expected = os.environ.get("AT_WEBHOOK_TOKEN")
     if expected and not _constant_time_equal(token, expected):
         return Response(403, "bad token", "text/plain; charset=utf-8")
-    if not expected and not demo:
+    if not expected and strict:
         return Response(503, "webhook not configured", "text/plain; charset=utf-8")
     form = {
         key: (values or [""])[0]
