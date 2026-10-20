@@ -66,12 +66,14 @@ ENTRY_FIT_TONE = {
     "experienced": "muted",
     "unknown": "muted",
 }
-SLO_TONE = {"on_time": "good", "late": "warn", "stale": "danger", "never_fetched": "muted"}
+SLO_TONE = {"on_time": "good", "late": "warn", "stale": "danger", "never_fetched": "muted",
+            "not_enabled": "muted"}
 SLO_LABEL = {
     "on_time": "on time",
     "late": "late",
     "stale": "stale",
     "never_fetched": "never fetched",
+    "not_enabled": "not enabled",
 }
 
 STYLE = """

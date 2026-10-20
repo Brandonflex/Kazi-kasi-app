@@ -113,6 +113,12 @@ shipped:
   private, `noindex`, no rejection count, no interview rate, and a shareable card
   that cannot name an employer you applied to.
 
+- **Cheap sources, gated sources** — a new board is a manifest, a URL pattern and
+  optional selectors (`StructuredSource`), and a source that has never parsed a
+  live page is `unverified` and cannot ingest by default. Coverage should grow by
+  configuration, not by copy-paste; trust should grow by verification, not by
+  optimism.
+
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly
 ritual with forgiveness, because the evidence that rituals drive returns is

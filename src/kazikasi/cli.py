@@ -86,6 +86,7 @@ def cmd_sources(_: argparse.Namespace) -> int:
                 "cadence_minutes": manifest.cadence_minutes,
                 "requires_auth": manifest.requires_auth,
                 "terms_reviewed_at": manifest.terms_reviewed_at,
+                "status": manifest.status,
                 "supports": list(manifest.supports),
             }
         )
@@ -102,7 +103,12 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     try:
         for name in _select_sources(args.source):
             report = ingest(
-                _build_adapter(name), fetcher, store, pages=args.pages, limit=args.limit
+                _build_adapter(name),
+                fetcher,
+                store,
+                pages=args.pages,
+                limit=args.limit,
+                allow_unverified=getattr(args, "allow_unverified", False),
             )
             summary = report.summary()
             if args.out:
@@ -524,6 +530,11 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--limit", type=int, default=None)
     p_ingest.add_argument("--min-interval", type=float, default=1.0)
     p_ingest.add_argument("--db", default=None, help="also write the graph into this SQLite file")
+    p_ingest.add_argument(
+        "--allow-unverified",
+        action="store_true",
+        help="ingest a source whose parser has never been checked against a live page",
+    )
     p_ingest.set_defaults(func=cmd_ingest)
 
     p_replay = sub.add_parser("replay", help="re-parse stored payloads offline")

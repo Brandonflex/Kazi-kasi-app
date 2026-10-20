@@ -11,7 +11,10 @@ def test_sources_lists_every_registered_source(capsys):
     assert main(["sources"]) == 0
     rows = json.loads(capsys.readouterr().out)
     ids = {row["id"] for row in rows}
-    assert {"brightermonday", "fuzu", "myjobmag", "reliefweb", "psc", "nairobi_county"} == ids
+    assert {
+        "brightermonday", "fuzu", "myjobmag", "reliefweb", "psc", "nairobi_county",
+        "careerpoint", "tsc", "ajira",
+    } == ids
 
 
 def test_document_parses_one_advert_into_its_posts(capsys, fixtures):

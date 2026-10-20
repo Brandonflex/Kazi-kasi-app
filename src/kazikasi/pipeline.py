@@ -31,6 +31,11 @@ USER_AGENT = (
 )
 
 
+class UnverifiedSource(RuntimeError):
+    """A source that has never parsed a live page. Not an error in the parser —
+    a refusal to let unverified markup into the feed by accident."""
+
+
 class Fetcher(Protocol):
     def get(self, url: str, *, json_body: dict | None = None) -> Payload: ...
 
@@ -142,7 +147,16 @@ def ingest(
     pages: int = 1,
     limit: int | None = None,
     verify_records: bool = True,
+    allow_unverified: bool = False,
 ) -> IngestReport:
+    status = getattr(adapter.manifest, "status", "active")
+    if status != "active" and not allow_unverified:
+        raise UnverifiedSource(
+            f"{adapter.manifest.id} is {status}: it has never parsed a live page. "
+            f"Run `kazikasi canary --source {adapter.manifest.id} --live`, read the "
+            "output, then pass allow_unverified=True (CLI: --allow-unverified) if "
+            "you are deliberately testing it."
+        )
     report = IngestReport(source_id=adapter.manifest.id)
 
     detail_urls: list[str] = []

@@ -45,7 +45,15 @@ class TestReport:
     def test_reports_every_registered_source(self, conn):
         payload = slo.report(conn, now=NOW)
         ids = {source["source_id"] for source in payload["sources"]}
-        assert ids == {"brightermonday", "fuzu", "myjobmag", "reliefweb", "psc", "nairobi_county"}
+        assert ids >= {"brightermonday", "fuzu", "myjobmag", "reliefweb", "psc", "nairobi_county"}
+        assert {"careerpoint", "tsc", "ajira"} <= ids
+
+    def test_an_unverified_source_is_not_counted_as_late(self, conn):
+        payload = slo.report(conn, now=NOW)
+        by_id = {source["source_id"]: source for source in payload["sources"]}
+        assert by_id["careerpoint"]["state"] == "not_enabled"
+        assert by_id["careerpoint"]["enabled"] is False
+        assert payload["slo_rate"] == 1.0
 
     def test_counts_only_sources_that_have_reported(self, conn):
         payload = slo.report(conn, now=NOW)

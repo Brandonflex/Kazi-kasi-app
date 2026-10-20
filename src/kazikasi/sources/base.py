@@ -50,6 +50,11 @@ class Manifest:
     supports: tuple[str, ...] = ()
     listing_urls: tuple[str, ...] = ()
     notes: str = ""
+    #: ``active`` — parsed against a live page and cleared to ingest.
+    #: ``unverified`` — written against the documented structure, never run live.
+    #: The pipeline refuses to ingest an unverified source by default; that gate
+    #: is what stops a parser that returns zero rows from shipping quietly.
+    status: str = "active"
 
 
 class Adapter:

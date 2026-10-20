@@ -36,6 +36,7 @@ def source_status(conn, source_id: str, *, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     manifest = REGISTRY[source_id].manifest if source_id in REGISTRY else None
     target_minutes = manifest.cadence_minutes if manifest else 60
+    enabled = getattr(manifest, "status", "active") == "active" if manifest else True
 
     row = conn.execute(
         "SELECT MAX(fetched_at) AS last_fetch, COUNT(*) AS observations FROM observations WHERE source_id = ?",
@@ -43,7 +44,12 @@ def source_status(conn, source_id: str, *, now: datetime | None = None) -> dict:
     ).fetchone()
     last_fetch = _parse(row["last_fetch"]) if row else None
 
-    if last_fetch is None:
+    if not enabled:
+        # A source we have deliberately not switched on is not "late"; counting it
+        # would make the ops page permanently red and teach everyone to ignore it.
+        age_minutes = None if last_fetch is None else (now - last_fetch).total_seconds() / 60
+        state = "not_enabled"
+    elif last_fetch is None:
         age_minutes = None
         state = "never_fetched"
     else:
@@ -63,6 +69,7 @@ def source_status(conn, source_id: str, *, now: datetime | None = None) -> dict:
         "age_minutes": round(age_minutes, 1) if age_minutes is not None else None,
         "observations": row["observations"] if row else 0,
         "state": state,
+        "enabled": enabled,
         "meets_slo": state == "on_time",
     }
 
@@ -71,7 +78,7 @@ def report(conn, *, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     statuses = [source_status(conn, source_id, now=now) for source_id in sorted(REGISTRY)]
 
-    known = [status for status in statuses if status["last_fetch"]]
+    known = [status for status in statuses if status["last_fetch"] and status["enabled"]]
     met = sum(1 for status in known if status["meets_slo"])
 
     # The user-facing promise: how stale is the *feed*, not any one source.
@@ -91,6 +98,6 @@ def report(conn, *, now: datetime | None = None) -> dict:
 
 
 def worst_state(report_payload: dict) -> str:
-    order = {"on_time": 0, "late": 1, "never_fetched": 2, "stale": 3}
-    states = [source["state"] for source in report_payload["sources"]]
+    order = {"on_time": 0, "not_enabled": 1, "late": 2, "never_fetched": 3, "stale": 4}
+    states = [source["state"] for source in report_payload["sources"] if source.get("enabled", True)]
     return max(states, key=lambda state: order.get(state, 0)) if states else "never_fetched"
