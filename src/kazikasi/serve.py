@@ -51,59 +51,89 @@ SLO_LABEL = {
 
 STYLE = """
 :root{
-  --ink:#14181f; --muted:#5b6573; --line:#e3e7ee; --bg:#f7f8fa;
-  --card:#ffffff; --accent:#0f6b4f; --accent-soft:#e7f4ee;
-  --warn:#8a5300; --warn-soft:#fdf1dd; --danger:#a3241c; --danger-soft:#fdeceb;
+  /* design tokens — see docs/design/01-visual-system.md */
+  --paper:#FBF8F2; --card:#FFFFFF; --sunken:#F3EEE5; --line:#E3DCCF;
+  --ink:#12161C; --ink-2:#3D4653; --muted:#5C6675;
+  --forest:#14532D; --forest-soft:#E7F0E8;
+  --amber:#9A4E00; --amber-soft:#FBEEDC;
+  --risk:#A3241C; --risk-soft:#FBEAE8;
+  --live:#15803D;
+  --accent:var(--forest); --accent-soft:var(--forest-soft);
+  --warn:var(--amber); --warn-soft:var(--amber-soft);
+  --danger:var(--risk); --danger-soft:var(--risk-soft);
+  --bg:var(--paper);
+  --radius:14px; --radius-sm:10px; --radius-pill:999px;
+  --focus:0 0 0 3px #B9D4C1, 0 0 0 1px #14532D;
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);
-  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-a{color:var(--accent);text-decoration:none}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--font-sans);
+  -webkit-font-smoothing:antialiased}
+a{color:var(--forest);text-decoration:none}
 a:hover{text-decoration:underline}
-header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 20px}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:6px}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px}
 .wrap{max-width:760px;margin:0 auto;padding:0 20px}
-.brand{font-weight:700;font-size:19px;letter-spacing:-.01em;display:flex;
-  justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.brand span{color:var(--muted);font-weight:500;font-size:14px}
-.brand nav a{margin-left:14px;font-size:14px;color:var(--muted)}
-.banner{background:var(--warn-soft);color:var(--warn);border-bottom:1px solid #f0dcbc;
-  padding:10px 20px;font-size:14px}
-.whobar{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px;font-size:14px}
+.brand{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.lockup{display:flex;align-items:center;gap:9px;min-width:0}
+.lockup svg{width:26px;height:26px;color:var(--forest);flex:none}
+.lockup .word{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.lockup .tag{display:block;color:var(--muted);font-weight:500;font-size:12.5px;letter-spacing:.01em}
+.brand nav{display:flex;gap:4px;flex-wrap:wrap}
+.brand nav a{font-size:14px;color:var(--ink-2);padding:7px 10px;border-radius:var(--radius-sm)}
+.brand nav a:hover{background:var(--sunken);text-decoration:none}
+.brand nav a.on{background:var(--forest-soft);color:var(--forest);font-weight:600}
+.banner{background:var(--amber-soft);color:var(--amber);border-bottom:1px solid #EBD6B4;padding:10px 20px;font-size:14px}
+.whobar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;margin:18px 0 0;font-size:14px}
 .whobar b{font-weight:650}
-.whobar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.chip{border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:13px;color:var(--muted)}
-.strip{display:flex;gap:20px;flex-wrap:wrap;padding:18px 0 6px;color:var(--muted);font-size:14px}
-.strip b{color:var(--ink);font-size:18px;display:block;line-height:1.2}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 22px}
-.filters a{border:1px solid var(--line);background:var(--card);border-radius:999px;
-  padding:6px 12px;font-size:14px;color:var(--muted)}
-.filters a.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+.whobar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 10px;
+  font-size:13px;color:var(--ink-2);background:var(--card)}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px 0 4px;
+  color:var(--muted);font-size:13px}
+.strip b{color:var(--ink);font-size:20px;line-height:1.15;display:block;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
+.filters a{border:1px solid var(--line);background:var(--card);border-radius:var(--radius-pill);
+  padding:7px 14px;font-size:14px;color:var(--ink-2);min-height:36px;display:inline-flex;align-items:center}
+.filters a.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
   padding:16px 18px;margin-bottom:12px}
-.card h2{margin:0 0 4px;font-size:17px;letter-spacing:-.01em}
-.employer{color:var(--muted);font-size:14px;margin-bottom:10px}
+.card h2{margin:0 0 3px;font-size:18px;line-height:1.3;letter-spacing:-.015em;font-weight:650}
+.card h2 a{color:var(--ink)}
+.card h2 a:hover{color:var(--forest)}
+.employer{color:var(--ink-2);font-size:14px;margin-bottom:10px}
 .badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.badge{font-size:12px;border-radius:999px;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
-.badge.good{background:var(--accent-soft);border-color:#c9e6d9;color:var(--accent)}
-.badge.warn{background:var(--warn-soft);border-color:#f0dcbc;color:var(--warn)}
-.badge.danger{background:var(--danger-soft);border-color:#f6cfcb;color:var(--danger)}
-.evidence{font-size:13px;color:var(--muted);border-left:2px solid var(--line);
-  padding-left:10px;margin:8px 0 4px}
-.whythat{font-size:13px;color:var(--muted);margin:8px 0 0;padding-left:0;list-style:none;
+.badge{font-size:12px;border-radius:var(--radius-pill);padding:3px 10px;border:1px solid var(--line);
+  color:var(--ink-2);background:var(--sunken);white-space:nowrap}
+.badge.good{background:var(--forest-soft);border-color:#CFE3D4;color:var(--forest);font-weight:600}
+.badge.warn{background:var(--amber-soft);border-color:#EBD6B4;color:var(--amber);font-weight:600}
+.badge.danger{background:var(--risk-soft);border-color:#EBC5C0;color:var(--risk);font-weight:600}
+.badge.muted{background:var(--sunken);border-color:var(--line);color:var(--ink-2)}
+.evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
+  padding-left:12px;margin:10px 0 4px}
+.whythat{font-size:13px;color:var(--muted);margin:8px 0 0;padding:0;list-style:none;
   display:flex;gap:6px;flex-wrap:wrap}
-.whythat li{background:#f2f4f7;border-radius:6px;padding:2px 8px}
+.whythat li{background:var(--sunken);border-radius:6px;padding:2px 8px}
 .foot{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);
-  margin-top:12px;align-items:center}
+  margin-top:12px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
 .foot form{display:inline;margin:0}
 .foot button{font:inherit;font-size:13px;background:none;border:none;color:var(--muted);
-  cursor:pointer;padding:0;text-decoration:underline}
-.foot .apply{border:1px solid var(--accent);color:var(--accent);border-radius:999px;
-  padding:5px 12px;font-size:14px;background:var(--accent-soft)}
-h1{font-size:22px;letter-spacing:-.02em;margin:24px 0 6px}
+  cursor:pointer;padding:8px 0;text-decoration:underline}
+.foot .apply{border:1px solid var(--forest);color:#fff;border-radius:var(--radius-pill);
+  padding:9px 16px;font-size:14px;font-weight:600;background:var(--forest);min-height:40px;
+  display:inline-flex;align-items:center}
+.foot .apply:hover{background:#0F3F22;text-decoration:none}
+h1{font-size:28px;line-height:1.15;letter-spacing:-.02em;margin:26px 0 6px}
+h2{font-size:18px;letter-spacing:-.01em;margin:24px 0 4px}
+p{margin:8px 0}
 table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);
-  border:1px solid var(--line);border-radius:10px;overflow:hidden}
-th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line)}
-th{color:var(--muted);font-weight:600;font-size:13px;background:#fbfcfd}
+  border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;
+  font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12.5px;background:var(--paper)}
 tr:last-child td{border-bottom:none}
 dl{display:grid;grid-template-columns:150px 1fr;gap:8px 16px;margin:18px 0;font-size:15px}
 dt{color:var(--muted)}
@@ -112,20 +142,41 @@ dd{margin:0}
 .sources li{padding:8px 0;border-bottom:1px solid var(--line)}
 .sources li:last-child{border-bottom:none}
 .small{font-size:13px;color:var(--muted)}
-.msg{white-space:pre-wrap;word-break:break-word;background:#e8f5ee;border:1px solid var(--line);
-  border-radius:14px;padding:14px 16px;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:12px 0}
-.msg.sms{background:#f3f5f8}
+.msg{white-space:pre-wrap;word-break:break-word;background:var(--forest-soft);
+  border:1px solid #CFE3D4;border-radius:var(--radius);padding:14px 16px;
+  font:14px/1.6 var(--font-mono);margin:12px 0;color:var(--ink)}
+.msg.sms{background:var(--sunken);border-color:var(--line)}
 .subform{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
-.subform input{flex:1 1 220px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:15px}
-.subform button{padding:10px 16px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:15px;font-weight:600}
-.subform button.ghost{background:#fff;color:var(--muted);border:1px solid var(--line);font-weight:500}
-footer{padding:28px 0 40px;font-size:13px;color:var(--muted)}
-@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dt{margin-top:10px}}
+.subform input{flex:1 1 220px;padding:11px 13px;border:1px solid var(--line);
+  border-radius:var(--radius-sm);font-size:16px;font-family:inherit;background:var(--card)}
+.subform button{padding:11px 18px;border:0;border-radius:var(--radius-sm);background:var(--forest);
+  color:#fff;font-size:15px;font-weight:600;cursor:pointer;min-height:44px}
+.subform button:hover{background:#0F3F22}
+.subform button.ghost{background:var(--card);color:var(--ink-2);border:1px solid var(--line);font-weight:500}
+footer{padding:30px 0 44px;font-size:13px;color:var(--muted)}
+@media (max-width:520px){
+  h1{font-size:24px}
+  .strip{grid-template-columns:repeat(2,1fr);gap:10px}
+  dl{grid-template-columns:1fr;gap:2px}dt{margin-top:10px}
+  .foot .apply{width:100%;justify-content:center}
+  .brand nav a{padding:7px 8px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
 
 def _constant_time_equal(left: str, right: str) -> bool:
     return _hmac.compare_digest((left or "").encode(), (right or "").encode())
+
+
+SCOPE_MARK = """<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+  <circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/>
+  <path d="M6.4 17.6a7.6 7.6 0 0 1 0-9.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M17.6 8a7.6 7.6 0 0 1 0 9.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M3.6 20.2a12 12 0 0 1 0-13.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
+  <path d="M20.4 6.8a12 12 0 0 1 0 13.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
+  <path d="M1.5 20.9h21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".35"/>
+</svg>"""
 
 
 def _e(value) -> str:
@@ -143,12 +194,18 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "") -> str:
         '<a href="/slo">Freshness</a><a href="/review">Review</a>'
     )
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en-KE"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#FBF8F2">
+<meta name="description" content="Kazi-Kasi — jobs you can reach, checked today.">
 <title>{_e(title)}</title><style>{STYLE}</style></head>
 <body>
-<header><div class="wrap"><div class="brand">Kazi-Kasi
-<span>Nairobi metro · early career</span>
+<header><div class="wrap"><div class="brand">
+<a class="lockup" href="/" aria-label="Kazi-Kasi — jobs you can reach">
+{SCOPE_MARK}
+<span><span class="word">Kazi-Kasi</span>
+<span class="tag">Nairobi metro · early career</span></span>
+</a>
 <nav>{links}</nav></div></div></header>
 {banner}
 <div class="wrap">{body}</div>
@@ -231,7 +288,7 @@ def render_feed(
         entry_label = ENTRY_FIT_LABEL.get(row.get("entry_fit"), "eligibility unstated")
         badges = [f'<span class="badge {entry_tone}">{_e(entry_label)}</span>']
         place = row.get("county") if not row.get("sub_county") else f'{row["sub_county"]}, {row["county"]}'
-        badges.append(f'<span class="badge">{_e(place or "Location unstated")}</span>')
+        badges.append(f'<span class="badge muted">{_e(place or "Location unstated")}</span>')
         if row.get("work_mode") in ("remote", "hybrid"):
             badges.append(f'<span class="badge good">{_e(row["work_mode"].title())}</span>')
         deadline = graph.deadline_band(row, now=now)
@@ -242,10 +299,17 @@ def render_feed(
             badges.append(f'<span class="badge good">on {row["source_count"]} sources</span>')
         if row.get("status") == "stale":
             badges.append('<span class="badge warn">not re-checked recently</span>')
+        else:
+            badges.append('<span class="badge good">live</span>')
         if row.get("id") in acted:
             badges.append('<span class="badge">you applied</span>')
 
-        reasons = "".join(f"<li>{_e(reason)}</li>" for reason in match.reasons[:4])
+        # The deadline is already a badge; a reason that repeats it is noise.
+        # Keep at least one reason so every card still says why it is here.
+        shown_reasons = [reason for reason in match.reasons if not reason.startswith("closes")]
+        if not shown_reasons:
+            shown_reasons = match.reasons[:1]
+        reasons = " · ".join(_e(reason) for reason in shown_reasons[:3])
         source = graph.primary_source(conn, match.job_id)
 
         apply_html = ""
@@ -260,7 +324,7 @@ def render_feed(
   <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
   <div class="employer">{_e(match.employer or "Employer not stated")}</div>
   <div class="badges">{''.join(badges)}</div>
-  <ul class="whythat">{reasons}</ul>
+  <p class="whythat">{reasons}</p>
   <div class="foot">
     <span title="match score">{match.score:.2f}</span>
     <span>{_e(graph.freshness_band(row, now=now))}</span>
