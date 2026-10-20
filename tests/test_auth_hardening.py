@@ -329,6 +329,24 @@ class TestTheReadyEndpoint:
         assert "No provider is connected" not in body
 
 
+class TestSyntheticLabelling:
+    """Setting KAZIKASI_DEMO=0 must not un-label synthetic vacancies."""
+
+    def test_no_database_means_synthetic(self, monkeypatch):
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        assert serve.synthetic_build() is True
+
+    def test_a_database_flips_it(self, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgres://example")
+        assert serve.synthetic_build() is False
+
+    def test_strict_sessions_do_not_change_the_label(self, monkeypatch):
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setenv("KAZIKASI_DEMO", "0")
+        assert serve.synthetic_build() is True
+        assert accounts.strict_mode() is True
+
+
 class TestTheCheckCommand:
     def test_it_reports_readiness_and_exits_nonzero_when_nothing_is_wired(self, capsys, monkeypatch):
         monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)

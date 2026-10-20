@@ -139,7 +139,8 @@ def app(environ, start_response):
                 query,
                 body=_body(environ),
                 headers=_headers(environ),
-                demo=os.environ.get("KAZIKASI_DEMO", "1") != "0",
+                # Synthetic until a real store exists — see serve.synthetic_build().
+                demo=serve.synthetic_build(),
                 limiter=LIMITER,
                 client=_client(environ),
             )

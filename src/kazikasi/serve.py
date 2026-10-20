@@ -962,6 +962,17 @@ with an employer, and a save is never sold as a lead.</p>
 # --------------------------------------------------------------------------
 
 
+def synthetic_build() -> bool:
+    """Is the data on this instance synthetic?
+
+    True until a real store is configured (`DATABASE_URL`). Deliberately
+    independent of `KAZIKASI_DEMO`, which governs session strictness: turning on
+    real secret hygiene must never un-label synthetic vacancies, because the
+    banner is the one thing standing between a demo corpus and a lie.
+    """
+    return not (os.environ.get("DATABASE_URL") or "").strip()
+
+
 def _base_url() -> str:
     return (os.environ.get("KAZIKASI_BASE_URL") or "https://kazi-kasi-app.vercel.app").rstrip("/")
 
