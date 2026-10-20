@@ -9,10 +9,17 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from kazikasi import db, graph, tracking
+from kazikasi import db, graph, outbox, tracking
 from kazikasi.corpus import load_corpus
 from kazikasi.profile import seed_profiles
-from kazikasi.serve import make_server, render_feed, render_job, render_review, render_slo
+from kazikasi.serve import (
+    make_server,
+    render_digest,
+    render_feed,
+    render_job,
+    render_review,
+    render_slo,
+)
 
 NOW = datetime(2026, 10, 20, 9, tzinfo=timezone.utc)
 
@@ -141,6 +148,75 @@ class TestFreshnessPage:
         assert "late" in page or "stale" in page
 
 
+class TestDigestPage:
+    def test_the_page_shows_the_message_exactly_as_it_would_arrive(self, conn):
+        page = render_digest(conn, now=NOW, demo=True)
+        text = readable(page)
+        assert "WhatsApp digest" in text
+        assert "Kazi-Kasi" in text and "jobs for you today" in text
+        assert "Reply STOP" in text
+
+    def test_the_preview_is_the_same_body_the_transport_would_send(self, conn):
+        from kazikasi import digest as digest_module
+
+        digest = outbox.compose(conn, "demo-fresher", now=NOW)
+        expected = digest_module.render_digest(digest, link_base="https://kazikasi.app")
+        page = render_digest(conn, profile_id="demo-fresher", now=NOW)
+        first_card = expected.splitlines()[2]
+        assert first_card in page          # inside the <pre>, escaped only
+
+    def test_an_unsubscribed_profile_is_offered_an_opt_in_not_a_digest(self, conn):
+        text = readable(render_digest(conn, now=NOW))
+        assert "No number on file" in text
+        assert "Start the daily digest" in text
+
+    def test_a_subscriber_sees_the_consent_record_and_a_way_out(self, conn):
+        outbox.subscribe(conn, "demo-fresher", "0712345678", now=NOW)
+        text = readable(render_digest(conn, profile_id="demo-fresher", now=NOW))
+        assert "+2547•••5678" in text
+        assert "Stop these messages" in text
+        assert "12345678" not in text
+
+    def test_the_sms_fallback_is_shown_because_it_is_part_of_the_promise(self, conn):
+        text = readable(render_digest(conn, now=NOW))
+        assert "If WhatsApp fails" in text
+        assert "Kazi-Kasi: 5 new jobs" in text
+
+    def test_what_was_left_out_is_stated(self, conn):
+        digest = outbox.compose(conn, "demo-fresher", now=NOW)
+        target = digest.items[0].job_id
+        tracking.record(conn, "demo-fresher", target, "applied")
+        text = readable(render_digest(conn, profile_id="demo-fresher", now=NOW))
+        assert "you already applied" in text
+        assert target not in text
+
+    def test_an_empty_day_is_silence_not_an_apology(self, conn):
+        for job in conn.execute("SELECT id FROM jobs").fetchall():
+            tracking.record(conn, "demo-fresher", job["id"], "dismissed")
+        page = render_digest(conn, profile_id="demo-fresher", now=NOW)
+        assert "Nothing to send today" in readable(page)
+        # And no message body was rendered: the person gets silence, not a push.
+        assert "Kazi-Kasi — 0 jobs" not in page
+        assert 'class="msg sms"></pre>' in page.replace(" ", " ").replace('class="msg sms">\n', 'class="msg sms">')
+
+    def test_the_delivery_log_shows_what_happened(self, conn):
+        outbox.subscribe(conn, "demo-fresher", "0712345678", now=NOW)
+        outbox.queue_digest(conn, "demo-fresher", now=NOW)
+        text = readable(render_digest(conn, profile_id="demo-fresher", now=NOW))
+        assert "Delivery log" in text
+        assert "queued" in text
+
+    def test_the_page_opens_on_someone_who_actually_gets_a_digest(self, conn):
+        outbox.subscribe(conn, "demo-two-years", "0712345678", now=NOW)
+        text = readable(render_digest(conn, now=NOW))
+        assert "Otieno" in text
+        assert "Stop these messages" in text
+
+    def test_a_bad_number_is_reported_rather_than_silently_dropped(self, conn):
+        text = readable(render_digest(conn, now=NOW, error="not a Kenyan mobile number: '0712'"))
+        assert "not a Kenyan mobile number" in text
+
+
 class TestReviewPage:
     def test_lists_the_ambiguous_pairs(self, conn):
         page = readable(render_review(conn, now=NOW))
@@ -231,6 +307,42 @@ class TestHttpServer:
         _, feed_after = self._get(f"{server}/api/jobs?profile=demo-fresher")
         ids = [match["job_id"] for match in json.loads(feed_after)["matches"]]
         assert job_id not in ids
+
+    def test_digest_page(self, server):
+        status, body = self._get(f"{server}/digest")
+        assert status == 200
+        assert "WhatsApp digest" in body
+        assert "Reply STOP" in body
+
+    def test_subscribing_over_http_records_consent_and_masks_the_number(self, server):
+        data = urllib.parse.urlencode({"profile": "demo-fresher", "msisdn": "0712 345 678"}).encode()
+        request = urllib.request.Request(f"{server}/digest/subscribe", data=data, method="POST")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            page = response.read().decode()
+            assert response.status == 200
+        assert "+2547•••5678" in page
+        assert "Stop these messages" in page
+
+    def test_a_bad_number_comes_back_as_an_error_not_a_subscription(self, server):
+        data = urllib.parse.urlencode({"profile": "demo-fresher", "msisdn": "0712"}).encode()
+        request = urllib.request.Request(f"{server}/digest/subscribe", data=data, method="POST")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            page = response.read().decode()
+        assert "not a Kenyan mobile number" in page
+        assert "No number on file" in page
+
+    def test_opting_out_over_http_stops_the_digest(self, server):
+        data = urllib.parse.urlencode({"profile": "demo-fresher", "msisdn": "0712345678"}).encode()
+        urllib.request.urlopen(
+            urllib.request.Request(f"{server}/digest/subscribe", data=data, method="POST"), timeout=5
+        ).close()
+        data = urllib.parse.urlencode({"profile": "demo-fresher"}).encode()
+        with urllib.request.urlopen(
+            urllib.request.Request(f"{server}/digest/unsubscribe", data=data, method="POST"), timeout=5
+        ) as response:
+            page = response.read().decode()
+        assert "Opted out on" in page
+        assert "Start the daily digest" in page
 
     def test_unknown_path_is_404(self, server):
         with pytest.raises(urllib.error.HTTPError) as error:

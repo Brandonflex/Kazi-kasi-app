@@ -161,3 +161,61 @@ def test_slo_exits_non_zero_when_the_feed_is_late(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert {"sources", "slo_rate", "feed_age_minutes"} <= set(payload)
     assert code in (0, 1)
+
+
+def test_digest_subscribe_then_preview_writes_nothing(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    capsys.readouterr()
+
+    assert main(["digest", "--db", db_path, "--profile", "demo-fresher", "--subscribe", "0712 345 678"]) == 0
+    subscribed = json.loads(capsys.readouterr().out)
+    assert subscribed["subscribed"]["msisdn"] == "+2547•••5678"
+
+    assert main(["digest", "--db", db_path, "--profile", "demo-fresher", "--preview"]) == 0
+    out = capsys.readouterr().out
+    assert "*Kazi-Kasi*" in out
+    assert "Reply STOP" in out
+
+    # A preview is not a send and not a queue.
+    assert main(["outbox", "--db", db_path, "--json"]) == 0
+    summary = json.loads(capsys.readouterr().out)["summary"]
+    assert summary["counts"] == {}
+
+
+def test_digest_queue_then_send_with_fake_transports(tmp_path, capsys):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    main(["digest", "--db", db_path, "--subscribe", "0712345678"])
+    capsys.readouterr()
+
+    assert main(["digest", "--db", db_path, "--profile", "demo-fresher", "--queue"]) == 0
+    assert "queued (5 cards)" in capsys.readouterr().out
+
+    assert main(["outbox", "--db", db_path]) == 0
+    assert "outbox: queued 1" in capsys.readouterr().out
+
+    assert main(["outbox", "--db", db_path, "--send", "--dry-run", "--ignore-window"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["sent"] == 1
+    # The dry run proves the send without moving the message.
+    assert main(["outbox", "--db", db_path]) == 0
+    assert "queued 1" in capsys.readouterr().out
+
+
+def test_digest_refuses_a_typo_number(tmp_path):
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    with pytest.raises(SystemExit) as error:
+        main(["digest", "--db", db_path, "--subscribe", "071234567"])
+    assert "not a Kenyan mobile number" in str(error.value)
+
+
+def test_outbox_refuses_to_pretend_it_sent_without_credentials(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("WHATSAPP_PHONE_NUMBER_ID", raising=False)
+    monkeypatch.delenv("WHATSAPP_TOKEN", raising=False)
+    db_path = str(tmp_path / "kazi.db")
+    main(["load", "--db", db_path, "--demo"])
+    with pytest.raises(SystemExit) as error:
+        main(["outbox", "--db", db_path, "--send"])
+    assert "WHATSAPP_TOKEN" in str(error.value)

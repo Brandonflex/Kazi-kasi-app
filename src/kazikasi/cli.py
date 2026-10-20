@@ -17,6 +17,11 @@
     kazikasi match --db ./data/kazi.db --profile demo-fresher
     kazikasi apply --db ./data/kazi.db --profile demo-fresher --job <id> --applied
     kazikasi slo --db ./data/kazi.db
+
+    kazikasi digest --db ./data/kazi.db --profile demo-fresher --subscribe 0712345678
+    kazikasi digest --db ./data/kazi.db --profile demo-fresher --preview
+    kazikasi digest --db ./data/kazi.db --all --dry-run
+    kazikasi outbox --db ./data/kazi.db --send --dry-run
 """
 
 from __future__ import annotations
@@ -38,6 +43,8 @@ from .profile import list_profiles, load_profile, seed_profiles
 from .ranking import explain, rank
 from . import slo as slo_module
 from . import tracking
+from . import outbox as outbox_module
+from .channels import FakeTransport, transport_for
 from .models import JobCandidate
 from .pipeline import HttpFetcher, ingest, write_jsonl
 from .rawstore import FileRawStore
@@ -328,6 +335,96 @@ def cmd_slo(args: argparse.Namespace) -> int:
         conn.close()
 
 
+def cmd_digest(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        seed_profiles(conn)
+
+        if args.subscribe:
+            try:
+                subscription = outbox_module.subscribe(
+                    conn, args.profile, args.subscribe, source=args.source,
+                    channel=args.channel, fallback_channel=None if args.no_fallback else "sms",
+                )
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
+            print(json.dumps({"subscribed": subscription.to_dict()}, indent=2))
+            if not args.preview and not args.queue:
+                return 0
+
+        if args.unsubscribe:
+            changed = outbox_module.unsubscribe(conn, args.profile)
+            print(json.dumps({"profile_id": args.profile, "unsubscribed": changed}, indent=2))
+            return 0
+
+        profiles = [p.id for p in list_profiles(conn)] if args.all else [args.profile]
+        results = []
+        for profile_id in profiles:
+            try:
+                result = outbox_module.queue_digest(
+                    conn, profile_id, dry_run=args.dry_run or args.preview, link_base=args.link_base
+                )
+            except ValueError as error:
+                results.append({"profile_id": profile_id, "error": str(error)})
+                continue
+            results.append(result)
+
+        if args.json:
+            print(json.dumps(results, indent=2, default=str))
+            return 0
+
+        for result in results:
+            if "error" in result:
+                print(f"{result['profile_id']}: {result['error']}")
+                continue
+            digest = result.get("digest") or {}
+            print(f"{result['profile_id']}: {result['state']} ({len(digest.get('items', []))} cards)")
+            if result.get("preview"):
+                print()
+                print(result["preview"])
+                print()
+        return 0
+    finally:
+        conn.close()
+
+
+def cmd_outbox(args: argparse.Namespace) -> int:
+    conn = database.connect(args.db)
+    try:
+        if args.send:
+            if args.dry_run:
+                transports = {"whatsapp": FakeTransport(), "sms": FakeTransport()}
+            else:
+                try:
+                    transports = {channel: transport_for(channel) for channel in ("whatsapp", "sms")}
+                except RuntimeError as error:
+                    # A missing token is a configuration mistake, not a crash.
+                    raise SystemExit(f"cannot send: {error}") from error
+            report = outbox_module.send_due(
+                conn,
+                transports,
+                respect_window=not args.ignore_window,
+                dry_run=args.dry_run,
+            )
+            print(json.dumps(report.to_dict(), indent=2))
+            return 0
+
+        summary = outbox_module.outbox_summary(conn)
+        if args.json:
+            print(json.dumps({"summary": summary, "messages": args.messages and [
+                dict(row) for row in conn.execute(
+                    "SELECT id, profile_id, channel, state, attempts, last_error, created_at "
+                    "FROM messages ORDER BY id DESC LIMIT 20"
+                )
+            ]}, indent=2, default=str))
+        else:
+            counts = summary["counts"] or {}
+            print("outbox: " + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "empty"))
+        return 0
+    finally:
+        conn.close()
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .serve import serve
 
@@ -423,6 +520,31 @@ def main(argv: list[str] | None = None) -> int:
     p_slo.add_argument("--min-rate", type=float, default=0.999)
     p_slo.add_argument("--json", action="store_true")
     p_slo.set_defaults(func=cmd_slo)
+
+    p_digest = sub.add_parser("digest", help="compose (and optionally queue) a WhatsApp digest")
+    p_digest.add_argument("--db", default="./data/kazi.db")
+    p_digest.add_argument("--profile", default="demo-fresher")
+    p_digest.add_argument("--all", action="store_true", help="every subscribed profile")
+    p_digest.add_argument("--subscribe", metavar="MSISDN", default=None, help="record consent for this number")
+    p_digest.add_argument("--unsubscribe", action="store_true")
+    p_digest.add_argument("--channel", default="whatsapp", choices=["whatsapp", "sms"])
+    p_digest.add_argument("--source", default="cli", help="how consent was given")
+    p_digest.add_argument("--no-fallback", action="store_true")
+    p_digest.add_argument("--preview", action="store_true", help="print the message, queue nothing")
+    p_digest.add_argument("--queue", action="store_true", help="queue it even when subscribing")
+    p_digest.add_argument("--dry-run", action="store_true")
+    p_digest.add_argument("--link-base", default="https://kazikasi.app")
+    p_digest.add_argument("--json", action="store_true")
+    p_digest.set_defaults(func=cmd_digest)
+
+    p_outbox = sub.add_parser("outbox", help="inspect or deliver queued messages")
+    p_outbox.add_argument("--db", default="./data/kazi.db")
+    p_outbox.add_argument("--send", action="store_true")
+    p_outbox.add_argument("--dry-run", action="store_true", help="deliver to a fake transport")
+    p_outbox.add_argument("--ignore-window", action="store_true")
+    p_outbox.add_argument("--messages", action="store_true")
+    p_outbox.add_argument("--json", action="store_true")
+    p_outbox.set_defaults(func=cmd_outbox)
 
     p_serve = sub.add_parser("serve", help="serve the read-only feed (internal)")
     p_serve.add_argument("--db", default="./data/kazi.db")

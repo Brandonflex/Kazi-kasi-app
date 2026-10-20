@@ -22,7 +22,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -160,6 +160,76 @@ CREATE TABLE IF NOT EXISTS apply_events (
 
 CREATE INDEX IF NOT EXISTS idx_apply_events_job ON apply_events (job_id, at);
 CREATE INDEX IF NOT EXISTS idx_apply_events_profile ON apply_events (profile_id, at);
+
+-- ---------------------------------------------------------------------------
+-- v4: the digest. Consent, what was sent, and what happened to it.
+-- ---------------------------------------------------------------------------
+
+-- Consent is a record, not a flag: DPA 2019 wants to know when someone agreed,
+-- to what, and how they can stop. Unsubscribing keeps the row and dates it.
+CREATE TABLE IF NOT EXISTS subscriptions (
+    profile_id     TEXT PRIMARY KEY REFERENCES profiles(id),
+    channel        TEXT NOT NULL,          -- whatsapp | sms
+    msisdn         TEXT NOT NULL,          -- E.164; see note in digest.py on at-rest encryption
+    msisdn_hash    TEXT NOT NULL,          -- for dedupe and logs without exposing the number
+    consented_at   TEXT NOT NULL,
+    consent_source TEXT NOT NULL,          -- how they opted in
+    cadence        TEXT NOT NULL DEFAULT 'daily',
+    window_start   TEXT NOT NULL DEFAULT '18:00',  -- EAT, local
+    window_end     TEXT NOT NULL DEFAULT '20:00',
+    max_items      INTEGER NOT NULL DEFAULT 5,
+    fallback_channel TEXT,                 -- sms | NULL
+    unsubscribed_at TEXT,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_active ON subscriptions (unsubscribed_at, cadence);
+
+-- One digest per profile per day per channel. The unique key is what makes a
+-- retry safe: sending twice is the failure mode users actually notice.
+CREATE TABLE IF NOT EXISTS digest_runs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id     TEXT NOT NULL REFERENCES profiles(id),
+    channel        TEXT NOT NULL,
+    run_date       TEXT NOT NULL,          -- YYYY-MM-DD in EAT
+    created_at     TEXT NOT NULL,
+    item_count     INTEGER NOT NULL DEFAULT 0,
+    state          TEXT NOT NULL DEFAULT 'composed',  -- composed | queued | sent | empty | failed
+    UNIQUE (profile_id, run_date, channel)
+);
+
+CREATE INDEX IF NOT EXISTS idx_digest_runs_profile ON digest_runs (profile_id, run_date);
+
+CREATE TABLE IF NOT EXISTS digest_items (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id     INTEGER NOT NULL REFERENCES digest_runs(id),
+    job_id     TEXT NOT NULL REFERENCES jobs(id),
+    position   INTEGER NOT NULL,
+    reason     TEXT,
+    UNIQUE (run_id, job_id)
+);
+
+-- Every outbound message, with its state machine. `attempts` and `last_error`
+-- exist so a failure is visible rather than a message that vanished.
+CREATE TABLE IF NOT EXISTS messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    idempotency   TEXT NOT NULL UNIQUE,
+    profile_id    TEXT NOT NULL REFERENCES profiles(id),
+    channel       TEXT NOT NULL,
+    to_msisdn     TEXT NOT NULL,
+    body          TEXT NOT NULL,
+    kind          TEXT NOT NULL DEFAULT 'digest',  -- digest | fallback | notice
+    state         TEXT NOT NULL DEFAULT 'queued',  -- queued | sent | delivered | failed | suppressed
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    provider_id   TEXT,
+    last_error    TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    sent_at       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_queue ON messages (state, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_profile ON messages (profile_id, created_at);
 """
 
 
@@ -208,11 +278,17 @@ def migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _now_iso() -> str:
-    """One timestamp format for every table, in UTC."""
+def _now_iso(now=None) -> str:
+    """One timestamp format for every table, in UTC.
+
+    Accepts an explicit moment so tests and backfills can be deterministic.
+    """
     from datetime import datetime, timezone
 
-    return datetime.now(timezone.utc).isoformat()
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).isoformat()
 
 
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
@@ -225,5 +301,9 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "review_queue",
         "profiles",
         "apply_events",
+        "subscriptions",
+        "digest_runs",
+        "digest_items",
+        "messages",
     )
     return {name: conn.execute(f"SELECT COUNT(*) AS c FROM {name}").fetchone()["c"] for name in names}

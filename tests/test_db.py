@@ -23,6 +23,10 @@ def test_connect_creates_the_schema_and_records_a_version(tmp_path):
             "review_queue",
             "profiles",
             "apply_events",
+            "subscriptions",
+            "digest_runs",
+            "digest_items",
+            "messages",
         }
         assert all(value == 0 for value in counts.values())
     finally:
