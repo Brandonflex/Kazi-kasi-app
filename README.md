@@ -33,7 +33,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 557 tests, no network
+python -m pytest                                    # 578 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -50,6 +50,42 @@ kazikasi outbox --db ./data/kazi.db --send --dry-run                   # deliver
 kazikasi run   --db ./data/kazi.db --explain                           # who is due, and why
 kazikasi serve --db ./data/kazi.db --demo            # feed, /digest, webhooks on http://localhost:8765
 ```
+
+## The deployed surface
+
+The project's public face is **<https://kazi-kasi-app.vercel.app/>**, built by
+Vercel from `main`. Every pull request also gets its own preview on the same
+project, aliased to the branch, so unreviewed changes can be clicked through
+before they land:
+
+| what | where |
+| --- | --- |
+| this branch (pending changes) | <https://kazi-kasi-app-git-arena-882ede8a-kaz-6ecccc-brandonflex108-4814.vercel.app> |
+| `main` (merged) | <https://kazi-kasi-app.vercel.app/> |
+
+The preview alias is stable: push to the branch and the same URL rebuilds.
+`/api/health` is the quickest way to tell which build you are looking at:
+
+```bash
+curl -s https://kazi-kasi-app.vercel.app/api/health
+# {"ok": true, "schema": 5, "live_jobs": 28, "sources_reporting": 4, ...}
+```
+
+How it is wired — there is no build step and no static output:
+
+* `vercel.json` rewrites everything into one function, passing the original path
+  as `__path`, because a rewrite is free to discard `PATH_INFO`.
+* `api/index.py` is a WSGI adapter. It builds the synthetic corpus **in memory**
+  on the first request in a warm instance and reuses it behind a lock; a
+  function has no writable disk, so it never opens `data/kazi.db`.
+* Routing lives in `kazikasi.serve.handle()` — the same function the local
+  `kazikasi serve` uses — so the deployed site and the sandbox cannot drift.
+* No `requirements.txt` is needed or wanted: the web surface imports only the
+  standard library. `bs4`, `httpx`, and `pypdf` are imported lazily by the
+  ingestion CLI, which never runs in a request.
+* Remember the demo is seeded: `demo-fresher`, `demo-midcareer`,
+  `demo-careerchange`, `demo-remote`. It is a read-only shop window for the
+  design, not the live product — every push resets it.
 
 ## Scope in one line
 
