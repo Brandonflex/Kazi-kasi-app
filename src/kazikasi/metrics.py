@@ -50,12 +50,15 @@ def stats(conn, *, now: datetime | None = None, closing_within_days: int = 7) ->
         )
     ]
 
+    # A deadline that has already passed is not "closing soon"; it is closed, and
+    # counting it made the pulse and the feed disagree about the same week.
     cutoff = (today + timedelta(days=closing_within_days)).isoformat()
     closing_soon = _rows(
         conn,
         """SELECT COUNT(*) AS c FROM jobs
-           WHERE status IN ('open','needs_review') AND deadline IS NOT NULL AND deadline <= ?""",
-        (cutoff,),
+           WHERE status IN ('open','needs_review') AND deadline IS NOT NULL
+             AND deadline >= ? AND deadline <= ?""",
+        (today.isoformat(), cutoff),
     )[0]["c"]
 
     flagged = [

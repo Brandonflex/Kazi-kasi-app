@@ -20,6 +20,7 @@ Routes:
 
 from __future__ import annotations
 
+import hashlib
 import hmac as _hmac
 import html
 import json
@@ -32,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from . import db, digest as digest_module, graph, metrics, outbox, ranking, shortlist, slo, tracking, webhooks
+from . import db, digest as digest_module, graph, metrics, outbox, pulse, ranking, shortlist, slo, tracking, webhooks
 from .corpus import load_corpus
 from .profile import DEMO_PROFILES, list_profiles, seed_profiles
 
@@ -361,7 +362,7 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
     demo_line = f'<div class="small" style="margin-top:6px">demo build {_e(build)}</div>' if demo else ""
     links = nav or (
         '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
-        '<a href="/digest">WhatsApp</a><a href="/slo">Freshness</a><a href="/review">Review</a>'
+        '<a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
     )
     return f"""<!doctype html>
 <html lang="en-KE"><head><meta charset="utf-8">
@@ -381,6 +382,8 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
 <main class="wrap">{body}</main>
 <footer class="wrap"><p>Every card says when it was last checked and why it was shown.
 Eligibility labels quote the advert. Applications happen on the employer's site, never here.</p>
+<p class="ops">Ops: <a href="/slo">freshness</a> · <a href="/review">review queue</a> ·
+<a href="/salaries">advertised pay</a></p>
 {demo_line}</footer>
 </body></html>"""
 
@@ -857,6 +860,248 @@ with an employer, and a save is never sold as a lead.</p>
     return _page("Shortlist — Kazi-Kasi", body, demo=demo)
 
 
+
+# --------------------------------------------------------------------------
+# The public market pages
+# --------------------------------------------------------------------------
+
+
+def _base_url() -> str:
+    return (os.environ.get("KAZIKASI_BASE_URL") or "https://kazi-kasi-app.vercel.app").rstrip("/")
+
+
+def _band_line(band: dict | None, *, prefix: str = "KES ") -> str:
+    if not band:
+        return "not stated in enough adverts"
+    if band["p25"] == band["p75"]:
+        return f"{prefix}{band['median']:,.0f}"
+    return f"{prefix}{band['p25']:,.0f}–{band['p75']:,.0f}"
+
+
+def _n(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def render_pulse(conn, *, now: datetime | None = None, demo: bool = False) -> str:
+    now = now or datetime.now(timezone.utc)
+    data = pulse.overview(conn, now=now)
+    stamp = (now + timedelta(hours=3)).strftime("%H:%M")
+
+    rows = "".join(
+        f"""<tr>
+  <td><a href="/county/{pulse.slug(item['county'])}">{_e(item['county'])}</a></td>
+  <td>{item['live']}</td>
+  <td>{item['closing']}</td>
+  <td>{_e(_band_line(item['band'], prefix=''))}</td>
+  <td>{item['band']['n'] if item['band'] else 0}</td>
+</tr>"""
+        for item in data["counties"]
+    )
+
+    employers = " · ".join(
+        f"{_e(name)} <span class='small'>{count}</span>" for name, count in data["employers"]
+    ) or '<span class="small">none yet</span>'
+
+    sources = "".join(
+        f"<tr><td>{_e(name)}</td><td>{count}</td></tr>" for name, count in data["sources"].items()
+    )
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Market pulse · counted, not estimated</p>
+  <h1 class="display">What Nairobi is hiring</h1>
+  <p class="scopeline">Every number on this page comes from adverts we have checked
+  ourselves. Nothing here is a forecast, a survey or an extrapolation.</p>
+  <p class="ledger"><b>Updated {stamp} EAT</b> · window: last {data['window_days']} days</p>
+</div>
+<div class="strip">
+  <div><b>{data['live']}</b><span>live adverts</span></div>
+  <div><b>{data['new']}</b><span>new this week</span></div>
+  <div><b>{data['closing']}</b><span>closing this week</span></div>
+  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "—"}</b><span>median advertised minimum (KES)</span></div>
+</div>
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>By county</span><em>{len(data['counties'])} counties</em></div>
+    <div class="tablewrap"><table>
+      <tr><th>County</th><th>Live</th><th>Closing</th><th>Middle half (KES/month)</th><th>n</th></tr>
+      {rows}
+    </table></div>
+    <p class="rail-note">The middle half is the 25th–75th percentile of monthly minimums
+    stated in adverts; <b>n</b> is how many adverts stated one. A band built from four
+    adverts is four adverts, and it says so.</p>
+
+    <div class="section" style="margin-top:32px"><span>Employers hiring most</span></div>
+    <p>{employers}</p>
+
+    <div class="section" style="margin-top:32px"><span>Sources</span><em>live adverts contributed</em></div>
+    <div class="tablewrap"><table><tr><th>Source</th><th>Live adverts</th></tr>{sources}</table></div>
+    <p class="small">Flagged adverts are excluded from every figure on this page. They stay
+    in the corpus for the review queue, not for the statistic.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>How to read this</h3>
+      <p class="rail-note">“Live” means an advert we have checked and that has not passed
+      its deadline. A job seen once is not live; it is unconfirmed.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Early career</h3>
+      <p class="rail-note">{data['fresher_share'] if data['fresher_share'] is not None else 0}% of live
+      adverts say they are open to people with no experience.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Your turn</h3>
+      <p class="rail-note">A count is not a shortlist.</p>
+      <a class="more" href="/">See what fits you →</a>
+    </div>
+  </aside>
+</div>"""
+    return _page("Market pulse — Kazi-Kasi", body, demo=demo)
+
+
+def render_salaries(conn, *, now: datetime | None = None, demo: bool = False) -> str:
+    now = now or datetime.now(timezone.utc)
+    data = pulse.overview(conn, now=now)
+    rows = "".join(
+        f"""<tr>
+  <td><a href="/county/{pulse.slug(item['county'])}">{_e(item['county'])}</a></td>
+  <td>{_e(_band_line(item['band'], prefix=''))}</td>
+  <td>{item['band']['median']:,.0f}</td>
+  <td>{item['band']['n']}</td>
+  <td>{item['live']}</td>
+</tr>"""
+        for item in data["counties"]
+        if item["band"]
+    )
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Advertised pay</p>
+  <h1 class="display">What the adverts actually say</h1>
+  <p class="scopeline">Monthly minimums, as stated in live adverts. Not an estimate,
+  not a survey, and never a number we filled in ourselves.</p>
+  <p class="ledger"><b>{data['live']} live adverts</b> · {data['band']['n'] if data['band'] else 0}
+  stated a monthly salary · updated {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
+</div>
+<div class="layout">
+  <div class="feedcol">
+    <div class="tablewrap"><table>
+      <tr><th>County</th><th>Middle half</th><th>Median</th><th>n</th><th>Live adverts</th></tr>
+      {rows or '<tr><td colspan="5">Not enough adverts have stated a salary yet.</td></tr>'}
+    </table></div>
+    <p class="rail-note">An advert that does not state pay is not a data point. The gap
+    is the advert's, not yours — and we would rather show four honest numbers than
+    forty invented ones.</p>
+    <h2>Why this page exists</h2>
+    <p>Salary information in Kenya is scattered across adverts, rumours and
+    recruiters. This is the smallest honest version of the answer: the middle half
+    of what adverts stated, with the sample size attached, updated as the corpus
+    changes.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Every figure</h3>
+      <p class="rail-note">Computed from live, unflagged adverts only. Sample size on
+      every row, because a median of three is a rumour with a decimal point.</p>
+    </div>
+  </aside>
+</div>"""
+    return _page("Advertised pay — Kazi-Kasi", body, demo=demo)
+
+
+def render_county(conn, key: str, *, now: datetime | None = None, demo: bool = False) -> str | None:
+    """A county by slug ("nairobi") or by name ("Nairobi"). 404 when we have never seen it."""
+    now = now or datetime.now(timezone.utc)
+    data = pulse.county(conn, key, now=now) or pulse.by_slug(conn, key.lower(), now=now)
+    if data is None:
+        return None
+    name = data["county"]
+
+    def pay(row) -> str:
+        low, high = row.get("pay_min"), row.get("pay_max")
+        if low and high and low != high:
+            return f"KES {low:,.0f}–{high:,.0f}"
+        if low:
+            return f"KES {low:,.0f}"
+        return "not stated"
+
+    rows = "".join(
+        f"""<tr>
+  <td><a href="/job/{_e(row['id'])}">{_e(row['title'])}</a></td>
+  <td>{_e(row.get('employer_name') or 'not stated')}</td>
+  <td>{_e(row.get('deadline') or '—')}</td>
+  <td>{pay(row)}</td>
+</tr>"""
+        for row in data["jobs"]
+    )
+    body = f"""
+<div class="masthead">
+  <p class="kicker">County view</p>
+  <h1 class="display">{_e(name)}</h1>
+  <p class="scopeline">Live adverts in {_e(name)}, soonest deadline first.</p>
+  <p class="ledger"><b>{data['live']} live</b> · {data['new']} new this week ·
+  {data['closing']} closing this week · updated
+  {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
+</div>
+<div class="strip">
+  <div><b>{data['live']}</b><span>live adverts</span></div>
+  <div><b>{data['new']}</b><span>new this week</span></div>
+  <div><b>{data['closing']}</b><span>closing this week</span></div>
+  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "—"}</b><span>median advertised minimum (KES)</span></div>
+</div>
+<div class="tablewrap" style="margin-top:26px"><table>
+  <tr><th>Role</th><th>Employer</th><th>Closes</th><th>Pay</th></tr>
+  {rows}
+</table></div>
+<p class="small">Pay is what the advert stated. “Not stated” is the advert's gap,
+not a judgement about the job. <a href="/salaries">Advertised pay by county →</a></p>"""
+    return _page(f"{name} — jobs — Kazi-Kasi", body, demo=demo)
+
+
+def render_sitemap(conn, *, now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    base = _base_url()
+    entries = [
+        (f"{base}/", now),
+        (f"{base}/pulse", now),
+        (f"{base}/salaries", now),
+    ]
+    for item in pulse.overview(conn, now=now)["counties"]:
+        entries.append((f"{base}/county/{pulse.slug(item['county'])}", now))
+    for row in pulse.live_rows(conn):
+        stamp = pulse._as_dt(row.get("last_seen_at")) or now
+        entries.append((f"{base}/job/{row['id']}", stamp))
+
+    urls = "".join(
+        f"<url><loc>{_e(loc)}</loc><lastmod>{stamp.strftime('%Y-%m-%d')}</lastmod></url>"
+        for loc, stamp in entries
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{urls}</urlset>"
+    )
+
+
+def render_robots() -> str:
+    base = _base_url()
+    return "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /slo",
+            "Disallow: /review",
+            "Disallow: /digest",
+            "Disallow: /action",
+            "Disallow: /webhooks/",
+            "Disallow: /api/",
+            "",
+            f"Sitemap: {base}/sitemap.xml",
+            "",
+        ]
+    )
+
+
 def render_job(
     conn: sqlite3.Connection,
     job_id: str,
@@ -1174,6 +1419,20 @@ class _RateLimiter:
         self.hits.clear()
 
 
+def _spread_first_seen(conn, now: datetime) -> None:
+    """Make the demo corpus look accumulated rather than conjured.
+
+    On a serverless cold start every advert is created in the same second, which
+    makes "new this week" mean "everything" and the ledger meaningless. The spread
+    is derived from the job id, so it is stable across restarts.
+    """
+    for row in conn.execute("SELECT id FROM jobs").fetchall():
+        days = int(hashlib.sha256(row["id"].encode()).hexdigest()[:4], 16) % 14
+        stamp = (now - timedelta(days=days, hours=days)).replace(microsecond=0)
+        conn.execute("UPDATE jobs SET first_seen_at = ? WHERE id = ?", (stamp.isoformat(), row["id"]))
+    conn.commit()
+
+
 def demo_connection(*, thread_safe: bool = False, now: datetime | None = None) -> sqlite3.Connection:
     """An in-memory database with the synthetic corpus and the demo profiles.
 
@@ -1182,8 +1441,10 @@ def demo_connection(*, thread_safe: bool = False, now: datetime | None = None) -
     instance does, which for a testing link is the right trade.
     """
     conn = db.connect(":memory:", check_same_thread=not thread_safe)
-    load_corpus(conn, now=now or datetime.now(timezone.utc))
+    moment = now or datetime.now(timezone.utc)
+    load_corpus(conn, now=moment)
     seed_profiles(conn)
+    _spread_first_seen(conn, moment)
     return conn
 
 
@@ -1313,6 +1574,24 @@ def _handle_get(
         if challenge is None:
             return Response(403, "verification failed", "text/plain; charset=utf-8")
         return Response(200, challenge, "text/plain; charset=utf-8")
+
+    if path == "/pulse":
+        return Response(200, render_pulse(conn, now=now, demo=demo))
+
+    if path == "/salaries":
+        return Response(200, render_salaries(conn, now=now, demo=demo))
+
+    if path == "/sitemap.xml":
+        return Response(200, render_sitemap(conn, now=now), "application/xml; charset=utf-8")
+
+    if path == "/robots.txt":
+        return Response(200, render_robots(), "text/plain; charset=utf-8")
+
+    if path.startswith("/county/"):
+        page = render_county(conn, path.rsplit("/", 1)[-1], now=now, demo=demo)
+        if page is None:
+            return Response(404, _page("Not found", "<h1>County not found</h1>", demo=demo))
+        return Response(200, page)
 
     if path == "/shortlist":
         return Response(

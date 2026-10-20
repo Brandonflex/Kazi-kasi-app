@@ -74,6 +74,10 @@ shipped:
 - **The shortlist** — save from the card, compare up to four side by side, and
   earn exactly one reminder 48 hours before the deadline (Airbnb A2, `§3.9`).
   A save is never shared with an employer.
+- **The public market pages** — `/pulse` (live, new, closing, median band by
+  county), `/salaries` (advertised pay with n on every row) and `/county/<slug>`,
+  each computed from checked adverts, each carrying its window. This is §7's
+  search engine, in its smallest honest form, plus `sitemap.xml` and `robots.txt`.
 
 The document also narrows the earlier "no gamification" rule rather than
 reversing it: no points, badges, mascots or leaderboards — but yes to a weekly

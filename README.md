@@ -33,7 +33,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m pytest                                    # 620 tests, no network
+python -m pytest                                    # 642 tests, no network
 
 kazikasi sources                                    # registered sources + manifests
 kazikasi ingest --source brightermonday --store ./data/raw --out ./data/jobs.jsonl
@@ -64,6 +64,12 @@ before they land:
 | `main` (merged) | <https://kazi-kasi-app.vercel.app/> |
 
 The preview alias is stable: push to the branch and the same URL rebuilds.
+The footer names the deployed commit (`demo build 718f627`) and `/api/health`
+returns it, so "is this the new build?" is one glance rather than a guess.
+
+Public surfaces: `/` (the feed), `/shortlist`, `/pulse` (the market, counted),
+`/salaries` (advertised pay, with sample sizes), `/county/<slug>`, `/sitemap.xml`
+and `/robots.txt`.
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
