@@ -10,10 +10,14 @@ This document records what was decided, what was delegated, and what is still op
 
 | # | Decision | Answer | Consequence |
 |---|---|---|---|
-| **D1** | Primary user | **Early-career white-collar, 0–3 years** — IT/digital first, plus graduate schemes, internships and industrial attachments | The whole product optimises for timing, eligibility fit, safety, and commute. Not for seniority breadth |
+| **D1** | Primary user | **Early-career white-collar, 0–3 years** — across sectors, with graduate schemes, internships and industrial attachments | The whole product optimises for timing, eligibility fit, safety, and commute. Not for seniority breadth |
 | **D2** | Wedge segment | **Entry-level + internship/attachment**, with a **secondary "passive watcher" surface (Radar)** | Two surfaces, one engine: Feed for urgency, Radar for intelligence |
+| **D2b** | Wedge breadth | **All white-collar entry-level**, not IT only — finance, admin, operations, sales, HR, NGO programme support, graduate schemes | Matches how graduates actually search ("anything I'm eligible for"); costs a noisier `entry_fit` signal, hence eligibility as a first-class field |
 | **D3** | v1 boundary | **Delegated → thin vertical slice** (see §2) | ~12–14 weeks to a closed beta, not a 6-month pipeline |
+| **D3b** | Radar timing | **Ships after the feed works** | It is the retention product, not the acquisition product; two half-built surfaces is the classic failure mode |
 | **D4** | Geography | **Kenya first.** Nairobi metro as the beta. East Africa as the expansion shape | Nairobi-only coverage and routing in v1; adapters designed to carry to Uganda/Tanzania later |
+| **D4b** | Kenya coverage | **Nairobi metro only**, including remote-first roles that hire in Kenya | Depth of verification and routing over national breadth; Mombasa/Kisumu in a later stage |
+| **D5** | Product surface | **Web feed + WhatsApp digest** | Feed carries provenance, evidence and "why this job"; WhatsApp carries the alert. Each does what it is good at |
 | **D7** | Social lane | **None in v1.** No WhatsApp group scraping, no Facebook, no LinkedIn profiles | Removes the largest legal and fraud surface; keeps scope honest |
 | **D11** | Business model | **Undecided** — keep the schema open | No employer-paid ranking, ever; B2B data remains architecturally possible |
 
@@ -38,16 +42,7 @@ You delegated v1 scope. Here is what I chose and why, so you can overrule it exp
 
 ## 2. Open decisions (need your input, none blocking Phase 1)
 
-### D5 · Product surface — recommend: Feed + WhatsApp digest
-
-| | |
-|---|---|
-| **Question** | What is the primary interface? |
-| **Options** | (a) Web feed + WhatsApp digest · (b) WhatsApp-first, no real web app · (c) Map-first · (d) Chat/agent |
-| **Recommendation** | **(a)**. The web feed is where the trust artefacts live (provenance, evidence, reasons). WhatsApp is where the *alert* lives |
-| **Why** | Kenya is WhatsApp-saturated (~95% of internet users) and mobile-first (52.3M smartphones vs. 27.4M feature phones). A WhatsApp-only product cannot show a "why this job" panel or a scam-evidence trail — and those are the differentiators. A web-only product will not be opened daily |
-| **What it changes** | Distribution cost, notification design, retention model, and whether SMS fallback is needed (recommend yes, for feature-phone users, opt-in) |
-| **Your call** | — |
+D5 was confirmed after the session (web feed + WhatsApp digest) and is now recorded in §5. What remains:
 
 ### D6 · Source depth — recommend: boards + public sector + NGO, no aggregators
 
@@ -142,9 +137,12 @@ Write these down before building, so the decision to stop is a judgement, not a 
 |---|---|---|---|---|
 | D1 | Primary user | Early-career white-collar, 0–3 yrs | Session | 2026-10-20 |
 | D2 | Wedge + secondary surface | Entry-level/internships + Radar for passive watchers | Session | 2026-10-20 |
+| D2b | Wedge breadth | All white-collar entry-level, not IT only | Matches how graduates search; eligibility becomes a first-class field | 2026-10-20 |
 | D3 | v1 boundary | Thin vertical slice (my call) | Speed to feedback; quality over breadth | 2026-10-20 |
+| D3b | Radar timing | After the feed works | Retention product, not acquisition product | 2026-10-20 |
 | D4 | Geography | Kenya first, Nairobi metro beta; EAC expansion | Session | 2026-10-20 |
-| D5 | Surface | Feed + WhatsApp digest | Pending confirmation | — |
+| D4b | Kenya coverage | Nairobi metro only (+ Kenya-hiring remote roles) | Verification depth over national breadth | 2026-10-20 |
+| D5 | Surface | Web feed + WhatsApp digest | Each does what it is good at | 2026-10-20 |
 | D6 | Sources | 4 boards + PSC/county + ReliefWeb | Pending confirmation | — |
 | D7 | Social lane | None in v1 | Session (implied by scope) | 2026-10-20 |
 | D8 | Freshness | Per-card "last checked" + SLO page | Pending confirmation | — |
@@ -172,11 +170,14 @@ job graph, and tell one early-career jobseeker in Nairobi which roles are real,
 reachable, safe and worth their time.
 
 DECIDED
-- User:              early-career white-collar, 0-3 years, IT/digital first,
-                     plus internships and industrial attachments
-- Secondary surface: Radar — passive watchers (target employers, pay movement)
-- Market:            Kenya; Nairobi metro in beta
-- v1:                thin vertical slice — 4 sources, one feed, WhatsApp digest
+- User:              early-career white-collar, 0-3 years, all sectors
+                     (IT/digital, finance, admin, operations, sales, HR,
+                     NGO programme support), plus internships and attachments
+- Secondary surface: Radar — passive watchers (target employers, pay movement);
+                     ships after the feed works
+- Market:            Kenya; Nairobi metro in beta; EAC expansion shape
+- Surface:           web feed + WhatsApp digest (+ opt-in SMS fallback)
+- v1:                thin vertical slice — 4 sources, one feed, verification built
 - Social:            none in v1
 - Revenue:           undecided; schema kept open
 
@@ -292,18 +293,17 @@ this?" from the UI alone.
 
 Short answers are fine.
 
-1. **D5:** feed + WhatsApp digest, or WhatsApp-first? (My recommendation: both, web as the trust surface.)
-2. **Nairobi only, or Nairobi + Mombasa + Kisumu** in beta?
-3. **IT/digital only at launch**, or all white-collar entry-level (finance, admin, NGO programme support, graduate schemes)?
-4. **Do you have any of these:** a BrighterMonday/MyJobMag contact, a Kenyan lawyer, a hosting account in Kenya, or beta users lined up?
-5. **Radar in v1** — or after the feed works? (My recommendation: after. It is the retention product, not the acquisition product.)
-6. **Brand:** want me to draft the IP/domain check list for D12?
+1. **Do you have any of these:** a BrighterMonday/MyJobMag contact, a Kenyan lawyer, a hosting account in Kenya, or beta users lined up? Any one of them changes the first month.
+2. **D6:** confirm the source set — 4 boards + PSC/one county + ReliefWeb. (Recommendation: yes.)
+3. **D8–D10:** confirm published freshness, constraints→relevance→utility matching, and link-out apply. (Recommendation: yes to all three.)
+4. **D12:** want me to draft the IP and domain check list for the brand, and a shortlist of fallback names?
+5. **Anything in §3 assumptions** you want to overrule — especially "free through beta" and "no native app"?
 
 ---
 
 ## 8. Immediate next actions
 
-1. Answer D5, D6, D8–D10, D12 — or accept the recommendations and I will record them.
+1. Confirm D6, D8–D10 and D12 — or accept the recommendations and I will record them.
 2. Start ODPC registration and pick a Kenyan host (one afternoon, unblocks Phase 1).
 3. Apply for a ReliefWeb `appname` (a single form, but it gates one whole lane).
 4. Read the BrighterMonday and MyJobMag terms; email both about partnership.

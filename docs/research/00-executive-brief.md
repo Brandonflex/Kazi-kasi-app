@@ -64,8 +64,10 @@ Three commitments, unchanged by the market pivot:
 
 | Surface | User | Job to be done |
 |---|---|---|
-| **Feed** (primary) | Early-career white-collar: 0–3 years, IT/tech-adjacent, plus internships and industrial attachments | "Show me what just opened, that I can actually get to, that I actually qualify for, and that isn't a scam." |
-| **Radar** (secondary) | Passive watchers: employed, not applying, watching the market | "Tell me when a company I care about hires, when pay moves, and when something better appears — without making me search." |
+| **Feed** (primary) | Early-career **white-collar across the board**: 0–3 years in IT/digital, finance, admin, operations, sales, HR, and NGO programme support — plus internships and industrial attachments | "Show me what just opened, that I can actually get to, that I actually qualify for, and that isn't a scam." |
+| **Radar** (secondary, ships after the feed) | Passive watchers: employed, not applying, watching the market | "Tell me when a company I care about hires, when pay moves, and when something better appears — without making me search." |
+
+**Why all white-collar rather than IT only:** graduates do not search by industry vertical, they search by "anything I am eligible for". Narrowing to IT would have sharpened the source set (Fuzu's IT category, BrighterMonday's software/data section, ReliefWeb tech roles) but would have shrunk the addressable user to a fraction of the entry-level market. The cost is a noisier `entry_fit` signal across sectors, which is why eligibility extraction is treated as a first-class field rather than a filter.
 
 These share one engine. The difference is cadence and framing: the Feed pushes *urgency*, Radar pushes *intelligence*. Radar is also the retention product for the 40+ weeks a person is not actively applying — which is most of their life.
 
@@ -203,12 +205,20 @@ Geography is deliberately late: routing on top of unverified job identity is was
 
 ---
 
-## 13. Open questions
+## 13. Confirmed decisions and remaining questions
 
-1. **Nairobi only, or Nairobi + Mombasa + Kisumu** in beta? My recommendation: Nairobi metro plus remote-first roles (the majority of entry-level tech roles are Nairobi-based or remote).
-2. **Board partnership or independent indexing?** A partnership with MyJobMag or BrighterMonday would accelerate coverage and reduce legal risk; it would also constrain the product. Worth one meeting each.
-3. **Is "early-career white-collar" narrow enough?** It spans IT, finance, admin, NGO programme support, and graduate schemes. My recommendation: start with IT/digital and graduate schemes, then widen.
-4. **What does Radar show in v1?** My recommendation: target-company hiring activity and pay movement only — not a second feed.
-5. **Free forever, or paid alerts?** Undecided. Keep it free through beta; instrument willingness to pay.
+**Confirmed in session:**
+
+- **Surface (D5):** web feed **and** WhatsApp digest. The feed carries the trust artefacts; WhatsApp carries the alert.
+- **Geography (D4b):** Nairobi metro only, including remote-first roles that hire in Kenya.
+- **Breadth (D2b):** all white-collar entry-level, not IT only. IT/digital remains the densest source and the easiest place to prove quality.
+- **Radar (D3b):** ships after the feed works. It is the retention product, not the acquisition product.
+
+**Still open:**
+
+1. **Board partnership or independent indexing?** A partnership with MyJobMag or BrighterMonday would accelerate coverage and reduce legal risk; it would also constrain the product. Worth one meeting each.
+2. **Radar's v1 content, when it lands** — target-company hiring activity and pay movement only, or a second feed? My recommendation: the former.
+3. **Monetisation.** Undecided by choice. Keep it free through beta and instrument willingness to pay; do not let employer-paid placement into the feed under any circumstances.
+4. **Brand.** "Kazi-Kasi" is strong, but KaziChat, KaziKit, KaziNest and SwiftKazi already exist. Run a Kenyan trademark and domain check before launch.
 
 My working answers, with reasoning, are in [`03-refinement-session.md`](./03-refinement-session.md).
