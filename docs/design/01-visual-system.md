@@ -70,9 +70,16 @@ fails the build if a future colour change breaks one.
 
 ## 3. Type scale
 
+Two families, both system: **sans** for everything you read, **serif** (Georgia →
+`Iowan Old Style` → `Times New Roman`) for the three places where the product is
+allowed to be editorial — the page name, the four numbers, and the deadline in
+the card corner. No webfont is downloaded; on Android the serif falls back to
+Noto Serif, which is why the serif is used only at ≥16px.
+
+
 | Token | px / line-height | Weight | Where |
 |---|---|---|---|
-| `--t-display` | 28 / 1.15 | 700 | page `<h1>` |
+| `--t-display` | 50 / 1.02 | 400 serif | masthead name (34 on phones) |
 | `--t-title` | 18 / 1.3 | 650 | card job title |
 | `--t-body` | 16 / 1.55 | 400 | body copy, inputs |
 | `--t-small` | 13 / 1.45 | 400 | reasons, timestamps |

@@ -27,7 +27,7 @@ import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
@@ -64,133 +64,211 @@ STYLE = """
   --warn:var(--amber); --warn-soft:var(--amber-soft);
   --danger:var(--risk); --danger-soft:var(--risk-soft);
   --bg:var(--paper);
-  --radius:14px; --radius-sm:10px; --radius-pill:999px;
+  --radius:16px; --radius-sm:10px; --radius-pill:999px;
+  --shadow:0 1px 2px rgba(18,22,28,.04),0 10px 30px rgba(18,22,28,.05);
+  --shadow-lift:0 2px 4px rgba(18,22,28,.05),0 18px 44px rgba(18,22,28,.09);
   --focus:0 0 0 3px #B9D4C1, 0 0 0 1px #14532D;
   --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:Georgia,"Iowan Old Style","Times New Roman",serif;
   --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--font-sans);
-  -webkit-font-smoothing:antialiased}
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 a{color:var(--forest);text-decoration:none}
-a:hover{text-decoration:underline}
-:focus-visible{outline:none;box-shadow:var(--focus);border-radius:6px}
-header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px}
-.wrap{max-width:760px;margin:0 auto;padding:0 20px}
-.brand{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.lockup{display:flex;align-items:center;gap:9px;min-width:0}
-.lockup svg{width:26px;height:26px;color:var(--forest);flex:none}
-.lockup .word{font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
-.lockup .tag{display:block;color:var(--muted);font-weight:500;font-size:12.5px;letter-spacing:.01em}
-.brand nav{display:flex;gap:4px;flex-wrap:wrap}
-.brand nav a{font-size:14px;color:var(--ink-2);padding:7px 10px;border-radius:var(--radius-sm)}
-.brand nav a:hover{background:var(--sunken);text-decoration:none}
-.brand nav a.on{background:var(--forest-soft);color:var(--forest);font-weight:600}
-.banner{background:var(--amber-soft);color:var(--amber);border-bottom:1px solid #EBD6B4;padding:10px 20px;font-size:14px}
-.whobar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:14px 16px;margin:18px 0 0;font-size:14px}
-.whobar b{font-weight:650}
-.whobar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.chip{border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 10px;
-  font-size:13px;color:var(--ink-2);background:var(--card)}
-.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px 0 4px;
-  color:var(--muted);font-size:13px}
-.strip b{color:var(--ink);font-size:20px;line-height:1.15;display:block;
-  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 6px}
-.filters a{border:1px solid var(--line);background:var(--card);border-radius:var(--radius-pill);
-  padding:7px 14px;font-size:14px;color:var(--ink-2);min-height:36px;display:inline-flex;align-items:center}
-.filters a.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft);font-weight:600}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:8px}
+::selection{background:var(--forest-soft);color:var(--ink)}
+a{-webkit-tap-highlight-color:transparent}
+
+/* ---- the masthead -------------------------------------------------- */
+header{position:sticky;top:0;z-index:20;background:rgba(251,248,242,.93);
+  border-bottom:1px solid var(--line);backdrop-filter:saturate(140%) blur(10px)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+.brand{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:14px 0;flex-wrap:wrap}
+.lockup{display:flex;align-items:center;gap:10px;min-width:0}
+.lockup svg{width:30px;height:30px;color:var(--forest);flex:none}
+.lockup .word{font-size:21px;font-weight:700;letter-spacing:-.025em;line-height:1}
+.lockup .tag{display:block;color:var(--muted);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:600;margin-top:5px}
+.brand nav{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
+.brand nav a{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+  color:var(--ink-2);padding:9px 10px;border-radius:8px}
+.brand nav a:hover{background:var(--sunken);text-decoration:none;color:var(--ink)}
+.banner{background:var(--amber-soft);color:var(--amber);border-bottom:1px solid #EBD6B4;
+  padding:9px 24px;font-size:12.5px;letter-spacing:.01em}
+
+/* ---- the page ------------------------------------------------------ */
+main{padding-bottom:40px}
+.masthead{padding:44px 0 0}
+.kicker{margin:0;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:700;color:var(--muted)}
+.display{font-family:var(--font-display);font-weight:400;font-size:50px;line-height:1.02;
+  letter-spacing:-.025em;margin:12px 0 8px;color:var(--ink)}
+.scopeline{margin:0;color:var(--ink-2);font-size:15px;max-width:60ch}
+.ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:24px 0 0;
+  padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-size:13px;color:var(--ink-2)}
+.ledger b{color:var(--ink);font-weight:650}
+
+/* ---- the four numbers ---------------------------------------------- */
+.strip{display:grid;grid-template-columns:repeat(4,1fr);margin:0}
+.strip div{padding:18px 20px 16px 0;border-bottom:1px solid var(--line)}
+.strip b{display:block;font-family:var(--font-display);font-weight:400;font-size:34px;
+  line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.strip span{display:block;margin-top:7px;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:650}
+
+/* ---- layout -------------------------------------------------------- */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:36px;
+  padding:28px 0 0;align-items:start}
+.feedcol{min-width:0}
+.section{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  margin:0 0 14px;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.section em{font-style:normal;color:var(--ink-2);letter-spacing:.04em}
+.endnote{color:var(--muted);font-size:13px;padding:6px 0 0}
+
+/* ---- the card ------------------------------------------------------ */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:16px 18px;margin-bottom:12px}
-.card h2{margin:0 0 3px;font-size:18px;line-height:1.3;letter-spacing:-.015em;font-weight:650}
+  padding:20px 22px 16px;margin-bottom:14px;box-shadow:var(--shadow);
+  transition:border-color .18s ease-out,transform .18s ease-out,box-shadow .18s ease-out}
+.card:hover{border-color:#D5C7B0;transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+.card:focus-within{border-color:var(--forest)}
+.card-top{display:flex;gap:20px;justify-content:space-between;align-items:flex-start}
+.card h2{margin:0 0 5px;font-family:var(--font-sans);font-size:19px;line-height:1.26;
+  letter-spacing:-.018em;font-weight:650}
 .card h2 a{color:var(--ink)}
-.card h2 a:hover{color:var(--forest)}
-.employer{color:var(--ink-2);font-size:14px;margin-bottom:10px}
-.badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.badge{font-size:12px;border-radius:var(--radius-pill);padding:3px 10px;border:1px solid var(--line);
-  color:var(--ink-2);background:var(--sunken);white-space:nowrap}
+.card h2 a:hover{color:var(--forest);text-decoration:none}
+.employer{color:var(--muted);font-size:13.5px}
+.deadline{flex:none;text-align:right;padding-top:3px}
+.dl-label{display:block;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.dl-date{display:block;font-family:var(--font-display);font-size:18px;line-height:1.2;
+  color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.deadline.soon .dl-date{color:var(--amber)}
+.deadline.gone .dl-date{color:var(--muted);text-decoration:line-through}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
+.badge{font-size:11.5px;border-radius:var(--radius-pill);padding:3px 10px;
+  border:1px solid var(--line);color:var(--ink-2);background:var(--sunken);white-space:nowrap}
 .badge.good{background:var(--forest-soft);border-color:#CFE3D4;color:var(--forest);font-weight:600}
 .badge.warn{background:var(--amber-soft);border-color:#EBD6B4;color:var(--amber);font-weight:600}
 .badge.danger{background:var(--risk-soft);border-color:#EBC5C0;color:var(--risk);font-weight:600}
 .badge.muted{background:var(--sunken);border-color:var(--line);color:var(--ink-2)}
-.evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
-  padding-left:12px;margin:10px 0 4px}
-.whythat{font-size:13px;color:var(--muted);margin:8px 0 0;padding:0;list-style:none;
+.whythat{font-size:12.5px;color:var(--muted);margin:12px 0 0;padding:0;list-style:none;
   display:flex;gap:6px;flex-wrap:wrap}
-.whythat li{background:var(--sunken);border-radius:6px;padding:2px 8px}
-.foot{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);
-  margin-top:12px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.whythat li{border:1px solid var(--line);border-radius:var(--radius-pill);padding:2px 9px;
+  background:transparent}
+.foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;
+  padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.foot .score{font-variant-numeric:tabular-nums;letter-spacing:.02em;color:var(--ink-2)}
 .foot form{display:inline;margin:0}
-.foot button{font:inherit;font-size:13px;background:none;border:none;color:var(--muted);
-  cursor:pointer;padding:8px 0;text-decoration:underline}
-.foot .apply{border:1px solid var(--forest);color:#fff;border-radius:var(--radius-pill);
-  padding:9px 16px;font-size:14px;font-weight:600;background:var(--forest);min-height:40px;
-  display:inline-flex;align-items:center}
-.foot .apply:hover{background:#0F3F22;text-decoration:none}
-h1{font-size:28px;line-height:1.15;letter-spacing:-.02em;margin:26px 0 6px}
-h2{font-size:18px;letter-spacing:-.01em;margin:24px 0 4px}
+.foot button{font:inherit;font-size:12.5px;background:none;border:none;color:var(--muted);
+  cursor:pointer;padding:8px 0;border-bottom:1px solid transparent;transition:color .14s,border-color .14s}
+.foot button:hover{color:var(--ink);border-bottom-color:var(--line)}
+.foot button.on{color:var(--forest);font-weight:650}
+.foot .apply{margin-left:auto;border:1px solid var(--forest);color:#fff;
+  border-radius:var(--radius-pill);padding:0 18px;font-size:13.5px;font-weight:600;
+  background:var(--forest);min-height:40px;display:inline-flex;align-items:center;
+  transition:background .16s ease-out,transform .16s ease-out}
+.foot .apply:hover{background:#0F3F22;text-decoration:none;transform:translateY(-1px)}
+
+/* ---- the rail ------------------------------------------------------ */
+.rail{position:sticky;top:88px}
+.rail-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:14px}
+.rail-card h3{margin:0 0 10px;font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.rail-card .chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 10px;
+  font-size:12px;color:var(--ink-2);background:var(--sunken);white-space:nowrap}
+.mini{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
+  border-bottom:1px solid var(--line);font-size:13px;line-height:1.35}
+.mini:last-of-type{border-bottom:none}
+.mini a{color:var(--ink)}
+.mini .when{color:var(--amber);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px}
+.rail-card .more{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:650}
+.rail-note{color:var(--muted);font-size:12px;margin:6px 0 0}
+
+/* ---- profile switcher --------------------------------------------- */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0}
+.filters a{border:1px solid var(--line);background:transparent;border-radius:var(--radius-pill);
+  padding:6px 13px;font-size:12.5px;color:var(--ink-2);min-height:34px;
+  display:inline-flex;align-items:center;transition:border-color .14s,background .14s,color .14s}
+.filters a:hover{border-color:#CFC3AE;color:var(--ink);text-decoration:none}
+.filters a.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft);
+  font-weight:650}
+
+/* ---- panels used by the ops pages --------------------------------- */
+.whobar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;margin:20px 0 0;font-size:14px;box-shadow:var(--shadow)}
+.whobar b{font-weight:650}
+.whobar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.whobar button.ghost{font:inherit;font-size:13.5px;font-weight:650;background:var(--card);
+  color:var(--forest);border:1px solid var(--forest);border-radius:var(--radius-pill);
+  padding:9px 16px;cursor:pointer;min-height:40px}
+.whobar button.ghost:hover{background:var(--forest-soft)}
+.evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
+  padding-left:12px;margin:12px 0 4px}
+h1{font-family:var(--font-display);font-weight:400;font-size:38px;line-height:1.08;
+  letter-spacing:-.02em;margin:34px 0 8px}
+h2{font-size:18px;letter-spacing:-.01em;margin:26px 0 4px}
 p{margin:8px 0}
-table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card);
   border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;
   font-variant-numeric:tabular-nums}
 th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--muted);font-weight:600;font-size:12.5px;background:var(--paper)}
+th{color:var(--muted);font-weight:650;font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;background:var(--paper)}
 tr:last-child td{border-bottom:none}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0 4px}
+.tablewrap table{min-width:520px}
+.tablewrap th a{color:var(--ink);font-weight:650}
 dl{display:grid;grid-template-columns:150px 1fr;gap:8px 16px;margin:18px 0;font-size:15px}
 dt{color:var(--muted)}
 dd{margin:0}
-.sources{list-style:none;padding:0;margin:0;font-size:14px}
-.sources li{padding:8px 0;border-bottom:1px solid var(--line)}
+.sources{list-style:none;padding:0;margin:0;font-size:13.5px}
+.sources li{padding:9px 0;border-bottom:1px solid var(--line)}
 .sources li:last-child{border-bottom:none}
-.small{font-size:13px;color:var(--muted)}
+.small{font-size:12.5px;color:var(--muted)}
 .msg{white-space:pre-wrap;word-break:break-word;background:var(--forest-soft);
-  border:1px solid #CFE3D4;border-radius:var(--radius);padding:14px 16px;
-  font:14px/1.6 var(--font-mono);margin:12px 0;color:var(--ink)}
+  border:1px solid #CFE3D4;border-radius:var(--radius-sm);padding:14px 16px;
+  font:13.5px/1.65 var(--font-mono);margin:12px 0;color:var(--ink)}
 .msg.sms{background:var(--sunken);border-color:var(--line)}
-.subform{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
+.subform{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}
 .subform input{flex:1 1 220px;padding:11px 13px;border:1px solid var(--line);
   border-radius:var(--radius-sm);font-size:16px;font-family:inherit;background:var(--card)}
 .subform button{padding:11px 18px;border:0;border-radius:var(--radius-sm);background:var(--forest);
   color:#fff;font-size:15px;font-weight:600;cursor:pointer;min-height:44px}
 .subform button:hover{background:#0F3F22}
 .subform button.ghost{background:var(--card);color:var(--ink-2);border:1px solid var(--line);font-weight:500}
-footer{padding:30px 0 44px;font-size:13px;color:var(--muted)}
-@media (max-width:520px){
-  h1{font-size:24px}
-  .strip{grid-template-columns:repeat(2,1fr);gap:10px}
-  dl{grid-template-columns:1fr;gap:2px}dt{margin-top:10px}
-  .foot .apply{width:100%;justify-content:center}
-  .brand nav a{padding:7px 8px}
+footer{padding:34px 0 46px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
+footer p{margin:0;max-width:70ch}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:10px}
+  .rail{position:static;order:2;margin-top:6px}
+  .display{font-size:40px}
 }
-/* --- craft layer -------------------------------------------------------
-   Premium here is mostly restraint: one hairline that warms on hover, 1px of
-   lift, a 160ms ease-out, tabular figures, and a focus ring that is the only
-   thing allowed to shout. Nothing bounces, nothing loops, nothing decorates. */
-::selection{background:var(--forest-soft);color:var(--ink)}
-a{-webkit-tap-highlight-color:transparent}
-.card,.filters a,.badge,.foot .apply,.subform button,header,nav a{
-  transition:border-color .16s ease-out,background-color .16s ease-out,
-             color .16s ease-out,transform .16s ease-out,box-shadow .16s ease-out}
-.card:hover{border-color:#D8CBB6;transform:translateY(-1px)}
-.card:focus-within{border-color:var(--forest)}
-.card h2 a{text-underline-offset:2px;text-decoration-thickness:.06em}
-.filters a:hover{border-color:#CFC3AE;color:var(--ink)}
-.foot .apply:hover{transform:translateY(-1px)}
-.foot button.on{color:var(--forest);font-weight:600;text-decoration:none}
-.whobar button.ghost{font:inherit;font-size:14px;font-weight:600;background:var(--card);
-  color:var(--forest);border:1px solid var(--forest);border-radius:var(--radius-pill);
-  padding:9px 16px;cursor:pointer;min-height:40px}
-.whobar button.ghost:hover{background:var(--forest-soft)}
-.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0 4px}
-.tablewrap table{min-width:520px}
-.tablewrap th a{color:var(--ink);font-weight:650}
-.ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:16px 0 0;
-  padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--ink-2)}
-.ledger b{color:var(--ink);font-weight:650}
-.ledger .quiet{color:var(--muted)}
-.strip b,.ledger b,table td{font-variant-numeric:tabular-nums}
-.small,.badge{font-variant-numeric:tabular-nums}
+@media (max-width:520px){
+  .wrap{padding:0 18px}
+  main{overflow-x:hidden}
+  .masthead{padding-top:30px}
+  .display{font-size:34px}
+  .strip{grid-template-columns:repeat(2,1fr);gap:10px 0}
+  .strip b{font-size:28px}
+  .strip div{padding:14px 0 12px}
+  dl{grid-template-columns:1fr;gap:2px}
+  dt{margin-top:10px}
+  .foot .apply{width:100%;justify-content:center;margin-left:0}
+  .brand nav a{padding:8px 8px}
+  .card{padding:17px 16px 14px}
+  .card-top{flex-wrap:wrap;gap:6px}
+  .deadline{text-align:left;padding-top:0}
+  .dl-date{font-size:16px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 """
 
@@ -300,9 +378,9 @@ def _page(title: str, body: str, *, demo: bool = False, nav: str = "", head: str
 </a>
 <nav>{links}</nav></div></div></header>
 {banner}
-<div class="wrap">{body}</div>
-<footer class="wrap">Every card says when it was last checked and why it was shown.
-Eligibility labels quote the advert. Applications happen on the employer's site, never here.
+<main class="wrap">{body}</main>
+<footer class="wrap"><p>Every card says when it was last checked and why it was shown.
+Eligibility labels quote the advert. Applications happen on the employer's site, never here.</p>
 {demo_line}</footer>
 </body></html>"""
 
@@ -415,6 +493,26 @@ def _ranked(conn, profile, *, now, limit=40, include_blocked=False):
     return matches, acted
 
 
+def _deadline_view(row, now: datetime) -> tuple[str, str, str]:
+    """Label, date, tone. The deadline is the decision field; it gets the corner."""
+    raw = row.get("deadline")
+    if not raw:
+        return "no deadline", "—", ""
+    try:
+        day = date.fromisoformat(str(raw)[:10])
+    except ValueError:
+        return "no deadline", "—", ""
+    stamp = f"{day.day:02d} {day:%b}"
+    # Constructed rather than `datetime.combine(day, time(23, 59))`: importing
+    # `time` from datetime here would shadow the stdlib module the rate limiter
+    # needs, and that mistake costs an afternoon of 500s.
+    end = datetime(day.year, day.month, day.day, 23, 59, tzinfo=timezone(timedelta(hours=3)))
+    if end < now:
+        return "closed", stamp, "gone"
+    hours = (end - now).total_seconds() / 3600
+    return "closes", stamp, "soon" if hours <= 72 else ""
+
+
 def render_feed(
     conn: sqlite3.Connection,
     *,
@@ -452,11 +550,18 @@ def render_feed(
             if since.astimezone(timezone.utc).date() == now.astimezone(timezone.utc).date()
             else f"{since:%a} {since.day} {since:%b}"
         )
-        lead = f"<b>{new_count} new</b> since {when}" if new_count else f"<b>Nothing new</b> since {when}"
+        lead = (
+            f"<b>{new_count} new</b> since {when}"
+            if new_count
+            else f"<b>Nothing new</b> since {when}"
+        )
         ledger = (
             f'<p class="ledger">{lead} · {summary["closing_within_7_days"]} closing this week · '
             f"checked {clock} EAT</p>"
         )
+
+    name, _, tagline = profile.name.partition(" — ")
+    subtitle = tagline.strip() or "the scope this feed was ranked against"
 
     chips = "".join(
         f'<span class="chip">{_e(family)}</span>' for family in profile.role_families
@@ -469,7 +574,7 @@ def render_feed(
     pay_chip = (
         f'<span class="chip">≥ KES {profile.min_monthly_pay:,.0f}/month</span>'
         if profile.min_monthly_pay
-        else ""
+        else '<span class="chip">no pay floor</span>'
     )
 
     switcher = " ".join(
@@ -489,10 +594,6 @@ def render_feed(
         badges.append(f'<span class="badge muted">{_e(place or "Location unstated")}</span>')
         if row.get("work_mode") in ("remote", "hybrid"):
             badges.append(f'<span class="badge good">{_e(row["work_mode"].title())}</span>')
-        deadline = graph.deadline_band(row, now=now)
-        if deadline:
-            tone = "warn" if deadline.startswith("closes in") or "today" in deadline or "tomorrow" in deadline else ""
-            badges.append(f'<span class="badge {tone}">{_e(deadline)}</span>')
         if row.get("source_count", 1) > 1:
             badges.append(f'<span class="badge good">on {row["source_count"]} sources</span>')
         if row.get("status") == "stale":
@@ -504,13 +605,13 @@ def render_feed(
         if row.get("id") in saved:
             badges.append('<span class="badge good">saved</span>')
 
-        # The deadline is already a badge; a reason that repeats it is noise.
-        # Keep at least one reason so every card still says why it is here.
+        # The deadline now lives in the corner; a reason that repeats it is noise.
         shown_reasons = [reason for reason in match.reasons if not reason.startswith("closes")]
         if not shown_reasons:
             shown_reasons = match.reasons[:1]
-        reasons = " · ".join(_e(reason) for reason in shown_reasons[:3])
+        reasons = "".join(f"<li>{_e(reason)}</li>" for reason in shown_reasons[:3])
         source = graph.primary_source(conn, match.job_id)
+        label, stamp, tone = _deadline_view(row, now)
 
         apply_html = ""
         if source:
@@ -521,21 +622,25 @@ def render_feed(
 
         cards.append(
             f"""<article class="card">
-  <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
-  <div class="employer">{_e(match.employer or "Employer not stated")}</div>
+  <div class="card-top">
+    <div>
+      <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
+      <div class="employer">{_e(match.employer or "Employer not stated")}</div>
+    </div>
+    <div class="deadline {tone}"><span class="dl-label">{_e(label)}</span><span class="dl-date">{_e(stamp)}</span></div>
+  </div>
   <div class="badges">{''.join(badges)}</div>
-  <p class="whythat">{reasons}</p>
+  <ul class="whythat">{reasons}</ul>
   <div class="foot">
-    <span title="match score">{match.score:.2f}</span>
+    <span class="score" title="match score">{match.score:.2f}</span>
     <span>{_e(graph.freshness_band(row, now=now))}</span>
-    {apply_html}
     <form method="post" action="/action">
       <input type="hidden" name="profile" value="{_e(profile.id)}">
       <input type="hidden" name="job" value="{_e(match.job_id)}">
       <input type="hidden" name="kind" value="{'unsaved' if match.job_id in saved else 'saved'}">
       <input type="hidden" name="next" value="{_e(feed_path)}">
       <button type="submit" class="{'on' if match.job_id in saved else ''}">
-        {'Saved' if match.job_id in saved else 'Save'}
+        {'Save' if match.job_id not in saved else 'Saved'}
       </button>
     </form>
     <form method="post" action="/action">
@@ -545,31 +650,70 @@ def render_feed(
       <input type="hidden" name="next" value="{_e(feed_path)}">
       <button type="submit">Not for me</button>
     </form>
+    {apply_html}
   </div>
 </article>"""
         )
 
     if not cards:
-        cards.append('<div class="card"><p>Nothing matches this profile right now. Loosen a constraint, or check back after the next sweep.</p></div>')
+        cards.append(
+            '<div class="card"><h2>Nothing matches this scope right now</h2>'
+            "<p>Loosen a constraint, or check back after the next sweep. We will not "
+            "fill the space with jobs that do not fit.</p></div>"
+        )
+
+    soon = []
+    for match in matches:
+        row = match.row or {}
+        if _deadline_view(row, now)[2] == "soon":
+            soon.append(
+                f'<div class="mini"><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">'
+                f"{_e(match.title)}</a>"
+                f'<span class="when">{_e(_deadline_view(row, now)[1])}</span></div>'
+            )
+        if len(soon) == 3:
+            break
 
     strip = f"""<div class="strip">
-  <div><b>{summary['live_jobs']}</b>live jobs</div>
-  <div><b>{summary['closing_within_7_days']}</b>closing in 7 days</div>
-  <div><b>{len(matches)}</b>match this profile</div>
-  <div><b>{len(acted)}</b>applied</div>
+  <div><b>{len(matches)}</b><span>match this profile</span></div>
+  <div><b>{summary['live_jobs']}</b><span>live jobs</span></div>
+  <div><b>{summary['closing_within_7_days']}</b><span>closing in 7 days</span></div>
+  <div><b>{len(acted)}</b><span>applied</span></div>
 </div>"""
 
     body = f"""
-<div class="whobar">
-  <div><b>{_e(profile.name)}</b> <span class="small">— the constraints this feed was ranked against</span></div>
-  <div class="chips">{limit_chip}{pay_chip}{chips}</div>
+<div class="masthead">
+  <p class="kicker">Nairobi metro · early career</p>
+  <h1 class="display">{_e(name)}</h1>
+  <p class="scopeline">{_e(subtitle)}</p>
+  <div class="filters">{switcher}</div>
+  {ledger}
 </div>
-<div class="filters">{switcher}</div>
-{ledger}
 {strip}
-{''.join(cards)}"""
+<div class="layout">
+  <div class="feedcol">
+    <div class="section"><span>The feed</span><em>{len(matches)} roles</em></div>
+    {''.join(cards)}
+    <p class="endnote">That's all of them. We will tell you when that changes.</p>
+  </div>
+  <aside class="rail">
+    <div class="rail-card">
+      <h3>Your scope</h3>
+      <div class="chips">{limit_chip}{pay_chip}{chips}</div>
+      <p class="rail-note">This is the argument for why the feed looks like this.</p>
+    </div>
+    <div class="rail-card">
+      <h3>Closing this week</h3>
+      {''.join(soon) or '<p class="rail-note">Nothing closes in the next seven days.</p>'}
+    </div>
+    <div class="rail-card">
+      <h3>Shortlist</h3>
+      <p class="rail-note">{len(saved)} saved — kept for you, never sent to an employer.</p>
+      <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
+    </div>
+  </aside>
+</div>"""
     return _page("Kazi-Kasi — jobs for you", body, demo=demo)
-
 
 
 def render_shortlist(
