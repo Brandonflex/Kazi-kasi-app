@@ -225,3 +225,17 @@ class TestThePage:
         finally:
             bundle.STATE.clear()
             bundle.STATE.update({"source": "synthetic", "built_at": None, "count": 0, "error": None})
+
+
+class TestRotationGuidance:
+    """A leaked secret is a procedure, not a paragraph of shame."""
+
+    def test_the_page_explains_rotation_without_downtime(self, conn):
+        body = page(conn)
+        assert "Add secret" in body
+        assert "delete the old" in body.lower() or "delete the old one" in body.lower()
+
+    def test_it_says_the_console_can_still_show_the_secret(self, conn):
+        body = page(conn)
+        assert "masked" in body
+        assert "creation dialog" in body

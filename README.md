@@ -94,7 +94,10 @@ sign-in configuration as JSON, without secrets. See
 [phase 12](./docs/phase-12-search.md) (search),
 [phase 13](./docs/phase-13-hardening.md) (the response policy),
 [phase 14](./docs/phase-14-saved-searches.md) (saved searches) and
-[phase 15](./docs/phase-15-setup.md) (go-live).
+[phase 15](./docs/phase-15-setup.md) (go-live). Credentials — where each one
+lives, how to rotate it, what to do when one leaks — are in
+[docs/credentials.md](./docs/credentials.md), enforced by
+`tests/test_secrets_hygiene.py`.
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash

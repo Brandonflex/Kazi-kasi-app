@@ -340,6 +340,20 @@ def plan(
                 ),
             },
             {
+                "symptom": "Google warned that the client secret cannot be viewed again once the dialog closes.",
+                "cause": (
+                    "That is true of the creation dialog only. The client's detail page in "
+                    "the console still shows the secret, masked, with a copy button — and a "
+                    "client can hold two live secrets at once."
+                ),
+                "fix": (
+                    "Generate a second secret (the client page → Add secret), put it in Vercel, "
+                    "redeploy, sign in once to prove it, then delete the old one. Nothing goes "
+                    "down. If a secret was ever shared or committed, rotate it — the exposure is "
+                    "the secret, not the git history."
+                ),
+            },
+            {
                 "symptom": "A new variable changed nothing on the live site.",
                 "cause": "Variables apply to a build, not to the running one.",
                 "fix": "Deployments → the top entry → ⋯ → Redeploy. Then reload /api/setup.",
