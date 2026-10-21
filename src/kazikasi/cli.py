@@ -653,7 +653,10 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     from . import db, sweep
     from datetime import datetime, timezone
 
-    conn = db.connect(args.database)
+    # Use DATABASE_URL when --database is the default or empty, so the sweep
+    # writes to Neon on a deployment that has the variable set.
+    db_path = args.database if args.database and args.database != ":memory:" else None
+    conn = db.connect(db_path)
     try:
         report = sweep.run_sweep(conn, now=datetime.now(timezone.utc), force=args.force)
         print(json.dumps(report, indent=2, default=str))
