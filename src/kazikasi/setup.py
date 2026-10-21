@@ -388,7 +388,13 @@ def plan(
             note=(
                 "Either one works. DATABASE_URL (Neon or Supabase, free tier is enough) "
                 "makes the sweep and the outbox persistent. KAZIKASI_BUNDLE points at a "
-                "published sweep file and is read-only, but it is real vacancies."
+                "published sweep file and is read-only, but it is real vacancies.\n\n"
+                "Neon (recommended, free, no card): neon.tech → Sign up → New Project → "
+                "name it 'kazi-kasi' → leave the defaults (Postgres 16, 3 GB, single node) "
+                "→ Create project. The dashboard then shows a connection string that starts "
+                "with postgresql://… — copy the one labelled 'Pooler' (it has ?sslmode=require "
+                "already). Paste it into Vercel as DATABASE_URL, tick Production + Preview, "
+                "Save, then redeploy. /setup will flip storage to done on the next build."
             ),
             detail=store["detail"],
         )

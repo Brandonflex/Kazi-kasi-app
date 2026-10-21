@@ -49,22 +49,37 @@ ACTION_LIMITER = serve._RateLimiter(limit=serve.ACTION_RATE_LIMIT)
 def _connection():
     """The corpus this instance serves, built once per warm container.
 
-    If `KAZIKASI_BUNDLE` points at a published sweep, that is the corpus — real
-    vacancies, with the date they were collected. If it is missing or broken, the
-    synthetic corpus stands in and `/api/health` says why. The site never 500s
-    because a bundle URL moved.
+    Priority:
+
+    1. ``DATABASE_URL`` — a real Postgres store (Neon free tier). Everything the
+       app writes — accounts, shortlists, the digest outbox, the sweep — lives
+       here and survives cold starts. ``/api/setup`` flips ``storage`` to
+       ``done`` when this is set and reachable.
+    2. ``KAZIKASI_BUNDLE`` — a published sweep file. Real vacancies, but no
+       writes; good for a read-only deployment or a staged roll-out.
+    3. Synthetic, in-memory — what the test suite and ``vercel dev`` use.
+
+    The connection is opened once per warm instance and reused under the same
+    lock the serverless adapter already takes per request.
     """
     with _LOCK:
         if _STATE["conn"] is None:
             connection = None
-            if (os.environ.get("KAZIKASI_BUNDLE") or "").strip():
+            database_url = (os.environ.get("DATABASE_URL") or "").strip()
+            bundle_url = (os.environ.get("KAZIKASI_BUNDLE") or "").strip()
+            if database_url:
+                try:
+                    connection = db.connect(url=database_url)
+                except Exception as exc:  # noqa: BLE001 — surfaced, not swallowed
+                    # A bad DATABASE_URL must not take down the whole app: serve
+                    # the synthetic corpus and let /api/setup name the variable.
+                    sys.stderr.write(f"DATABASE_URL unreachable ({exc}); falling back to synthetic.\n")
+                    connection = None
+            if connection is None and bundle_url:
                 connection = bundle.build_fresh()
             if connection is None:
                 connection = serve.demo_connection(thread_safe=True, history=True)
-                if (os.environ.get("KAZIKASI_BUNDLE") or "").strip():
-                    # The synthetic corpus is only for walking the surfaces; it
-                    # has demo history so /activity and /year are not empty, and
-                    # it never claims to be real.
+                if bundle_url:
                     serve._seed_demo_history(connection, datetime.now(timezone.utc))
             _STATE["conn"] = connection
         return _STATE["conn"]
