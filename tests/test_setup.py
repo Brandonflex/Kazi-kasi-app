@@ -423,3 +423,45 @@ class TestTheTestingRecipe:
         finally:
             conn.close()
         assert "Preview environment only" in body or "Production" in body
+
+
+class TestOneOfTwoLanded:
+    """The most confusing state: half a credential.
+
+    A bare "missing: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET" cannot distinguish
+    "you never saved anything" from "the id arrived and the secret did not" — and
+    those two send you to different screens.
+    """
+
+    @pytest.fixture(autouse=True)
+    def half_configured(self, monkeypatch):
+        for name in ("GOOGLE_CLIENT_SECRET", "GOOGLE_SECRET", "GOOGLE_CLIENT_KEY"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "123.apps.googleusercontent.com")
+
+    def test_it_names_what_arrived(self):
+        text = setup._explain(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"])
+        assert text.startswith("set: GOOGLE_CLIENT_ID · ")
+        assert "GOOGLE_CLIENT_SECRET" in text
+
+    def test_a_shortened_name_is_named_rather_than_called_absent(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_SECRET", "value")
+        text = setup._explain(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"])
+        assert "GOOGLE_SECRET exists" in text
+        assert "rename it" in text
+
+    def test_an_unrelated_variable_is_not_claimed_as_a_near_miss(self, monkeypatch):
+        monkeypatch.setenv("SOME_OTHER_TOKEN", "value")
+        assert setup._probe("GOOGLE_CLIENT_SECRET")["state"] == "absent"
+
+    def test_a_blank_candidate_is_not_offered_as_a_near_miss(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_SECRET", "   ")
+        assert setup._probe("GOOGLE_CLIENT_SECRET")["state"] == "absent"
+
+    def test_the_page_reports_the_half_state(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "set: GOOGLE_CLIENT_ID" in body

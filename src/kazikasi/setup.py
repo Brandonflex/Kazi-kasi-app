@@ -23,6 +23,7 @@ The state is derived, never stored: change a variable, redeploy, reload.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -90,6 +91,16 @@ def _probe(name: str) -> dict:
             len(norm) - len(wanted)
         ) <= 6:
             return {"state": "near", "name": name, "seen": key}
+
+    # Token overlap catches the honest mistakes that share no prefix:
+    # GOOGLE_SECRET for GOOGLE_CLIENT_SECRET, GOOGLE_CLIENT_KEY for the id.
+    wanted_tokens = set(re.split(r"[^a-z0-9]+", name.lower())) - {""}
+    for key in sorted(os.environ):
+        if not (os.environ.get(key) or "").strip():
+            continue
+        tokens = set(re.split(r"[^a-z0-9]+", key.lower())) - {""}
+        if len(tokens) >= 2 and tokens < wanted_tokens:
+            return {"state": "near", "name": name, "seen": key}
     return {"state": "absent", "name": name}
 
 
@@ -103,18 +114,25 @@ _PROBE_TEXT = {
 
 
 def _explain(names) -> str:
-    """A detail line that says what to do, not merely what is wrong."""
-    parts = []
+    """A detail line that says what to do, not merely what is wrong.
+
+    Names the arrivals as well as the absences. "Both missing" and "one of the two
+    landed" look identical in a bare ``missing:`` list, and they send you to
+    completely different places.
+    """
+    present, problems = [], []
     for name in names:
         probe = _probe(name)
         if probe["state"] == "set":
-            continue
-        parts.append(_PROBE_TEXT[probe["state"]].format(**probe))
-    if not parts:
+            present.append(name)
+        else:
+            problems.append(_PROBE_TEXT[probe["state"]].format(**probe))
+    if not problems:
         return ""
-    if len(parts) == 1:
-        return parts[0] + "."
-    return "; ".join(parts) + "."
+    head = f"set: {', '.join(present)} · " if present else ""
+    if len(problems) == 1:
+        return head + problems[0] + "."
+    return head + "; ".join(problems) + "."
 
 
 @dataclass
@@ -259,7 +277,11 @@ def plan(
                 "redirect URI above into Authorised redirect URIs. While the consent "
                 "screen is in Testing, add your own address as a test user."
             ),
-            detail="" if google["configured"] else _explain(google["missing"]),
+            detail=(
+                ""
+                if google["configured"]
+                else _explain(("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"))
+            ),
         )
     )
 
@@ -283,7 +305,11 @@ def plan(
                 "linkedin.com/company/setup/new, then type its name back into the field "
                 "and pick it from the list. Skip this entirely until Google works."
             ),
-            detail="" if linkedin["configured"] else _explain(linkedin["missing"]),
+            detail=(
+                ""
+                if linkedin["configured"]
+                else _explain(("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"))
+            ),
         )
     )
 
