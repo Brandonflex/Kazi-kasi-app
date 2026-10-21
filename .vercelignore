@@ -1,0 +1,8 @@
+# Nothing here is needed to serve the read-only demo.
+tests/
+data/
+docs/
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc

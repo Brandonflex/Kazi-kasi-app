@@ -1,0 +1,38 @@
+{
+  "timeGenerated": "2026-10-20T06:00:00+00:00",
+  "count": 2,
+  "data": [
+    {
+      "id": 4100231,
+      "url": "https://reliefweb.int/job/4100231/programme-assistant-nairobi",
+      "fields": {
+        "title": "Programme Assistant",
+        "body": "<div><p>The Country Office in Nairobi seeks a Programme Assistant to support the humanitarian response portfolio.</p><p>Responsibilities include scheduling meetings, maintaining the activity tracker, and drafting routine correspondence.</p><p>Education: completed secondary education; a diploma in social sciences is desirable.</p><p>Experience: a minimum of one year of relevant experience is desirable. Recent graduates with strong organisational skills are encouraged to apply.</p><p>How to apply: submit your application through the recruitment portal linked on this page.</p></div>",
+        "url": "https://reliefweb.int/job/4100231/programme-assistant-nairobi",
+        "date": {"created": "2026-10-12T00:00:00+00:00", "closing": "2026-10-31T00:00:00+00:00"},
+        "source": {"name": "UN Office for the Coordination of Humanitarian Affairs", "homepage": "https://www.unocha.org"},
+        "country": [{"name": "Kenya"}],
+        "city": [{"name": "Nairobi"}],
+        "career_categories": [{"name": "Administration"}, {"name": "Program/Project Management"}],
+        "type": [{"name": "Job"}],
+        "experience": [{"name": "1-2 years"}]
+      }
+    },
+    {
+      "id": 4100299,
+      "url": "https://reliefweb.int/job/4100299/senior-finance-manager-nairobi",
+      "fields": {
+        "title": "Senior Finance Manager",
+        "body": "<div><p>Lead the finance function for a multi-country portfolio. Supervise a team of five, own donor reporting, and lead annual audits.</p><p>Experience: a minimum of eight years of progressive finance experience, including three years in a management role. CPA(K) required.</p><p>Apply via the portal by the closing date.</p></div>",
+        "url": "https://reliefweb.int/job/4100299/senior-finance-manager-nairobi",
+        "date": {"created": "2026-10-10T00:00:00+00:00", "closing": "2026-11-20T00:00:00+00:00"},
+        "source": {"name": "International Rescue Committee", "homepage": "https://www.rescue.org"},
+        "country": [{"name": "Kenya"}],
+        "city": [{"name": "Nairobi"}],
+        "career_categories": [{"name": "Finance/Accounting"}],
+        "type": [{"name": "Job"}],
+        "experience": [{"name": "8+ years"}]
+      }
+    }
+  ]
+}

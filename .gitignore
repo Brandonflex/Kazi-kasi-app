@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Test and tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Runtime data: raw payloads, parsed output, replay reports.
+# Crawled pages are third-party content and do not belong in Git.
+data/
+*.jsonl
+
+# Credentials. Nothing shaped like a secret belongs in Git, ever — a client
+# secret pasted into a source file is a client secret in every clone and every
+# backup. The real values live in Vercel (Settings → Environment Variables).
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.key
+credentials.json
+client_secret*.json
