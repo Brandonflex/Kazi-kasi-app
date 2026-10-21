@@ -315,7 +315,25 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     report["fetched"] = ingest_report.payloads
     report["errors"] = ingest_report.errors
 
+    # Write each candidate into the jobs table. This is the missing link between
+    # "we fetched the source" and "the digest has fresh vacancies". Without this
+    # the sweep was recording source_health but never populating jobs.
+    written = 0
+    for candidate in ingest_report.candidates:
+        try:
+            write_job(candidate, conn, now=now)
+            written += 1
+        except Exception as exc:
+            report["errors"].append({
+                "stage": "write_job",
+                "candidate": f"{candidate.source_id}:{candidate.source_job_id}",
+                "error": repr(exc),
+            })
+    report["stored"] = written
+    report["parsed"] = len(ingest_report.candidates)
+
     record_source_health(conn, adapter.manifest.id, status="ok", now=now, cadence_minutes=adapter.manifest.cadence_minutes)
+    conn.commit()
     return report
 
 

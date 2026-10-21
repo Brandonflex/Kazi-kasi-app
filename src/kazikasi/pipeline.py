@@ -50,8 +50,27 @@ class HttpFetcher:
             timeout=timeout,
             headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/json"},
             follow_redirects=True,
+            verify=self._pick_ssl_verify(),
         )
         self._last: dict[str, float] = {}
+
+    @staticmethod
+    def _pick_ssl_verify():
+        """Pick an SSL trust store.
+
+        httpx defaults to the system CA bundle, which works on Linux and macOS.
+        On Windows, Python's system trust store is not the same as the browser's
+        and several job boards (ajira.go.ke among them) have a chain that only
+        validates against the Mozilla bundle. Try certifi first; fall back to
+        the default (system store). certifi is an optional dependency.
+        """
+        import ssl
+        try:
+            import certifi  # type: ignore
+            ctx = ssl.create_default_context(cafile=certifi.where())
+            return ctx
+        except ImportError:
+            return True
 
     def _throttle(self, url: str) -> None:
         host = httpx.URL(url).host or ""
