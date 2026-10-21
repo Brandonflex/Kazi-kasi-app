@@ -1262,7 +1262,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 "img-src 'self' data:",
                 "font-src 'self'",
                 "connect-src 'self'",
-                f"form-action {base_url}",
+                f"form-action 'self' https://kazi-kasi-app.vercel.app https://kazi-kasi-app.vercel.app/*",
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
                 "object-src 'none'",
