@@ -272,6 +272,9 @@ main{padding-bottom:40px}
 code.key{font:12px/1.4 var(--font-mono);background:var(--sunken);border:1px solid var(--line);
   border-radius:6px;padding:1px 6px;margin-right:4px;white-space:nowrap}
 .step .employer{max-width:62ch}
+.step.done{opacity:.72;padding:14px 18px}
+.step.done h2{font-size:15px;margin:0}
+.stepnum{display:inline-block;min-width:1.4em}
 .trouble li{margin-bottom:14px;line-height:1.5}
 .trouble .small{display:block}
 p.mono{font-family:var(--font-mono);font-size:12px}
@@ -2839,9 +2842,30 @@ is useful; they are never mixed into the feed.</p>
 
 
 
-def _setup_step_html(step) -> str:
+def _setup_step_html(step, *, number: int | None = None) -> str:
+    """One step. A **done** step never shows instructions.
+
+    That distinction is the whole page. An earlier version rendered the "here is
+    how you set this variable" note on completed steps too — so the first card on
+    the page told you to set something you had already set, and read like step one
+    of a to-do list. A checklist that keeps instructing you after you are finished
+    is a checklist you stop trusting.
+    """
     tone = setup_module.STATE_TONE.get(step.state, "muted")
     label = setup_module.STATE_LABEL.get(step.state, step.state)
+    badge = f'<span class="badge {tone}">{_e(label)}</span>'
+
+    if step.state == "done":
+        names = ", ".join(step.env) if step.env else "no variables"
+        return f"""<article class="card step done">
+  <div class="card-top">
+    <div><h2>{_e(step.title)}</h2>
+      <div class="small mono">{_e(step.detail or names)} · nothing to do</div></div>
+    <div class="deadline">{badge}</div>
+  </div>
+</article>"""
+
+    head = f'<span class="kicker stepnum">{number}.</span> ' if number is not None else ""
     rows = []
     if step.env:
         rows.append(
@@ -2855,17 +2879,17 @@ def _setup_step_html(step) -> str:
             f'<input readonly value="{_e(item.value)}" aria-label="{_e(item.label)}">'
             f'<button type="button" class="copy" data-copy="{_e(item.value)}">Copy</button></div>'
         )
-    if step.link:
-        rows.append(f'<p class="small"><a href="{_e(step.link[1])}">{_e(step.link[0])} →</a></p>')
     if step.detail:
         rows.append(f'<p class="small mono">{_e(step.detail)}</p>')
+    if step.link:
+        rows.append(f'<p class="small"><a href="{_e(step.link[1])}">{_e(step.link[0])} →</a></p>')
     if step.note:
         rows.append(f'<p class="small">{_e(step.note)}</p>')
     return f"""<article class="card step">
   <div class="card-top">
-    <div><h2>{_e(step.title)}</h2>
+    <div><h2>{head}{_e(step.title)}</h2>
       <div class="employer">{_e(step.why)}</div></div>
-    <div class="deadline"><span class="badge {tone}">{_e(label)}</span></div>
+    <div class="deadline">{badge}</div>
   </div>
   {''.join(rows)}
 </article>"""
@@ -2891,12 +2915,63 @@ def render_setup(
     tick = instance["tick"]
     corpus_tone = "good" if instance["corpus"]["source"] == "bundle" else "warn"
 
-    cards = "".join(_setup_step_html(step) for step in plan.steps)
+    # Grouped by what to do about it, not by an internal id order. A flat numbered
+    # list mixes "already finished" with "do this next" and reads like a to-do list
+    # that never shrinks — which is precisely how the previous version was misread.
+    todo = [step for step in plan.steps if step.state == "missing"]
+    optional = [step for step in plan.steps if step.state == "optional"]
+    deferred = [step for step in plan.steps if step.state == "deferred"]
+    done = [step for step in plan.steps if step.state == "done"]
+
+    def section(title: str, meta: str, html: str) -> str:
+        if not html:
+            return ""
+        return f'<div class="section mt26"><span>{title}</span><em>{meta}</em></div>{html}'
+
+    if todo:
+        todo_html = section(
+            "Do these, in this order",
+            f"{len(todo)} to go",
+            "".join(_setup_step_html(step, number=index) for index, step in enumerate(todo, 1)),
+        )
+    else:
+        todo_html = (
+            '<div class="whobar"><div><b>Nothing required is missing.</b> '
+            '<span class="small">Sign-in, sessions and storage are all configured — '
+            "whichever optional steps you take from here are improvements, not repairs.</span></div></div>"
+        )
+    optional_html = section(
+        "Optional, when you want a second channel",
+        f"{len(optional)}",
+        "".join(_setup_step_html(step) for step in optional),
+    )
+    deferred_html = section(
+        "Deliberately not yet",
+        f"{len(deferred)}",
+        "".join(_setup_step_html(step) for step in deferred),
+    )
+    done_html = section(
+        "Already done — nothing to do here",
+        f"{len(done)}",
+        "".join(_setup_step_html(step) for step in done),
+    )
+    cards = todo_html + optional_html + deferred_html + done_html
     trouble = "".join(
         f"""<li><b>{_e(item['symptom'])}</b>
       <span class="small">{_e(item['cause'])}</span>
       <span class="small"><b>Fix:</b> {_e(item['fix'])}</span></li>"""
         for item in plan.troubleshooting
+    )
+    next_line = (
+        "Nothing required is missing. Jump to what is left →"
+        if not todo
+        else "Next: "
+        + todo[0].title
+        + (
+            " — one step."
+            if len(todo) == 1
+            else f", then {len(todo) - 1} more."
+        )
     )
     required_done = sum(1 for item in plan.required if item.state == "done")
     optional_open = sum(1 for item in plan.steps if item.state in ("optional", "deferred"))
@@ -2905,8 +2980,7 @@ def render_setup(
 <div class="masthead">
   <p class="kicker">Go-live · this deployment</p>
   <h1 class="display">What is left, and what to paste</h1>
-  <p class="scopeline">Read from the running process, not from a checklist. Change a
-  variable, redeploy, reload. This page shows whether a value exists — never what it is.</p>
+  <p class="scopeline">{_e(next_line)}</p>
   <p class="ledger"><b>{required_done} of {len(plan.required)}</b> required steps done ·
     {optional_open} optional · build {_e(instance['build'])} ·
     schema {instance['schema']} · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>

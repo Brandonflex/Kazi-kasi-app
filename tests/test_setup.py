@@ -239,3 +239,62 @@ class TestRotationGuidance:
         body = page(conn)
         assert "masked" in body
         assert "creation dialog" in body
+
+
+class TestThePageDoesNotInstructYouAboutFinishedWork:
+    """The regression that caused a real "step one? what step one?".
+
+    The first version rendered the how-to note on completed steps too, so the top
+    card on the page told you to paste variables you had already set — and, being
+    first, read like "step 1 of a to-do list". A checklist that keeps instructing
+    after you are finished is a checklist people stop trusting.
+    """
+
+    @pytest.fixture(autouse=True)
+    def configured(self, monkeypatch):
+        monkeypatch.setenv("KAZIKASI_SECRET", "not-the-demo-secret-000000000")
+        monkeypatch.setenv("KAZIKASI_DEMO", "0")
+        monkeypatch.setenv("KAZIKASI_BASE_URL", "https://kazi-kasi-app.vercel.app")
+
+    def test_a_done_step_shows_no_instructions(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "Already done" in body
+        # the session step is complete: its "here is how" note must be gone
+        assert "There is no bulk-paste box" not in body
+        # ...but it is still reported, with evidence
+        assert "Session secret and production mode" in body
+        assert "secret set: True" in body
+
+    def test_the_next_action_is_named_in_one_line(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "Next: Google sign-in" in body
+
+    def test_missing_steps_are_numbered_from_one(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert 'class="kicker stepnum">1.' in body
+        # the completed step is not numbered at all
+        assert 'class="kicker stepnum">1. Session' not in body
+
+    def test_with_nothing_missing_the_headline_says_so(self, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgres://example")
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "id.apps.googleusercontent.com")
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret")
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "Nothing required is missing" in body
+        assert "Do these, in this order" not in body

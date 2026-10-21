@@ -1,6 +1,6 @@
 # Phase 15 — go-live: what is left, and what to paste
 
-**Status:** built and tested (1003 tests, all offline) · **Network required:** no
+**Status:** built and tested (1017 tests, all offline) · **Network required:** no
 **Depends on:** [Phase 10](./phase-10-signin.md) readiness, [Phase 11](./phase-11-cron.md) the tick, [Phase 14](./phase-14-saved-searches.md) bundles
 
 Phase 10 added `/auth/ready`, which answered one question honestly: *is sign-in
@@ -27,6 +27,29 @@ corpus is real, and what the cron tick would do if it fired right now.
 Seven steps, each with a state — `set`, `missing`, `optional`, `not yet` — and the
 page counts **required** steps separately from optional ones, so "0 of 3" never
 looks like "0 of 7".
+
+## 1a. A finished step stops instructing you
+
+The first version rendered every card the same way, including the how-to note on
+steps that were already done. On a deployment with the session secret set, the
+**first card on the page** therefore told you to paste three variables you had
+already pasted — and, being first, read like "step 1 of a to-do list". That is a
+comprehension bug, not a cosmetic one: it made a finished task look like the
+blocker.
+
+Now the page is grouped by what to do about it:
+
+| section | contents | treatment |
+| --- | --- | --- |
+| **Do these, in this order** | `missing` | numbered from 1, with variables, paste fields and console links |
+| **Optional, when you want a second channel** | `optional` | same detail, no number |
+| **Deliberately not yet** | `deferred` | why, and when to revisit |
+| **Already done — nothing to do here** | `done` | one quiet line, **no instructions at all** |
+
+The headline answers "what now?" in one line — `Next: Google sign-in, then 1
+more.` — and switches to *"Nothing required is missing"* when the required list is
+empty. Four tests pin it, including one that asserts the specific sentence
+("There is no bulk-paste box") disappears once the secret exists.
 
 ## 2. Every step names its next click
 
@@ -107,10 +130,10 @@ again.
 ## 7. Verification
 
 ```
-1003 passed in 31.05s
+1017 passed in 28.85s
 ```
 
-`tests/test_setup.py` — 26 tests: every step derived from the environment
+`tests/test_setup.py` — 40 tests: every step derived from the environment
 (bare, secret set, the demo secret refused, Google, a database, each transport
 alone, half a credential); no secret value in the HTML or the JSON while presence
 is still reported; the exact redirect URI, cron path and schedule with a
