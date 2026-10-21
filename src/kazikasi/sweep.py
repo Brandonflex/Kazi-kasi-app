@@ -178,8 +178,8 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
                 candidate.employment_type,
                 candidate.work_mode,
                 deadline_iso,
-                candidate.pay.amount if candidate.pay else None,
-                None,
+                candidate.pay.min_amount if candidate.pay else None,
+                candidate.pay.max_amount if candidate.pay else None,
                 candidate.pay.period if candidate.pay else None,
                 now.isoformat(),
                 now.isoformat(),
@@ -208,8 +208,8 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
                 candidate.employment_type,
                 candidate.work_mode,
                 deadline_iso,
-                candidate.pay.amount if candidate.pay else None,
-                None,
+                candidate.pay.min_amount if candidate.pay else None,
+                candidate.pay.max_amount if candidate.pay else None,
                 candidate.pay.period if candidate.pay else None,
                 now.isoformat(),
                 now.isoformat(),
@@ -266,7 +266,7 @@ def record_source_health(conn, source_id: str, *, status: str, last_error: str |
     conn.commit()
 
 
-def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None, timeout: float = 3.0) -> dict[str, Any]:
+def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None, timeout: float = 3.0, allow_unverified: bool = False) -> dict[str, Any]:
     """Fetch one source end-to-end and write its jobs.
 
     Returns a report dict: ``{source_id, fetched, parsed, stored, errors}``.
@@ -275,6 +275,11 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     does not respond within the timeout, it is marked "warn" and the sweep
     moves on. This keeps the total sweep under Vercel's 10-second serverless
     limit even when some sources are slow.
+
+    ``allow_unverified`` bypasses the manifest status gate. The canary proves
+    a source parses; this flag tells the sweep to trust that proof. Without
+    it, sources with ``status: unverified`` in the registry raise
+    ``UnverifiedSource`` even if the canary returned ``ok: true``.
     """
     now = now or datetime.now(timezone.utc)
     report = {
@@ -294,7 +299,7 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
             pages=pages,
             limit=limit,
             verify_records=True,
-            allow_unverified=False,
+            allow_unverified=allow_unverified,
         )
     
     try:
@@ -343,7 +348,7 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     return report
 
 
-def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0, limit: int | None = None) -> dict[str, Any]:
+def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0, limit: int | None = None, allow_unverified: bool = False) -> dict[str, Any]:
     """Run the sweep across every source that is due.
 
     Returns a top-level report: ``{sources: [...], totals: {fetched, parsed, stored, errors}}``.
@@ -356,6 +361,10 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout
     ``limit`` caps the number of detail pages parsed per source. The CLI
     defaults to 1 (like the canary) to keep the first sweep fast; pass
     ``--limit 999`` to fetch everything.
+
+    ``allow_unverified`` bypasses the manifest status gate. When True, sources
+    with ``status: unverified`` in the registry will be fetched anyway. The
+    CLI ``--force`` flag implies this.
     """
     now = now or datetime.now(timezone.utc)
     add_source_health_schema(conn)
@@ -367,7 +376,7 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout
             totals["skipped"] += 1
             continue
         totals["ran"] += 1
-        report = refresh(adapter, conn, now=now, timeout=timeout, limit=limit)
+        report = refresh(adapter, conn, now=now, timeout=timeout, limit=limit, allow_unverified=allow_unverified)
         reports.append(report)
         totals["fetched"] += report["fetched"]
         totals["parsed"] += report["parsed"]

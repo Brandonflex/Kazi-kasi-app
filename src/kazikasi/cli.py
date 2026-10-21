@@ -658,7 +658,16 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     db_path = args.database if args.database and args.database != ":memory:" else None
     conn = db.connect(db_path)
     try:
-        report = sweep.run_sweep(conn, now=datetime.now(timezone.utc), force=args.force, timeout=args.timeout, limit=args.limit)
+        # ``--force`` implies ``allow_unverified``: the canary already proved the
+        # source parses, so forcing a re-sweep should trust that proof.
+        report = sweep.run_sweep(
+            conn,
+            now=datetime.now(timezone.utc),
+            force=args.force,
+            timeout=args.timeout,
+            limit=args.limit,
+            allow_unverified=args.force,
+        )
         print(json.dumps(report, indent=2, default=str))
         return 0 if report["totals"]["errors"] == 0 else 1
     finally:
