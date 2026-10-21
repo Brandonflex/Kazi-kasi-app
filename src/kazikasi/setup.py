@@ -104,6 +104,40 @@ def _probe(name: str) -> dict:
     return {"state": "absent", "name": name}
 
 
+#: Prefixes this deployment owns. Only names matching one of these are ever listed,
+#: so a diagnostic can say "here is what arrived" without inventorying the host.
+_OWN_PREFIXES = (
+    "GOOGLE",
+    "LINKEDIN",
+    "APPLE",
+    "WHATSAPP",
+    "AT_",
+    "DATABASE",
+    "KAZIKASI",
+    "CRON",
+)
+
+
+def _names_like(fragment: str) -> list[str]:
+    """Names in this build's environment that contain ``fragment``.
+
+    Names only, never values. The point is to answer "did my variable arrive under a
+    name I did not expect" — a missing `GOOGLE_CLIENT_SECRET` and a saved
+    `GOOGLE_CLIENTSECRET` are indistinguishable from a boolean, and one of them costs
+    twenty minutes in the wrong console.
+    """
+    wanted = fragment.upper()
+    found = []
+    for key in os.environ:
+        upper = key.upper()
+        if wanted not in upper:
+            continue
+        if not any(upper.startswith(prefix) or prefix in upper for prefix in _OWN_PREFIXES):
+            continue
+        found.append(key)
+    return sorted(found)
+
+
 #: One sentence per state, used in the step detail line.
 _PROBE_TEXT = {
     "blank": "{name} exists but its value is empty — re-paste it in Vercel",
@@ -111,6 +145,14 @@ _PROBE_TEXT = {
     "near": "{name} is not set, but a variable named {seen} exists — rename it",
     "absent": "{name} is not in this build — if you just added it, redeploy",
 }
+
+
+def _inventory(fragment: str) -> str:
+    """Second sentence: what this build *does* have under that prefix."""
+    names = _names_like(fragment)
+    if not names:
+        return f" No {fragment} variable is present in this build at all."
+    return " In this build: " + ", ".join(names) + "."
 
 
 def _explain(names) -> str:
@@ -281,6 +323,7 @@ def plan(
                 ""
                 if google["configured"]
                 else _explain(("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"))
+                + _inventory("GOOGLE")
             ),
         )
     )
@@ -309,6 +352,7 @@ def plan(
                 ""
                 if linkedin["configured"]
                 else _explain(("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"))
+                + _inventory("LINKEDIN")
             ),
         )
     )
