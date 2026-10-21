@@ -355,7 +355,6 @@ CREATE INDEX IF NOT EXISTS idx_receipts_provider ON message_receipts (provider_i
 #: (Postgres 10+); every other construct — partial unique indexes, IF NOT EXISTS,
 #: REFERENCES, TEXT timestamps — is already valid DDL.
 POSTGRES_SCHEMA = """
-"
 CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL

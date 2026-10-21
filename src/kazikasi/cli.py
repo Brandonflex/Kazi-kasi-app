@@ -661,15 +661,15 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     finally:
         conn.close()
 
-    p_sweep = sub.add_parser("sweep", help="fetch sources that are due and update jobs")
-    p_sweep.add_argument("--database", default=":memory:", help="sqlite path (default: in-memory)")
-    p_sweep.add_argument("--force", action="store_true", help="ignore cadence and fetch everything")
-    p_sweep.set_defaults(func=cmd_sweep)
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kazikasi", description="Kazi-Kasi ingestion spine")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_sweep = sub.add_parser("sweep", help="fetch sources that are due and update jobs")
+    p_sweep.add_argument("--database", default=":memory:", help="sqlite path (default: in-memory)")
+    p_sweep.add_argument("--force", action="store_true", help="ignore cadence and fetch everything")
+    p_sweep.set_defaults(func=cmd_sweep)
 
     p_sources = sub.add_parser("sources", help="list registered sources")
     p_sources.set_defaults(func=cmd_sources)
