@@ -166,4 +166,6 @@ class TestThePageCannotEchoOne:
         finally:
             conn.close()
         google = next(step for step in payload["steps"] if step["id"] == "google")
-        assert "GOOGLE_CLIENT_SECRET" not in google["detail"] or google["state"] == "done"
+        # the *name* is the point of the page; the *value* must never appear
+        assert self.SECRET_SHAPE not in google["detail"]
+        assert "set: GOOGLE_CLIENT_SECRET" in google["detail"]
