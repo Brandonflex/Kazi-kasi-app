@@ -62,9 +62,16 @@ Treat it as public. The order matters:
    verify sign-in → **delete the old secret**. Two secrets can be live at once
    precisely so this has no downtime.
    (For LinkedIn: **Auth** tab → *Client Secret* → **Regenerate**.)
-2. **Check whether it was ever committed.** `git log -S 'GOCSPX-' --oneline`
-   returns nothing if it never entered history. If it did, rotation is what fixes
-   the exposure; rewriting history only helps the tree, not the clones already out
+2. **Check whether it was ever committed** — in file *contents*, not commit
+   messages (where the pattern is talked about, legitimately):
+
+   ```bash
+   # the *shape* (20+ characters of value), not the bare prefix that prose mentions
+   git grep -I -E 'GOCSPX-[A-Za-z0-9_-]{20,}' $(git rev-list --all) -- . | head
+   ```
+
+   No output means it never entered a tree. If it did, **rotation is what fixes the
+   exposure**; rewriting history only cleans the tree, not the clones already out
    there.
 3. **Check what it could do.** A *web application* OAuth client secret can only be
    used with a redirect URI registered on that client. It cannot read mail, call

@@ -91,11 +91,29 @@ def test_the_repository_tracks_no_credential_shaped_string():
     assert not offenders, "credentials in the repository:\n  " + "\n  ".join(offenders)
 
 
-def test_no_env_file_is_tracked():
+def test_no_env_file_is_tracked_except_the_empty_example():
     tracked = tracked_files()
-    assert not [path for path in tracked if Path(path).name.startswith(".env")], (
-        "an .env file must never be committed; Vercel holds the real values"
-    )
+    offenders = [
+        path
+        for path in tracked
+        if Path(path).name.startswith(".env") and Path(path).name != ".env.example"
+    ]
+    assert not offenders, "an .env file must never be committed; Vercel holds the values"
+
+
+def test_the_example_carries_no_values():
+    """A template is a list of names. One assigned value makes it a leak."""
+    text = (ROOT / ".env.example").read_text()
+    assigned = [
+        line
+        for line in text.splitlines()
+        if "=" in line
+        and not line.strip().startswith("#")
+        and line.split("=", 1)[1].strip()
+        # public defaults are allowed: they are in every page already
+        and line.split("=", 1)[1].strip() not in ("0", "1", "https://kazi-kasi-app.vercel.app")
+    ]
+    assert not assigned, "the example must be names, not values: " + ", ".join(assigned)
 
 
 def test_the_ignore_file_covers_the_shapes_we_scan_for():
