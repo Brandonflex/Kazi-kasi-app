@@ -308,7 +308,8 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False) -> dict
     add_source_health_schema(conn)
     totals = {"fetched": 0, "parsed": 0, "stored": 0, "errors": 0, "ran": 0, "skipped": 0}
     reports = []
-    for adapter in REGISTRY.values():
+    for adapter_class in REGISTRY.values():
+        adapter = adapter_class()
         if not force and not should_run(adapter, now, conn):
             totals["skipped"] += 1
             continue
