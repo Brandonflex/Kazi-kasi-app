@@ -1250,6 +1250,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
     `frame-ancestors 'none'` and `X-Frame-Options: DENY` say the same thing twice
     on purpose: the older header is what some scanners still read.
     """
+    base_url = _base_url()
     headers = {
         "Content-Security-Policy": "; ".join(
             [
@@ -1261,7 +1262,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 "img-src 'self' data:",
                 "font-src 'self'",
                 "connect-src 'self'",
-                "form-action 'self'",
+                f"form-action {base_url}",
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
                 "object-src 'none'",
