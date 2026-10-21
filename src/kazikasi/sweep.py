@@ -337,10 +337,15 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     return report
 
 
-def run_sweep(conn, *, now: datetime | None = None, force: bool = False) -> dict[str, Any]:
+def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0) -> dict[str, Any]:
     """Run the sweep across every source that is due.
 
     Returns a top-level report: ``{sources: [...], totals: {fetched, parsed, stored, errors}}``.
+
+    ``timeout`` is the per-source wall-clock budget. Vercel's serverless
+    function runs at a 10-second total limit, so the cron path passes 3.0. The
+    CLI defaults to 10.0 because a real sweep from a developer machine has no
+    such constraint.
     """
     now = now or datetime.now(timezone.utc)
     add_source_health_schema(conn)
@@ -352,7 +357,7 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False) -> dict
             totals["skipped"] += 1
             continue
         totals["ran"] += 1
-        report = refresh(adapter, conn, now=now, timeout=3.0)
+        report = refresh(adapter, conn, now=now, timeout=timeout)
         reports.append(report)
         totals["fetched"] += report["fetched"]
         totals["parsed"] += report["parsed"]
