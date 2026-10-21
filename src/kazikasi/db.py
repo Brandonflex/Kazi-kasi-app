@@ -782,19 +782,26 @@ def migrate(conn) -> None:
 
     SQLite gets ``executescript`` (one round trip). Postgres gets each statement
     executed individually — psycopg v3 does not accept a semicolon-separated
-    script by default, and splitting on ``;`` is safe here because the schema
-    contains no string literals with semicolons.
+    script by default. Before splitting on ``;``, the schema has ALL comment
+    text stripped (whole-line ``--`` comments and inline ``--`` comments after
+    a column definition). Several columns carry inline comments that contain
+    semicolons (e.g. ``msisdn TEXT NOT NULL, -- E.164; see note``); leaving
+    those in is what has broken this path three times.
     """
     from datetime import datetime, timezone
 
     if _is_postgres(conn):
-        # Strip SQL comments before splitting on semicolons: comments like
-        # ``-- ...job; a "closed"`` contain semicolons that would split a
-        # comment into fragments psycopg then tries to execute as SQL.
-        without_comments = "\n".join(
-            line for line in POSTGRES_SCHEMA.split("\n")
-            if not line.lstrip().startswith("--")
-        )
+        # Strip SQL comments before splitting on semicolons. Handles both
+        # whole-line comments (``-- ...``) and inline comments after a column
+        # (``msisdn TEXT NOT NULL, -- E.164; see note``). The schema has no
+        # string literals containing ``--``, so a naive strip is safe.
+        clean_lines = []
+        for line in POSTGRES_SCHEMA.split("\n"):
+            idx = line.find("--")
+            if idx != -1:
+                line = line[:idx]
+            clean_lines.append(line)
+        without_comments = "\n".join(clean_lines)
         for stmt in (s.strip() for s in without_comments.split(";") if s.strip()):
             conn.execute(stmt)
     else:
