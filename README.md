@@ -92,8 +92,9 @@ sign-in configuration as JSON, without secrets. See
 [phase 9](./docs/phase-9-sources.md), [phase 10](./docs/phase-10-signin.md),
 [phase 11](./docs/phase-11-cron.md) (the scheduled tick),
 [phase 12](./docs/phase-12-search.md) (search),
-[phase 13](./docs/phase-13-hardening.md) (the response policy) and
-[phase 14](./docs/phase-14-saved-searches.md) (saved searches).
+[phase 13](./docs/phase-13-hardening.md) (the response policy),
+[phase 14](./docs/phase-14-saved-searches.md) (saved searches) and
+[phase 15](./docs/phase-15-setup.md) (go-live).
 `/api/health` is the quickest way to tell which build you are looking at:
 
 ```bash
@@ -102,6 +103,11 @@ curl -s https://kazi-kasi-app.vercel.app/api/health
 #  "synthetic": true, "strict": false,
 #  "outbox": {"queued": 0, "sent_24h": 0, "failed_24h": 0, "suppressed": 0}, ...}
 ```
+
+**`/setup` is the go-live page**: which variables exist, which provider is wired,
+what the cron tick would do right now, and the exact string to paste where —
+derived from the running process, never a stored to-do list. It shows presence,
+never values. `/api/setup` is the same thing as JSON.
 
 `synthetic` answers "is this corpus invented?" and `strict` answers "is this
 production?" — two different questions that the old single `demo` flag was

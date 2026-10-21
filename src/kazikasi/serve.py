@@ -55,6 +55,7 @@ from . import (
     scheduler,
     search as search_module,
     searches as searches_module,
+    setup as setup_module,
     shortlist,
     slo,
     tracking,
@@ -262,6 +263,18 @@ main{padding-bottom:40px}
   border-radius:10px;border:1px solid var(--forest);background:var(--forest);
   color:#FBF8F2;min-height:42px;cursor:pointer}
 .searchform button:hover{background:#0F3F22}
+.paste{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.paste input{flex:1 1 260px;min-width:0;font:13px/1.4 var(--font-mono);padding:9px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--sunken);color:var(--ink)}
+.copy{font:inherit;font-size:12.5px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:8px;background:var(--card);color:var(--ink-2);cursor:pointer;min-height:36px}
+.copy:hover{border-color:#CFC3AE;color:var(--ink)}
+code.key{font:12px/1.4 var(--font-mono);background:var(--sunken);border:1px solid var(--line);
+  border-radius:6px;padding:1px 6px;margin-right:4px;white-space:nowrap}
+.step .employer{max-width:62ch}
+.trouble li{margin-bottom:14px;line-height:1.5}
+.trouble .small{display:block}
+p.mono{font-family:var(--font-mono);font-size:12px}
 @media (max-width:640px){.searchform{grid-template-columns:1fr 1fr}
   .searchform label:first-of-type{grid-column:1/-1}}
 .mini{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
@@ -493,7 +506,7 @@ def _page(
 <footer class="wrap"><p>Every card says when it was last checked and why it was shown.
 Eligibility labels quote the advert. Applications happen on the employer's site, never here.</p>
 <p class="ops">Ops: <a href="/slo">freshness</a> · <a href="/review">review queue</a> ·
-<a href="/salaries">advertised pay</a></p>
+<a href="/salaries">advertised pay</a> · <a href="/setup">go-live</a></p>
 {demo_line}</footer>
 </body></html>"""
 
@@ -1103,6 +1116,22 @@ PALETTE_JS = """
 """
 
 
+COPY_JS = """(function(){
+  document.addEventListener('click', function(event){
+    var target = event.target;
+    var button = target && target.closest ? target.closest('[data-copy]') : null;
+    if(!button) return;
+    var value = button.getAttribute('data-copy') || '';
+    var original = button.textContent;
+    function say(word){ button.textContent = word; setTimeout(function(){ button.textContent = original; }, 1200); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(value).then(function(){ say('Copied'); }, function(){ say('Select it'); });
+    } else {
+      say('Select it');
+    }
+  });
+})();"""
+
 # --------------------------------------------------------------------------
 # Response policy
 # --------------------------------------------------------------------------
@@ -1128,6 +1157,7 @@ white-space:pre-wrap;font:13px/1.6 ui-monospace,Menlo,monospace}"""
 
 STYLE_HASH = _inline_hash(STYLE)
 SCRIPT_HASH = _inline_hash(PALETTE_JS)
+COPY_HASH = _inline_hash(COPY_JS)
 ERROR_STYLE_HASH = _inline_hash(ERROR_STYLE)
 
 
@@ -1146,7 +1176,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}'",
                 # The palette's index is a JSON data block, not a program; the
                 # only executable inline script is PALETTE_JS.
-                f"script-src '{SCRIPT_HASH}'",
+                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}'",
                 "img-src 'self' data:",
                 "font-src 'self'",
                 "connect-src 'self'",
@@ -1678,6 +1708,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
         "<p class='small'>The flow is built and the buttons are real; the credentials are not. "
         "A deployment needs a client id and secret per provider — <code>kazikasi auth check</code> "
         "lists them, and <a href='/auth/ready'>/auth/ready</a> shows the same state as JSON. "
+        "<a href='/setup'>The go-live page</a> names the exact value to paste where. "
         "Guest accounts work right now.</p></div></div>"
     )
 
@@ -2806,6 +2837,105 @@ is useful; they are never mixed into the feed.</p>
     )
 
 
+
+
+def _setup_step_html(step) -> str:
+    tone = setup_module.STATE_TONE.get(step.state, "muted")
+    label = setup_module.STATE_LABEL.get(step.state, step.state)
+    rows = []
+    if step.env:
+        rows.append(
+            '<div class="small">Variables: '
+            + " ".join(f'<code class="key">{_e(name)}</code>' for name in step.env)
+            + "</div>"
+        )
+    for item in step.paste:
+        rows.append(
+            '<div class="paste"><span class="small">' + _e(item.label) + "</span>"
+            f'<input readonly value="{_e(item.value)}" aria-label="{_e(item.label)}">'
+            f'<button type="button" class="copy" data-copy="{_e(item.value)}">Copy</button></div>'
+        )
+    if step.link:
+        rows.append(f'<p class="small"><a href="{_e(step.link[1])}">{_e(step.link[0])} →</a></p>')
+    if step.detail:
+        rows.append(f'<p class="small mono">{_e(step.detail)}</p>')
+    if step.note:
+        rows.append(f'<p class="small">{_e(step.note)}</p>')
+    return f"""<article class="card step">
+  <div class="card-top">
+    <div><h2>{_e(step.title)}</h2>
+      <div class="employer">{_e(step.why)}</div></div>
+    <div class="deadline"><span class="badge {tone}">{_e(label)}</span></div>
+  </div>
+  {''.join(rows)}
+</article>"""
+
+
+def render_setup(
+    conn,
+    *,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+) -> str:
+    """The go-live page: derived from this process, never from a to-do list."""
+    now = now or datetime.now(timezone.utc)
+    plan = setup_module.plan(
+        conn,
+        now=now,
+        synthetic=synthetic_build(),
+        strict=accounts.strict_mode(),
+        base_url=_base_url(),
+    )
+    instance = plan.instance
+    tick = instance["tick"]
+    corpus_tone = "good" if instance["corpus"]["source"] == "bundle" else "warn"
+
+    cards = "".join(_setup_step_html(step) for step in plan.steps)
+    trouble = "".join(
+        f"""<li><b>{_e(item['symptom'])}</b>
+      <span class="small">{_e(item['cause'])}</span>
+      <span class="small"><b>Fix:</b> {_e(item['fix'])}</span></li>"""
+        for item in plan.troubleshooting
+    )
+    required_done = sum(1 for item in plan.required if item.state == "done")
+    optional_open = sum(1 for item in plan.steps if item.state in ("optional", "deferred"))
+
+    body = f"""
+<div class="masthead">
+  <p class="kicker">Go-live · this deployment</p>
+  <h1 class="display">What is left, and what to paste</h1>
+  <p class="scopeline">Read from the running process, not from a checklist. Change a
+  variable, redeploy, reload. This page shows whether a value exists — never what it is.</p>
+  <p class="ledger"><b>{required_done} of {len(plan.required)}</b> required steps done ·
+    {optional_open} optional · build {_e(instance['build'])} ·
+    schema {instance['schema']} · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
+</div>
+<div class="strip">
+  <div><b>{instance['live_jobs']}</b><span>live roles</span></div>
+  <div><b>{instance['sources']}</b><span>sources</span></div>
+  <div><b>{'synthetic' if instance['synthetic'] else 'real'}</b><span>corpus</span></div>
+  <div><b>{'yes' if tick['runs'] else 'no'}</b><span>tick would send</span></div>
+</div>
+<div class="whobar">
+  <div><b>The scheduled tick, right now:</b>
+    <span class="small">{_e(tick['answer'])}{(' — needs ' + _e(tick['needs'])) if tick['needs'] else ''}</span></div>
+  <div><span class="badge {corpus_tone}">{_e(instance['corpus']['source'])}</span></div>
+</div>
+{cards}
+<div class="section mt26"><span>When a console fights you</span><em>the three that cost hours</em></div>
+<ul class="whythat trouble">{trouble}</ul>
+<p class="small">Nothing on this page is a secret: it renders booleans and public URLs.
+The values themselves live in Vercel and are never read back out.</p>"""
+    return _page(
+        "Go live — Kazi-Kasi",
+        body + f"<script>{COPY_JS}</script>",
+        demo=demo,
+        nav=_public_nav(conn, headers),
+        head='<meta name="robots" content="noindex">',
+    )
+
+
 def render_sitemap(conn, *, now: datetime | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     base = _base_url()
@@ -2844,6 +2974,7 @@ def render_robots() -> str:
             "Disallow: /digest",
             "Disallow: /action",
             "Disallow: /search",
+            "Disallow: /setup",
             "Disallow: /webhooks/",
             "Disallow: /api/",
             "",
@@ -3390,17 +3521,25 @@ def handle(
 
 
 def _record_view(conn, profile_id: str, job_id: str, now: datetime) -> None:
-    """One "visited" per job per day — enough for the tracker, not a hit counter."""
+    """One "visited" per job per (Nairobi) day — the tracker, not a hit counter.
+
+    The day is stored in ``detail`` and compared there. Comparing the timestamp's
+    prefix instead mixes two clocks *and* two timezones: rows are stamped in UTC
+    while the day is a Nairobi day, so between 21:00 and 23:59 UTC the same
+    Nairobi day spans two UTC dates and the de-duplication silently fails. The
+    timestamp fallback stays for rows written before ``detail`` existed.
+    """
     day = (now + timedelta(hours=3)).date().isoformat()
     existing = conn.execute(
         """SELECT 1 FROM apply_events
-            WHERE profile_id = ? AND job_id = ? AND kind = 'viewed' AND substr(at, 1, 10) = ?""",
-        (profile_id, job_id, day),
+            WHERE profile_id = ? AND job_id = ? AND kind = 'viewed'
+              AND (detail = ? OR substr(at, 1, 10) = ?)""",
+        (profile_id, job_id, day, day),
     ).fetchone()
     if existing:
         return
     try:
-        tracking.record(conn, profile_id, job_id, "viewed", detail=day)
+        tracking.record(conn, profile_id, job_id, "viewed", detail=day, now=now)
     except ValueError:
         pass
 
@@ -3579,6 +3718,21 @@ def _handle_get(
         )
 
 
+
+    if path == "/setup":
+        return Response(200, render_setup(conn, demo=demo, now=now, headers=headers), "text/html; charset=utf-8")
+
+    if path == "/api/setup":
+        plan = setup_module.plan(
+            conn,
+            now=now,
+            synthetic=synthetic_build(),
+            strict=accounts.strict_mode(),
+            base_url=_base_url(),
+        )
+        return Response(
+            200, json.dumps(plan.to_dict(), indent=2, default=str), "application/json; charset=utf-8"
+        )
 
     if path == "/search":
         return _handle_search(conn, query, demo=demo, now=now, headers=headers)

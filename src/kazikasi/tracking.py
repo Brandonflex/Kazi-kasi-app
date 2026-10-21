@@ -23,8 +23,23 @@ from .db import _now_iso
 KINDS = ("viewed", "clicked_through", "applied", "dismissed", "saved", "unsaved", "reminded")
 
 
-def record(conn, profile_id: str, job_id: str, kind: str, *, detail: str | None = None) -> int:
-    """Append one apply-funnel event. Returns the event id."""
+def record(
+    conn,
+    profile_id: str,
+    job_id: str,
+    kind: str,
+    *,
+    detail: str | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Append one apply-funnel event. Returns the event id.
+
+    ``now`` is injected so a replay, a backfill or a test can stamp the moment it
+    is *reasoning about* rather than the wall clock. That matters more than it
+    sounds: de-duplication on this table ("one visit per job per day") compares
+    dates, so a caller that computes the day from a request clock while the row is
+    stamped by the system clock gets two different days for the same instant.
+    """
     if kind not in KINDS:
         raise ValueError(f"unknown event {kind!r}; expected one of {', '.join(KINDS)}")
     if conn.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone() is None:
@@ -33,7 +48,7 @@ def record(conn, profile_id: str, job_id: str, kind: str, *, detail: str | None 
         raise ValueError(f"unknown profile {profile_id!r}; run `kazikasi profiles --seed`")
     cursor = conn.execute(
         "INSERT INTO apply_events (profile_id, job_id, kind, at, detail) VALUES (?,?,?,?,?)",
-        (profile_id, job_id, kind, _now_iso(), detail),
+        (profile_id, job_id, kind, _now_iso(now), detail),
     )
     conn.commit()
     return int(cursor.lastrowid)

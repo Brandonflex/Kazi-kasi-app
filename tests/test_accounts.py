@@ -498,3 +498,67 @@ class TestEverythingStillWorksWithoutAnAccount:
         response = get(conn, path)
         assert response.status == 200
         assert "Sign in" in response.body
+
+
+class TestClocks:
+    """The date test that only fails at night, and the bug behind it.
+
+    `_record_view` stores a *Nairobi* day but the row is stamped in *UTC*. Between
+    21:00 and 23:59 UTC those disagree on the date, so the "one visit per day"
+    de-duplication quietly stopped working for three hours of every night — and
+    broke outright whenever a caller passed a `now` the wall clock disagreed with.
+    """
+
+    def test_a_visit_is_recorded_once_across_the_utc_eat_boundary(self, conn):
+        job_id = conn.execute("SELECT id FROM jobs WHERE status = 'open' LIMIT 1").fetchone()["id"]
+        # 00:30 EAT on the 21st is 21:30 UTC on the 20th: one Nairobi day, two UTC dates.
+        late = datetime(2026, 10, 20, 21, 30, tzinfo=timezone.utc)
+        early = datetime(2026, 10, 21, 6, 0, tzinfo=timezone.utc)
+        for moment in (late, early):
+            handle(
+                conn,
+                "GET",
+                f"/job/{job_id}",
+                {"profile": ["demo-fresher"]},
+                headers=dict(HTML),
+                demo=True,
+                now=moment,
+            )
+        count = conn.execute(
+            "SELECT COUNT(*) AS c FROM apply_events WHERE kind = 'viewed' AND job_id = ?",
+            (job_id,),
+        ).fetchone()["c"]
+        assert count == 1
+
+    def test_a_new_nairobi_day_does_record_again(self, conn):
+        job_id = conn.execute("SELECT id FROM jobs WHERE status = 'open' LIMIT 1").fetchone()["id"]
+        first = datetime(2026, 10, 21, 6, 0, tzinfo=timezone.utc)
+        next_day = datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc)
+        for moment in (first, next_day):
+            handle(
+                conn,
+                "GET",
+                f"/job/{job_id}",
+                {"profile": ["demo-fresher"]},
+                headers=dict(HTML),
+                demo=True,
+                now=moment,
+            )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM apply_events WHERE kind = 'viewed' AND job_id = ?",
+                (job_id,),
+            ).fetchone()["c"]
+            == 2
+        )
+
+    def test_tracking_records_the_moment_it_is_given(self, conn):
+        from kazikasi import tracking
+
+        job_id = conn.execute("SELECT id FROM jobs WHERE status = 'open' LIMIT 1").fetchone()["id"]
+        moment = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+        tracking.record(conn, "demo-fresher", job_id, "saved", now=moment)
+        row = conn.execute(
+            "SELECT at FROM apply_events WHERE kind = 'saved' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        assert row["at"].startswith("2026-03-01T12:00")
