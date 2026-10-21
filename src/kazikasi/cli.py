@@ -648,6 +648,25 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sweep(args: argparse.Namespace) -> int:
+    """Run the sweep: fetch every source that is due, update the jobs table."""
+    from . import db, sweep
+    from datetime import datetime, timezone
+
+    conn = db.connect(args.database)
+    try:
+        report = sweep.run_sweep(conn, now=datetime.now(timezone.utc), force=args.force)
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report["totals"]["errors"] == 0 else 1
+    finally:
+        conn.close()
+
+    p_sweep = sub.add_parser("sweep", help="fetch sources that are due and update jobs")
+    p_sweep.add_argument("--database", default=":memory:", help="sqlite path (default: in-memory)")
+    p_sweep.add_argument("--force", action="store_true", help="ignore cadence and fetch everything")
+    p_sweep.set_defaults(func=cmd_sweep)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kazikasi", description="Kazi-Kasi ingestion spine")
     sub = parser.add_subparsers(dest="command", required=True)

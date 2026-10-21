@@ -3738,6 +3738,29 @@ def _outbox_counts(conn, *, now: datetime) -> dict:
     return {key: int(row[key] or 0) for key in ("queued", "sent_24h", "failed_24h", "suppressed")} if row else {}
 
 
+def _handle_sweep(conn, headers: dict, query: dict, *, now: datetime, demo: bool) -> Response:
+    """On-demand sweep: fetch sources and update jobs.
+
+    Gated by CRON_SECRET (same as the tick). Returns a report of what was fetched.
+    """
+    from . import sweep  # lazy: pulls in pipeline which pulls in httpx
+
+    expected = (os.environ.get("CRON_SECRET") or "").strip()
+    supplied = ""
+    authorization = str(headers.get("authorization") or "")
+    if authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip()
+    supplied = supplied or _query_one(query, "token")
+    if not expected:
+        return _json(503, {"error": "cron not configured", "hint": "set CRON_SECRET"})
+    if not _constant_time_equal(supplied, expected):
+        return _json(403, {"error": "bad cron token"})
+
+    force = _query_one(query, "force") == "1"
+    report = sweep.run_sweep(conn, now=now, force=force)
+    return _json(200, report)
+
+
 def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool) -> Response:
     """One scheduled tick: compose what is due, then deliver it.
 
@@ -3788,9 +3811,16 @@ def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool)
             },
         )
 
+    # Sweep first: fetch every source that is due, update the jobs table, so the
+    # digest has fresh vacancies to compose from. Without this the digest is
+    # composed from whatever happened to be in the database yesterday.
+    from . import sweep  # lazy: sweep pulls in pipeline which pulls in httpx
+    sweep_report = sweep.run_sweep(conn, now=now)
+
     report = scheduler.run_due(
         conn, transports, now=now, with_brief=True, with_alerts=True, with_searches=True
     )
+    report["sweep"] = sweep_report["totals"]
     report["outbox"] = _outbox_counts(conn, now=now)
     return _json(200, report)
 
@@ -3807,6 +3837,9 @@ def _handle_get(
 
     if path in ("/api/cron/run", "/api/cron"):
         return _handle_cron(conn, headers or {}, query, now=now, demo=demo)
+
+    if path == "/api/sweep":
+        return _handle_sweep(conn, headers or {}, query, now=now, demo=demo)
 
     if path == "/api/health":
         summary = metrics.stats(conn, now=now)
