@@ -106,7 +106,13 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
     payload = candidate.to_dict()
 
     # Observation row — append-only, keyed by (source_id, source_job_id, fingerprint).
-    fingerprint = candidate.provenance().fingerprint() if hasattr(candidate, "provenance") else job_id
+    # Fingerprint is a hash of the candidate's identifying fields; if the provenance
+    # has no fingerprint method, fall back to the job id.
+    try:
+        prov = candidate.provenance()
+        fingerprint = f"{prov.source_id}:{prov.source_job_id}:{prov.source_url}"
+    except Exception:
+        fingerprint = job_id
     if _is_postgres(conn):
         conn.execute(
             "INSERT INTO observations (source_id, source_job_id, source_url, fetched_at, "
@@ -337,15 +343,19 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     return report
 
 
-def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0) -> dict[str, Any]:
+def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0, limit: int | None = None) -> dict[str, Any]:
     """Run the sweep across every source that is due.
 
     Returns a top-level report: ``{sources: [...], totals: {fetched, parsed, stored, errors}}``.
 
     ``timeout`` is the per-source wall-clock budget. Vercel's serverless
     function runs at a 10-second total limit, so the cron path passes 3.0. The
-    CLI defaults to 10.0 because a real sweep from a developer machine has no
+    CLI defaults to 60.0 because a real sweep from a developer machine has no
     such constraint.
+
+    ``limit`` caps the number of detail pages parsed per source. The CLI
+    defaults to 1 (like the canary) to keep the first sweep fast; pass
+    ``--limit 999`` to fetch everything.
     """
     now = now or datetime.now(timezone.utc)
     add_source_health_schema(conn)
@@ -357,7 +367,7 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout
             totals["skipped"] += 1
             continue
         totals["ran"] += 1
-        report = refresh(adapter, conn, now=now, timeout=timeout)
+        report = refresh(adapter, conn, now=now, timeout=timeout, limit=limit)
         reports.append(report)
         totals["fetched"] += report["fetched"]
         totals["parsed"] += report["parsed"]

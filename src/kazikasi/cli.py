@@ -658,7 +658,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     db_path = args.database if args.database and args.database != ":memory:" else None
     conn = db.connect(db_path)
     try:
-        report = sweep.run_sweep(conn, now=datetime.now(timezone.utc), force=args.force, timeout=args.timeout)
+        report = sweep.run_sweep(conn, now=datetime.now(timezone.utc), force=args.force, timeout=args.timeout, limit=args.limit)
         print(json.dumps(report, indent=2, default=str))
         return 0 if report["totals"]["errors"] == 0 else 1
     finally:
@@ -672,8 +672,10 @@ def main(argv: list[str] | None = None) -> int:
     p_sweep = sub.add_parser("sweep", help="fetch sources that are due and update jobs")
     p_sweep.add_argument("--database", default=":memory:", help="sqlite path (default: in-memory)")
     p_sweep.add_argument("--force", action="store_true", help="ignore cadence and fetch everything")
-    p_sweep.add_argument("--timeout", type=float, default=10.0,
-                         help="per-source timeout in seconds (default 10; Vercel cron uses 3)")
+    p_sweep.add_argument("--timeout", type=float, default=60.0,
+                         help="per-source timeout in seconds (default 60; Vercel cron uses 3)")
+    p_sweep.add_argument("--limit", type=int, default=1,
+                         help="max detail pages to parse per source (default 1; like canary)")
     p_sweep.set_defaults(func=cmd_sweep)
 
     p_sources = sub.add_parser("sources", help="list registered sources")
