@@ -154,6 +154,16 @@ def _error_page(exc: Exception) -> bytes:
     return body.encode("utf-8")
 
 
+def _is_connection_alive(conn) -> bool:
+    """Cheap health check. Returns False if the connection has been killed by
+    the pooler (idle-in-transaction timeout, network blip, etc.)."""
+    try:
+        conn.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
 def app(environ, start_response):
     """WSGI entrypoint."""
     method = (environ.get("REQUEST_METHOD") or "GET").upper()
@@ -164,6 +174,12 @@ def app(environ, start_response):
     try:
         with _LOCK:
             conn = _connection()
+            # If the pooler killed our connection (idle timeout, etc.), drop it
+            # and reconnect. One retry; if the reconnect also fails, fall through
+            # to the synthetic corpus via _connection()'s own fallback.
+            if not _is_connection_alive(conn):
+                _STATE["conn"] = None
+                conn = _connection()
             response = serve.handle(
                 conn,
                 method,

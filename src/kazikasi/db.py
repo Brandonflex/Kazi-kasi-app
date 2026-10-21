@@ -731,7 +731,7 @@ def _open_postgres(url: str):
     conn = psycopg.connect(
         url,
         row_factory=dict_row,
-        autocommit=False,
+        autocommit=True,
         connect_timeout=10,
     )
     # psycopg returns cursors; conn.execute() is the sqlite convenience. We
