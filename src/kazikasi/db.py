@@ -788,7 +788,14 @@ def migrate(conn) -> None:
     from datetime import datetime, timezone
 
     if _is_postgres(conn):
-        for stmt in (s.strip() for s in POSTGRES_SCHEMA.split(";") if s.strip()):
+        # Strip SQL comments before splitting on semicolons: comments like
+        # ``-- ...job; a "closed"`` contain semicolons that would split a
+        # comment into fragments psycopg then tries to execute as SQL.
+        without_comments = "\n".join(
+            line for line in POSTGRES_SCHEMA.split("\n")
+            if not line.lstrip().startswith("--")
+        )
+        for stmt in (s.strip() for s in without_comments.split(";") if s.strip()):
             conn.execute(stmt)
     else:
         conn.executescript(SCHEMA)
