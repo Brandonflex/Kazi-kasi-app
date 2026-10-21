@@ -146,14 +146,14 @@ class TestTheSignInPageItself:
         finally:
             conn.close()
 
-    def test_an_unconfigured_provider_is_not_a_live_button(self):
+    def test_an_unconfigured_provider_is_not_shown(self):
         body = self.page()
-        # no form wrapping a provider that cannot work: the button is inert
+        # When no provider is configured, no forms post to /auth/start
         assert 'action="/auth/start"' not in body
-        assert 'class="provider-button off" disabled' in body
-        assert "not configured" in body
+        # A notice points at /setup
+        assert "/setup" in body
 
-    def test_a_configured_provider_is_a_form_that_posts(self, monkeypatch):
+    def test_a_configured_provider_is_the_primary_form(self, monkeypatch):
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "id.apps.googleusercontent.com")
         monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret")
         conn = serve.demo_connection()
@@ -163,12 +163,20 @@ class TestTheSignInPageItself:
             conn.close()
         assert 'action="/auth/start"' in body
         assert 'value="google"' in body
-        assert "provider-state ready" in body
+        assert 'class="signin-primary-btn"' in body
 
-    def test_the_label_and_the_description_are_separate_elements(self):
-        """They ran together as "Continue with GoogleYour name and email address"."""
-        body = self.page()
-        assert "<b>Continue with Google</b><span>" in body
+    def test_the_label_and_the_description_are_separate_elements(self, monkeypatch):
+        """They used to run together as "Continue with GoogleYour name and email address"."""
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "id.apps.googleusercontent.com")
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret")
+        conn = serve.demo_connection()
+        try:
+            body = serve.handle(conn, "GET", "/signin", {}, demo=True).body
+        finally:
+            conn.close()
+        # The signin-provider-name and signin-provider-why are separate spans
+        assert 'class="signin-provider-name"' in body
+        assert 'class="signin-provider-why"' in body
 
 
 class TestThePostThatWasMissing:

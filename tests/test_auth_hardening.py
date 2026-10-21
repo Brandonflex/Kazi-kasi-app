@@ -322,7 +322,7 @@ class TestTheReadyEndpoint:
     def test_the_signin_page_says_when_nothing_is_connected(self, conn, monkeypatch):
         monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
         body = serve.handle(conn, "GET", "/signin", {}, headers={"accept": "text/html"}, demo=True, now=NOW).body
-        assert "No provider is connected" in body
+        assert "No sign-in provider is configured" in body
 
     def test_the_signin_page_stops_saying_it_once_a_provider_is_configured(self, conn):
         body = serve.handle(conn, "GET", "/signin", {}, headers={"accept": "text/html"}, demo=True, now=NOW).body

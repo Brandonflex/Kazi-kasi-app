@@ -128,6 +128,8 @@ header{position:sticky;top:0;z-index:20;background:rgba(251,248,242,.93);
 .brand nav a{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
   color:var(--ink-2);padding:9px 10px;border-radius:8px}
 .brand nav a:hover{background:var(--sunken);text-decoration:none;color:var(--ink)}
+.brand nav .nav-signin{background:var(--forest);color:#fff;padding:9px 16px}
+.brand nav .nav-signin:hover{background:#0e3d1f;color:#fff;text-decoration:none}
 .banner{background:var(--amber-soft);color:var(--amber);border-bottom:1px solid #EBD6B4;
   padding:9px 24px;font-size:12.5px;letter-spacing:.01em}
 
@@ -357,6 +359,38 @@ pre.msg{white-space:pre-wrap;font:13.5px/1.6 var(--font-mono);background:var(--s
   border:1px solid var(--line);color:var(--ink-2);font-size:11.5px;font-weight:700;
   display:flex;align-items:center;justify-content:center}
 .trial li .small{display:block;margin-top:3px}
+/* ---- Sign-in page ------------------------------------------------------ */
+.signin-wrap{display:flex;align-items:flex-start;justify-content:center;
+  padding:60px 20px 40px;min-height:60vh}
+.signin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:36px 40px 32px;max-width:440px;width:100%;box-shadow:var(--shadow)}
+.signin-card .kicker{margin:0 0 18px}
+.signin-headline{font-family:var(--font-display);font-weight:400;font-size:34px;
+  line-height:1.1;letter-spacing:-.02em;margin:0 0 10px;color:var(--ink)}
+.signin-sub{margin:0 0 24px;font-size:14.5px;color:var(--ink-2);line-height:1.45}
+.signin-primary{margin-bottom:14px}
+.signin-primary-btn{display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+  width:100%;background:var(--forest);color:#fff;border:none;border-radius:10px;
+  padding:18px 22px;cursor:pointer;text-align:left;font:inherit;
+  transition:background .14s,transform .14s}
+.signin-primary-btn:hover{background:#0e3d1f;transform:translateY(-1px)}
+.signin-primary-btn:focus-visible{outline:2px solid var(--forest);outline-offset:2px}
+.signin-provider-name{font-size:17px;font-weight:650}
+.signin-provider-why{font-size:12.5px;opacity:.85;line-height:1.3}
+.signin-secondary{display:flex;gap:8px;margin-bottom:8px}
+.signin-secondary-btn{flex:1;font:inherit;font-size:14px;font-weight:600;
+  background:var(--card);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:12px 14px;cursor:pointer;
+  transition:border-color .14s,box-shadow .14s}
+.signin-secondary-btn:hover{border-color:var(--forest);box-shadow:var(--shadow)}
+.signin-guest{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.signin-guest-btn{width:100%;font:inherit;font-size:13.5px;font-weight:600;
+  background:transparent;color:var(--ink-2);border:none;border-radius:8px;
+  padding:11px;cursor:pointer;transition:color .14s,background .14s}
+.signin-guest-btn:hover{color:var(--ink);background:var(--sunken)}
+.signin-privacy{margin:18px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5}
+.signin-notice{margin:0 0 14px;font-size:12.5px;color:var(--muted)}
+.signin-notice a{color:var(--forest)}
 .evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
   padding-left:12px;margin:12px 0 4px}
 h1{font-family:var(--font-display);font-weight:400;font-size:38px;line-height:1.08;
@@ -1407,16 +1441,22 @@ def _public_nav(conn, headers: dict | None) -> str:
 
 def _nav_for(account: dict | None, profile_id: str) -> str:
     who = _first_name(account)
-    label = who or ("Guest" if account else "Sign in")
+    if account:
+        # Signed in — show name, links to /account
+        label = who or "Account"
+        account_link = f'<a href="/account">{_e(label)}</a>'
+    else:
+        # Not signed in — prominent "Sign in" button first, no guest label
+        account_link = '<a href="/signin" class="nav-signin">Sign in</a>'
     return (
-        '<a href="/?profile=' + quote(profile_id) + '">Feed</a>'
-        '<a href="/shortlist?profile=' + quote(profile_id) + '">Shortlist</a>'
-        '<a href="/brief?profile=' + quote(profile_id) + '">Brief</a>'
-        '<a href="/activity?profile=' + quote(profile_id) + '">Activity</a>'
-        '<a href="/pulse">Pulse</a>'
-        '<a href="/account">' + _e(label) + "</a>"
-        '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
-        "Jump <kbd>⌘K</kbd></button>"
+        account_link
+        + '<a href="/?profile=' + quote(profile_id) + '">Feed</a>'
+        + '<a href="/shortlist?profile=' + quote(profile_id) + '">Shortlist</a>'
+        + '<a href="/brief?profile=' + quote(profile_id) + '">Brief</a>'
+        + '<a href="/activity?profile=' + quote(profile_id) + '">Activity</a>'
+        + '<a href="/pulse">Pulse</a>'
+        + '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
+        + "Jump <kbd>⌘K</kbd></button>"
     )
 
 
@@ -1732,92 +1772,88 @@ record →</a></p>"""
 
 
 def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
-    """Three providers, a guest door, and an honest statement of what is stored."""
-    configured = {key: provider.configured for key, provider in accounts.PROVIDERS.items()}
-    cards = []
-    for key, provider in accounts.PROVIDERS.items():
-        label = f"Continue with {_e(provider.label)}"
-        why = f"<span>{_e(accounts.WHY[key])}</span>"
-        if configured[key]:
-            cards.append(
-                '<form method="post" action="/auth/start" class="provider">'
-                f'<input type="hidden" name="provider" value="{key}">'
-                f'<button type="submit" class="provider-button"><b>{label}</b>{why}</button>'
-                '<span class="provider-state ready">ready</span>'
-                "</form>"
-            )
-        else:
-            # A button that cannot work is worse than no button: it invites a click,
-            # then explains itself. This is a statement, with the fix next to it.
-            cards.append(
-                '<div class="provider">'
-                f'<button type="button" class="provider-button off" disabled>'
-                f"<b>{label}</b>{why}</button>"
-                '<span class="provider-state">not configured</span>'
-                "</div>"
-            )
+    """Sign-in page: primary action first, explanation minimal.
 
-    none_ready = not any(configured.values())
-    config_note = (
-        ""
-        if not none_ready
-        else '<div class="whobar"><div><b>No provider is connected in this deployment.</b>'
-        "<p class='small'>The flow is built and the buttons are real; the credentials are not. "
-        "A deployment needs a client id and secret per provider — <code>kazikasi auth check</code> "
-        "lists them, and <a href='/auth/ready'>/auth/ready</a> shows the same state as JSON. "
-        "<a href='/setup'>The go-live page</a> names the exact value to paste where. "
-        "Guest accounts work right now.</p></div></div>"
-    )
+    The user came here to sign in. Don't argue with them. Show the button,
+    tell them what you'll store, get out of the way.
+    """
+    configured = {key: provider.configured for key, provider in accounts.PROVIDERS.items()}
+    any_configured = any(configured.values())
+
+    # Primary button: the first configured provider. On production this is
+    # Google. Shown as the big green card — the one action the page wants.
+    primary = None
+    for key, provider in accounts.PROVIDERS.items():
+        if configured[key]:
+            primary = (key, provider)
+            break
+
+    # Secondary buttons: the other configured providers, smaller.
+    secondaries = [
+        (key, provider)
+        for key, provider in accounts.PROVIDERS.items()
+        if configured[key] and (primary is None or key != primary[0])
+    ]
+
+    # Unconfigured providers are not shown at all. Showing a disabled button
+    # that says "Google is not configured" when Google IS configured would be
+    # confusing, and showing one that says "Apple is not configured" when Apple
+    # was never asked to be is just noise.
+    unconfigured = [key for key, v in configured.items() if not v]
+    unconfigured_note = ""
+    if unconfigured and not any_configured:
+        # Nothing is set. Show a small notice pointing at /setup.
+        unconfigured_note = (
+            '<p class="signin-notice">No sign-in provider is configured on this '
+            'deployment. <a href="/setup">The go-live page</a> names each '
+            'variable.</p>'
+        )
+
+    notice_html = _notice(tone, notice)
+
+    primary_html = ""
+    if primary:
+        key, provider = primary
+        primary_html = (
+            f'<form method="post" action="/auth/start" class="signin-primary">'
+            f'<input type="hidden" name="provider" value="{key}">'
+            f'<button type="submit" class="signin-primary-btn">'
+            f'<span class="signin-provider-name">Continue with {_e(provider.label)}</span>'
+            f'<span class="signin-provider-why">{_e(accounts.WHY[key])}</span>'
+            f"</button></form>"
+        )
+
+    secondary_html = ""
+    if secondaries:
+        buttons = []
+        for key, provider in secondaries:
+            buttons.append(
+                f'<form method="post" action=\"/auth/start\" class="signin-secondary">'
+                f'<input type="hidden" name="provider" value=\"{key}\">'
+                f'<button type=\"submit\" class=\"signin-secondary-btn\">'
+                f'Continue with {_e(provider.label)}</button></form>'
+            )
+        secondary_html = "".join(buttons)
 
     body = f"""
-<div class="masthead">
-  <p class="kicker">Optional · takes ten seconds</p>
-  <h1 class="display">Sign in, or don't</h1>
-  <p class="scopeline">The feed works without an account. Signing in keeps your
-  shortlist across devices and lets us fill employer forms with details your CV
-  already contains — nothing else.</p>
-</div>
-{_notice(tone, notice)}
-{config_note}
-<div class="layout">
-  <div class="feedcol">
-    <div class="section"><span>Continue with</span><em>we ask for a name and an email</em></div>
-    {''.join(cards)}
-    <div class="section mt26"><span>Or stay a guest</span></div>
-    <div class="rail-card flush">
-      <p class="rail-note mt0">A guest gets the whole product on this
-      device: the feed, the shortlist, the brief. Upload a CV and the application kit
-      works exactly the same. The only thing you lose is continuity when you clear
-      your browser.</p>
-      <form method="post" action="/auth/guest" class="mt12">
-        <input type="hidden" name="next" value="/account?guest=1">
-        <button type="submit" class="ghost">Continue as guest</button>
-      </form>
-    </div>
-    <h2>What we store, and what we never ask for</h2>
-    <ul class="sources">
-      <li>Your name and email address, as your provider returns them.</li>
-      <li>The details your CV states, with the line each one came from.</li>
-      <li>Your shortlist and what you told us you applied to.</li>
-    </ul>
-    <p class="small">We do not read your contacts, your posts or your connections —
-    LinkedIn sign-in asks only for your name, headline and email. We do not sell a
-    save, a click or an application to an employer. Deleting your account deletes the
-    CV and blanks the identity, and you can do it in one click.</p>
+<div class=\"signin-wrap\">
+  <div class=\"signin-card\">
+    <p class=\"kicker\">Sign in</p>
+    <h1 class=\"signin-headline\">One account, every job in Kenya.</h1>
+    <p class=\"signin-sub\">Your shortlist follows you across devices, and the
+    application kit fills employer forms from your CV — that's the whole deal.</p>
+    {notice_html}
+    {primary_html}
+    {secondary_html}
+    <form method=\"post\" action=\"/auth/guest\" class=\"signin-guest\">
+      <input type=\"hidden\" name=\"next\" value=\"/account?guest=1\">
+      <button type=\"submit\" class=\"signin-guest-btn\">Continue without an account</button>
+    </form>
+    {unconfigured_note}
+    <p class=\"signin-privacy\">We store your name, your email, and the fields
+    on your CV. We do not read your contacts or your connections, and deleting
+    your account deletes everything in one click.</p>
   </div>
-  <aside class="rail">
-    <div class="rail-card">
-      <h3>Why bother</h3>
-      <p class="rail-note">Two reasons: your shortlist follows you to another device,
-      and the application kit can fill an employer's form from your CV instead of you
-      retyping it at 11pm.</p>
-    </div>
-    <div class="rail-card">
-      <h3>Guest is not a trial</h3>
-      <p class="rail-note">Nothing is withheld from a guest. That is deliberate: a job
-      board that hides jobs behind a login is a lead-generation form with extra steps.</p>
-    </div>
-  </aside>
 </div>"""
     return _page("Sign in — Kazi-Kasi", body, demo=demo)
 
