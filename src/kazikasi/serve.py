@@ -4437,8 +4437,11 @@ class _Handler(BaseHTTPRequestHandler):
     def _respond(self, response: Response) -> None:
         # This server speaks plain HTTP; HSTS belongs on the deployment's edge,
         # where TLS actually terminates (the shim sends it, the base URL decides).
+        # Redirects skip COOP: it's meant for pages with sensitive content, not
+        # for 303s that are part of an OAuth flow coming back from Google.
         policy = security_headers(https=False)
         if response.is_redirect:
+            policy = {k: v for k, v in policy.items() if k != "Cross-Origin-Opener-Policy"}
             self.send_response(response.status)
             for key, value in policy.items():
                 self.send_header(key, value)

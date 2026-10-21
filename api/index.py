@@ -196,12 +196,17 @@ def app(environ, start_response):
             )
         status = f"{response.status} {'OK' if response.status < 400 else 'Error'}"
         payload = response.body.encode("utf-8")
+        policy = serve.security_headers()
+        # Redirects skip COOP: it's meant for pages with sensitive content, not
+        # for 303s that are part of an OAuth flow coming back from Google.
+        if response.is_redirect:
+            policy = {k: v for k, v in policy.items() if k != "Cross-Origin-Opener-Policy"}
         headers = [
             ("Content-Type", response.content_type),
             ("Content-Length", str(len(payload))),
             ("Cache-Control", "no-store"),
             ("X-Content-Type-Options", "nosniff"),
-            *serve.security_headers().items(),
+            *policy.items(),
             *[(key, value) for key, value in response.headers.items()],
         ]
     except Exception as exc:  # noqa: BLE001 - surfaced, not swallowed
