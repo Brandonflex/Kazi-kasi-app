@@ -3761,6 +3761,21 @@ def _handle_sweep(conn, headers: dict, query: dict, *, now: datetime, demo: bool
     return _json(200, report)
 
 
+def _handle_sources(conn, headers: dict, query: dict, *, now: datetime, demo: bool) -> Response:
+    """Source health: which sources are alive, which are dead, when each was last fetched."""
+    from . import db as _db
+    if not _db._is_postgres(conn) and "source_health" not in [
+        row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    ]:
+        return _json(200, {"sources": [], "note": "source_health table not yet created; run the sweep once"})
+    
+    rows = conn.execute(
+        "SELECT source_id, last_seen_at, last_error, status, cadence_minutes FROM source_health ORDER BY source_id"
+    ).fetchall()
+    sources = [dict(row) for row in rows]
+    return _json(200, {"sources": sources, "count": len(sources)})
+
+
 def _handle_cron(conn, headers: dict, query: dict, *, now: datetime, demo: bool) -> Response:
     """One scheduled tick: compose what is due, then deliver it.
 
@@ -3840,6 +3855,9 @@ def _handle_get(
 
     if path == "/api/sweep":
         return _handle_sweep(conn, headers or {}, query, now=now, demo=demo)
+
+    if path == "/api/sources":
+        return _handle_sources(conn, headers or {}, query, now=now, demo=demo)
 
     if path == "/api/health":
         summary = metrics.stats(conn, now=now)

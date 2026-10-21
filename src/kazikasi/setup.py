@@ -478,6 +478,15 @@ def plan(
         "tick": _tick(synthetic=synthetic, cron=cron, transport=whatsapp or sms),
         "checked_at": momentum.isoformat(),
     }
+    
+    # Add source health if the table exists
+    try:
+        source_health_rows = conn.execute(
+            "SELECT source_id, status, last_seen_at, last_error FROM source_health ORDER BY source_id"
+        ).fetchall()
+        instance["source_health"] = [dict(row) for row in source_health_rows]
+    except Exception:
+        instance["source_health"] = []
 
     return Plan(
         steps=steps,
