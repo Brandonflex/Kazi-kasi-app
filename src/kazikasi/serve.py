@@ -1035,6 +1035,14 @@ def synthetic_build() -> bool:
     )
 
 
+def _request_host(headers) -> str:
+    """The Host the browser actually used, so the page can catch a base-URL mismatch."""
+    for key, value in (headers or {}).items():
+        if str(key).lower() == "host":
+            return str(value)
+    return ""
+
+
 def _base_url() -> str:
     return (os.environ.get("KAZIKASI_BASE_URL") or "https://kazi-kasi-app.vercel.app").rstrip("/")
 
@@ -2910,6 +2918,7 @@ def render_setup(
         synthetic=synthetic_build(),
         strict=accounts.strict_mode(),
         base_url=_base_url(),
+        host=_request_host(headers),
     )
     instance = plan.instance
     tick = instance["tick"]
@@ -2973,6 +2982,15 @@ def render_setup(
             else f", then {len(todo) - 1} more."
         )
     )
+    host_warning = (
+        ""
+        if instance["host_matches"]
+        else f"""<div class="whobar"><div><b>You are on {_e(instance['served_host'])}, but this build thinks it lives at
+  {_e(instance['base_url'])}.</b>
+  <span class="small">Every redirect URI below is wrong for the address you are using. Sign-in will
+  bounce back with a state-mismatch error. Fix <code class="key">KAZIKASI_BASE_URL</code> in Vercel and
+  redeploy — or open the site at the address it names.</span></div></div>"""
+    )
     required_done = sum(1 for item in plan.required if item.state == "done")
     optional_open = sum(1 for item in plan.steps if item.state in ("optional", "deferred"))
 
@@ -2991,13 +3009,32 @@ def render_setup(
   <div><b>{'synthetic' if instance['synthetic'] else 'real'}</b><span>corpus</span></div>
   <div><b>{'yes' if tick['runs'] else 'no'}</b><span>tick would send</span></div>
 </div>
-<div class="whobar">
+{host_warning}<div class="whobar">
   <div><b>The scheduled tick, right now:</b>
     <span class="small">{_e(tick['answer'])}{(' — needs ' + _e(tick['needs'])) if tick['needs'] else ''}</span></div>
   <div><span class="badge {corpus_tone}">{_e(instance['corpus']['source'])}</span></div>
 </div>
 {cards}
-<div class="section mt26"><span>When a console fights you</span><em>the three that cost hours</em></div>
+<div class="section mt26"><span>How to test sign-in</span><em>in this order, two minutes</em></div>
+<ol class="whythat trial">
+  <li><b>Click Continue with Google</b> on <a href="/signin">the sign-in page</a>.
+    <span class="small">If the page says the provider is not connected, the variables are not in
+    <em>this</em> build — redeploy first.</span></li>
+  <li><b>You should land on Google's account chooser.</b>
+    <span class="small">That alone proves the client id is valid and the redirect URI is registered.</span></li>
+  <li><b>Pick your account, then look at where you land.</b>
+    <span class="small">A page showing your name and email means sign-in works end to end. Your
+    address appearing at the top right is the same evidence.</span></li>
+  <li><b>If Google says <code class="key">redirect_uri_mismatch</code></b>
+    <span class="small">the URI in the Google client differs from the one above by a character —
+    usually a trailing slash, http vs https, or www.</span></li>
+  <li><b>If Google says <code class="key">invalid_client</code></b>
+    <span class="small">the secret is wrong or has a stray newline from the paste. Re-paste it.</span></li>
+  <li><b>If you bounce back here with a state error</b>
+    <span class="small">the base URL does not match the domain you are on — see the warning above,
+    if there is one.</span></li>
+</ol>
+<div class="section mt26"><span>When a console fights you</span><em>the four that cost hours</em></div>
 <ul class="whythat trouble">{trouble}</ul>
 <p class="small">Nothing on this page is a secret: it renders booleans and public URLs.
 The values themselves live in Vercel and are never read back out.</p>"""
@@ -3803,6 +3840,7 @@ def _handle_get(
             synthetic=synthetic_build(),
             strict=accounts.strict_mode(),
             base_url=_base_url(),
+            host=_request_host(headers),
         )
         return Response(
             200, json.dumps(plan.to_dict(), indent=2, default=str), "application/json; charset=utf-8"

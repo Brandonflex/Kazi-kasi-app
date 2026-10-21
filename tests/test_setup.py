@@ -298,3 +298,128 @@ class TestThePageDoesNotInstructYouAboutFinishedWork:
             conn.close()
         assert "Nothing required is missing" in body
         assert "Do these, in this order" not in body
+
+
+class TestWhyAVariableIsUnusable:
+    """"missing" is four different mistakes with four different fixes.
+
+    On Vercel the same word covers: never saved, saved blank, saved with a pasted
+    newline (which OAuth rejects as invalid_client), and saved under a
+    nearly-identical name. Each has its own remedy, so the page names the state.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clean(self, monkeypatch):
+        for name in (
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_CLIENT_SECRET_KEY",
+            "LINKEDIN_CLIENT_ID",
+            "WHATSAPP_TOKEN",
+            "AT_USERNAME",
+            "AT_API_KEY",
+        ):
+            monkeypatch.delenv(name, raising=False)
+
+    def test_a_plain_value_is_set(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "id.apps.googleusercontent.com")
+        assert setup._probe("GOOGLE_CLIENT_ID")["state"] == "set"
+
+    def test_empty_is_not_missing(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "   ")
+        assert setup._probe("GOOGLE_CLIENT_ID")["state"] == "blank"
+
+    def test_a_pasted_newline_is_reported_as_padding(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "GOCSPX-abc\n")
+        probe = setup._probe("GOOGLE_CLIENT_SECRET")
+        assert probe["state"] == "padded"
+
+    def test_a_near_identical_name_is_named(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET_KEY", "value")
+        probe = setup._probe("GOOGLE_CLIENT_SECRET")
+        assert probe["state"] == "near"
+        assert probe["seen"] == "GOOGLE_CLIENT_SECRET_KEY"
+
+    def test_lowercase_and_hyphens_count_as_the_same_name(self, monkeypatch):
+        monkeypatch.setenv("google-client-secret", "value")
+        assert setup._probe("GOOGLE_CLIENT_SECRET")["state"] == "near"
+
+    def test_absent_says_redeploy(self):
+        assert setup._probe("GOOGLE_CLIENT_ID")["state"] == "absent"
+        assert "redeploy" in setup._explain(["GOOGLE_CLIENT_ID"])
+
+    def test_the_sentence_never_contains_a_value(self, monkeypatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "GOCSPX-do-not-print-me\n")
+        text = setup._explain(["GOOGLE_CLIENT_SECRET"])
+        assert "GOCSPX-do-not-print-me" not in text
+        assert "whitespace" in text
+
+    def test_the_page_surfaces_the_redeploy_hint(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "redeploy" in body
+
+
+class TestTheHostItIsActuallyServedOn:
+    """A redirect_uri built for a domain the visitor is not on fails at the callback.
+
+    The failure shows up as a state-mismatch on Google's end, which points at
+    cookies and CSRF, not at KAZIKASI_BASE_URL. Catching it on /setup is the whole
+    point of deriving the page from the request.
+    """
+
+    def test_a_matching_host_is_quiet(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            page_html = serve.render_setup(
+                conn, now=NOW, headers={"host": "kazi-kasi-app.vercel.app"}
+            )
+        finally:
+            conn.close()
+        assert "but this build thinks it lives at" not in page_html
+
+    def test_a_mismatched_host_is_named(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            page_html = serve.render_setup(conn, now=NOW, headers={"host": "example.org"})
+        finally:
+            conn.close()
+        assert "You are on example.org" in page_html
+        assert "KAZIKASI_BASE_URL" in page_html
+
+    def test_the_json_reports_it_too(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            plan = setup.plan(
+                conn, synthetic=True, strict=True, host="example.org:443"
+            )
+        finally:
+            conn.close()
+        assert plan.instance["host_matches"] is False
+        assert plan.instance["served_host"] == "example.org"
+
+
+class TestTheTestingRecipe:
+    """The page has to say how to *verify*, not only what to paste."""
+
+    def test_it_lists_the_sign_in_test_in_order(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "How to test sign-in" in body
+        assert "redirect_uri_mismatch" in body
+        assert "invalid_client" in body
+        assert "/signin" in body
+
+    def test_the_redeploy_entry_names_the_environment_scope(self):
+        conn = serve.demo_connection(now=NOW)
+        try:
+            body = page(conn)
+        finally:
+            conn.close()
+        assert "Preview environment only" in body or "Production" in body

@@ -51,6 +51,72 @@ def _has(name: str) -> bool:
     return bool((os.environ.get(name) or "").strip())
 
 
+def _normalise(name: str) -> str:
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def _probe(name: str) -> dict:
+    """Why a variable is not usable — the cause, not just the verdict.
+
+    "missing: GOOGLE_CLIENT_ID" is true and useless. On Vercel the same verdict
+    covers four very different mistakes, and each has a different fix:
+
+    ``blank``  the row exists with an empty value (a paste that selected nothing);
+    ``padded`` the value arrived with a newline or spaces, which OAuth rejects as
+               ``invalid_client`` — the value is *there*, so "missing" sends you
+               looking in the wrong place;
+    ``near``   a row with a nearly-identical name exists — a trailing space, a
+               different case, a ``_KEY`` suffix — so the value is in the account,
+               just not under the name the code reads;
+    ``absent`` genuinely not in this build's environment. On Vercel that is
+               usually "saved after this deployment was built".
+
+    Reports the **name state only**. Values are never read into the result.
+    """
+    raw = os.environ.get(name)
+    if raw is not None:
+        if not raw.strip():
+            return {"state": "blank", "name": name}
+        if raw != raw.strip():
+            return {"state": "padded", "name": name}
+        return {"state": "set", "name": name}
+
+    wanted = _normalise(name)
+    for key in sorted(os.environ):
+        norm = _normalise(key)
+        if norm == wanted:
+            return {"state": "near", "name": name, "seen": key}
+        if wanted and (norm.startswith(wanted) or wanted.startswith(norm)) and abs(
+            len(norm) - len(wanted)
+        ) <= 6:
+            return {"state": "near", "name": name, "seen": key}
+    return {"state": "absent", "name": name}
+
+
+#: One sentence per state, used in the step detail line.
+_PROBE_TEXT = {
+    "blank": "{name} exists but its value is empty — re-paste it in Vercel",
+    "padded": "{name} has leading or trailing whitespace — re-paste the value cleanly",
+    "near": "{name} is not set, but a variable named {seen} exists — rename it",
+    "absent": "{name} is not in this build — if you just added it, redeploy",
+}
+
+
+def _explain(names) -> str:
+    """A detail line that says what to do, not merely what is wrong."""
+    parts = []
+    for name in names:
+        probe = _probe(name)
+        if probe["state"] == "set":
+            continue
+        parts.append(_PROBE_TEXT[probe["state"]].format(**probe))
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0] + "."
+    return "; ".join(parts) + "."
+
+
 @dataclass
 class Paste:
     """A value the person copies into a console or a variable row."""
@@ -137,8 +203,15 @@ def plan(
     synthetic: bool,
     strict: bool,
     base_url: str = "https://kazi-kasi-app.vercel.app",
+    host: str | None = None,
 ) -> Plan:
-    """The whole go-live picture, from the process that is serving this request."""
+    """The whole go-live picture, from the process that is serving this request.
+
+    ``host`` is the Host header of the request that produced the page. If it does
+    not match ``base_url``, every redirect_uri on this page is wrong for the domain
+    the visitor is actually on — which shows up as a sign-in that bounces back with
+    a state-mismatch error, far from the variable that caused it.
+    """
     momentum = now or datetime.now(timezone.utc)
     providers = _provider_blocks(base_url)
     session = accounts.readiness(base_url=base_url)["session"]
@@ -186,7 +259,7 @@ def plan(
                 "redirect URI above into Authorised redirect URIs. While the consent "
                 "screen is in Testing, add your own address as a test user."
             ),
-            detail="" if google["configured"] else "missing: " + ", ".join(google["missing"]),
+            detail="" if google["configured"] else _explain(google["missing"]),
         )
     )
 
@@ -210,7 +283,7 @@ def plan(
                 "linkedin.com/company/setup/new, then type its name back into the field "
                 "and pick it from the list. Skip this entirely until Google works."
             ),
-            detail="" if linkedin["configured"] else "missing: " + ", ".join(linkedin["missing"]),
+            detail="" if linkedin["configured"] else _explain(linkedin["missing"]),
         )
     )
 
@@ -270,7 +343,19 @@ def plan(
                 "fallback. One of them is enough to start; the fallback is what saves a "
                 "number that is not on WhatsApp."
             ),
-            detail=f"whatsapp: {'set' if whatsapp else 'unset'} · sms: {'set' if sms else 'unset'}",
+            detail=(
+                f"whatsapp: {'set' if whatsapp else 'unset'} · sms: {'set' if sms else 'unset'}"
+                + (
+                    ""
+                    if (whatsapp or sms)
+                    else " · "
+                    + _explain(
+                        ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"]
+                        if not whatsapp
+                        else ["AT_USERNAME", "AT_API_KEY"]
+                    )
+                )
+            ),
         )
     )
 
@@ -294,8 +379,15 @@ def plan(
         )
     )
 
+    served = (host or "").strip().lower().split(":")[0]
+    expected = (base_url or "").split("://")[-1].split("/")[0].lower()
+    host_matches = not served or not expected or served == expected
+
     instance = {
         "build": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev",
+        "base_url": base_url,
+        "served_host": served or None,
+        "host_matches": host_matches,
         "schema": database.SCHEMA_VERSION,
         "live_jobs": summary["live_jobs"],
         "sources": len(summary["jobs_per_source"]),
@@ -355,8 +447,18 @@ def plan(
             },
             {
                 "symptom": "A new variable changed nothing on the live site.",
-                "cause": "Variables apply to a build, not to the running one.",
-                "fix": "Deployments → the top entry → ⋯ → Redeploy. Then reload /api/setup.",
+                "cause": (
+                    "Variables apply to a build, not to the running one. Three ways this "
+                    "happens: saved after the running build was created; saved into the "
+                    "Development or Preview environment only, while the site serves "
+                    "Production; or saved under a slightly different name."
+                ),
+                "fix": (
+                    "Deployments → the top entry → ⋯ → Redeploy, then reload /api/setup. "
+                    "Still missing? Settings → Environment Variables → open the row and check "
+                    "that Production is ticked and the Key matches character for character "
+                    "(this page names the near-miss if it can see one)."
+                ),
             },
         ],
     )
