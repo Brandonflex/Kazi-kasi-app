@@ -321,6 +321,42 @@ pre.msg{white-space:pre-wrap;font:13.5px/1.6 var(--font-mono);background:var(--s
   color:var(--forest);border:1px solid var(--forest);border-radius:var(--radius-pill);
   padding:9px 16px;cursor:pointer;min-height:40px}
 .whobar button.ghost:hover{background:var(--forest-soft)}
+
+
+/* Sign-in providers. These classes existed in the markup but were never defined —
+   a stylesheet rewrite dropped them, and the buttons rendered as unstyled inline
+   text. tests/test_css_coverage.py now fails if markup names a class the sheet
+   does not define. */
+.provider{display:flex;align-items:center;gap:12px;margin-bottom:10px;
+  padding:4px;border-radius:calc(var(--radius) + 4px)}
+.provider-button{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  font:inherit;text-align:left;cursor:pointer;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius);padding:13px 16px;
+  color:var(--ink);min-height:52px;
+  transition:border-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out}
+.provider-button b{font-size:14.5px;font-weight:650}
+.provider-button span{font-size:12.5px;color:var(--muted);line-height:1.35}
+.provider-button:hover{border-color:var(--forest);box-shadow:var(--shadow);
+  transform:translateY(-1px)}
+.provider-button:focus-visible{outline:2px solid var(--forest);outline-offset:2px}
+.provider-button.off{background:var(--sunken);color:var(--muted);cursor:not-allowed;
+  border-style:dashed;opacity:.85}
+.provider-button.off:hover{border-color:var(--line);box-shadow:none;transform:none}
+.provider-state{font-size:11.5px;border-radius:var(--radius-pill);padding:3px 10px;
+  border:1px solid var(--line);background:var(--sunken);color:var(--muted);
+  white-space:nowrap;flex:none}
+.provider-state.ready{background:var(--forest-soft);border-color:var(--forest);color:var(--forest)}
+
+/* The numbered verification list on the go-live page. */
+.trial{list-style:none;padding:0;margin:0;counter-reset:trial}
+.trial li{padding:11px 0 11px 34px;border-bottom:1px solid var(--line);position:relative;
+  font-size:13.5px;counter-increment:trial}
+.trial li:last-child{border-bottom:none}
+.trial li::before{content:counter(trial);position:absolute;left:0;top:11px;
+  width:22px;height:22px;border-radius:50%;background:var(--sunken);
+  border:1px solid var(--line);color:var(--ink-2);font-size:11.5px;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+.trial li .small{display:block;margin-top:3px}
 .evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
   padding-left:12px;margin:12px 0 4px}
 h1{font-family:var(--font-display);font-weight:400;font-size:38px;line-height:1.08;
@@ -1700,16 +1736,26 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
     configured = {key: provider.configured for key, provider in accounts.PROVIDERS.items()}
     cards = []
     for key, provider in accounts.PROVIDERS.items():
-        state = "ready" if configured[key] else "not configured in this build"
-        cards.append(
-            '<form method="post" action="/auth/start" class="provider">'
-            f'<input type="hidden" name="provider" value="{key}">'
-            f'<button type="submit" class="provider-button{" off" if not configured[key] else ""}">'
-            f'<b>Continue with {_e(provider.label)}</b>'
-            f"<span>{_e(accounts.WHY[key])}</span></button>"
-            f'<span class="small">{_e(state)}</span>'
-            "</form>"
-        )
+        label = f"Continue with {_e(provider.label)}"
+        why = f"<span>{_e(accounts.WHY[key])}</span>"
+        if configured[key]:
+            cards.append(
+                '<form method="post" action="/auth/start" class="provider">'
+                f'<input type="hidden" name="provider" value="{key}">'
+                f'<button type="submit" class="provider-button"><b>{label}</b>{why}</button>'
+                '<span class="provider-state ready">ready</span>'
+                "</form>"
+            )
+        else:
+            # A button that cannot work is worse than no button: it invites a click,
+            # then explains itself. This is a statement, with the fix next to it.
+            cards.append(
+                '<div class="provider">'
+                f'<button type="button" class="provider-button off" disabled>'
+                f"<b>{label}</b>{why}</button>"
+                '<span class="provider-state">not configured</span>'
+                "</div>"
+            )
 
     none_ready = not any(configured.values())
     config_note = (
@@ -3626,6 +3672,13 @@ def handle(
         if action_limiter is not None and not action_limiter.allow(client):
             return Response(429, "too many actions", "text/plain; charset=utf-8")
         return _handle_action(conn, body, header_map)
+    if path == "/auth/start":
+        # The sign-in page posts here with the provider in the body. This route did
+        # not exist, so every "Continue with ..." button answered 404 — the flow was
+        # built, tested through GET /auth/<provider>/start, and unreachable from the
+        # only place a person actually clicks it. Provenance is the lesson: test the
+        # route the markup posts to, not the route the helper is named after.
+        return _handle_auth_start_post(conn, body, demo=demo, now=now)
     if path in ("/auth/guest", "/auth/demo", "/auth/signout", "/account/cv", "/account/forget"):
         return _handle_account_post(conn, path, body, header_map, demo=demo, now=now)
     return Response(404, "not found", "text/plain; charset=utf-8")
@@ -4095,6 +4148,38 @@ def _handle_action(conn, body: bytes, headers: dict) -> Response:
     location = back or (f"/?profile={quote(profile_id)}" if profile_id else "/")
     return Response(303, "", headers={"Location": location})
 
+
+
+def _handle_auth_start_post(conn, body: bytes, *, demo: bool, now: datetime) -> Response:
+    """Turn "Continue with X" into the provider's consent screen.
+
+    Redirects (303, not 307) so a refresh re-enters through the gate rather than
+    replaying a POST. The provider must be one we know *and* one this build can
+    actually talk to; anything else goes back to the page that offered it, with a
+    notice that names the missing variable rather than a dead end.
+    """
+    form = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+    provider_key = (form.get("provider") or [""])[0].strip().lower()
+    provider = accounts.PROVIDERS.get(provider_key)
+    if provider is None:
+        return _redirect(
+            "/signin?notice=" + quote("That sign-in option does not exist.") + "&tone=warn"
+        )
+    if not provider.configured:
+        missing = ", ".join(
+            name
+            for name, present in (
+                (provider.client_id_env, bool(os.environ.get(provider.client_id_env))),
+                (provider.client_secret_env, bool(os.environ.get(provider.client_secret_env))),
+            )
+            if not present
+        )
+        return _redirect(
+            "/signin?notice="
+            + quote(f"{provider.label} is not configured in this build. Missing: {missing}.")
+            + "&tone=warn"
+        )
+    return _redirect(f"/auth/{provider.key}/start")
 
 
 def _redirect(location: str, *, cookie: str | None = None) -> Response:
