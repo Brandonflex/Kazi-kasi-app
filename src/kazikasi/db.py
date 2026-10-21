@@ -752,6 +752,12 @@ def _patch_postgres_conn(conn) -> None:
     def _execute(sql, params=None):
         cur = conn.cursor()
         if params:
+            # psycopg3 only understands %s and %(name)s placeholders; ``?`` is
+            # a literal. The rest of the codebase writes sqlite-style queries
+            # (metrics.stats, momentum.attention_weeks, etc.). Translate here
+            # so every query works on both backends without touching call sites.
+            if "?" in sql and "%s" not in sql:
+                sql = sql.replace("?", "%s")
             cur.execute(sql, params)
         else:
             cur.execute(sql)
@@ -762,8 +768,16 @@ def _patch_postgres_conn(conn) -> None:
 
 
 def _is_postgres(conn) -> bool:
-    """psycopg connections have ``info``; sqlite3 connections do not."""
-    return type(conn).__name__ == "Connection" and hasattr(conn, "info")
+    """psycopg3 connections are instances of psycopg.Connection; sqlite3 ones
+    are not. ``isinstance`` against the actual class is unambiguous — the old
+    ``type(conn).__name__ == "Connection"`` check broke across psycopg3 minor
+    versions that renamed the class.
+    """
+    try:
+        from psycopg import Connection as _PsycopgConnection
+        return isinstance(conn, _PsycopgConnection)
+    except ImportError:
+        return False
 
 
 def _current_version(conn) -> int:
