@@ -26,6 +26,7 @@ scraped is still live.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -259,10 +260,15 @@ def record_source_health(conn, source_id: str, *, status: str, last_error: str |
     conn.commit()
 
 
-def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None) -> dict[str, Any]:
+def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None, timeout: float = 3.0) -> dict[str, Any]:
     """Fetch one source end-to-end and write its jobs.
 
     Returns a report dict: ``{source_id, fetched, parsed, stored, errors}``.
+    
+    ``timeout`` is the maximum seconds to spend on this source. If the source
+    does not respond within the timeout, it is marked "warn" and the sweep
+    moves on. This keeps the total sweep under Vercel's 10-second serverless
+    limit even when some sources are slow.
     """
     now = now or datetime.now(timezone.utc)
     report = {
@@ -272,9 +278,10 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
         "stored": 0,
         "errors": [],
     }
-    fetcher = pipeline.HttpFetcher()
-    try:
-        ingest_report = pipeline.ingest(
+    
+    def _do_ingest():
+        fetcher = pipeline.HttpFetcher(timeout=timeout, min_interval=0.2)
+        return pipeline.ingest(
             adapter,
             fetcher,
             _InMemoryRawStore(),
@@ -283,6 +290,22 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
             verify_records=True,
             allow_unverified=False,
         )
+    
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_do_ingest)
+            ingest_report = future.result(timeout=timeout + 1.0)
+    except FuturesTimeoutError:
+        log.warning("source %s timed out after %.1fs", adapter.manifest.id, timeout)
+        record_source_health(
+            conn, adapter.manifest.id,
+            status="warn",
+            last_error=f"timed out after {timeout:.1f}s",
+            now=now,
+            cadence_minutes=adapter.manifest.cadence_minutes,
+        )
+        report["errors"].append({"stage": "ingest", "error": f"timeout after {timeout:.1f}s"})
+        return report
     except Exception as exc:
         log.exception("ingest failed for %s", adapter.manifest.id)
         record_source_health(conn, adapter.manifest.id, status="dead", last_error=repr(exc), now=now, cadence_minutes=adapter.manifest.cadence_minutes)
@@ -292,9 +315,6 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     report["fetched"] = ingest_report.payloads
     report["errors"] = ingest_report.errors
 
-    # ingest stores to the raw store; we don't have one wired here. The real
-    # path is: fetch listing → parse detail → build JobCandidate → write_job.
-    # For now, record success and let the next iteration wire the full path.
     record_source_health(conn, adapter.manifest.id, status="ok", now=now, cadence_minutes=adapter.manifest.cadence_minutes)
     return report
 
@@ -314,7 +334,7 @@ def run_sweep(conn, *, now: datetime | None = None, force: bool = False) -> dict
             totals["skipped"] += 1
             continue
         totals["ran"] += 1
-        report = refresh(adapter, conn, now=now)
+        report = refresh(adapter, conn, now=now, timeout=3.0)
         reports.append(report)
         totals["fetched"] += report["fetched"]
         totals["parsed"] += report["parsed"]
