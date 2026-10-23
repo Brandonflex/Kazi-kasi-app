@@ -777,6 +777,7 @@ def _page(
 <meta name="description" content="Kazi-Kasi — jobs you can reach. Personalized search, application tracking, and keyword matching.">
 <title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
 <body>
+<noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi — jobs you can reach">
 {SCOPE_MARK}
@@ -794,7 +795,15 @@ Eligibility labels quote the advert. Applications happen on the employer's site,
 {demo_line}</footer>
 <script>
 // Scroll-triggered reveal animations
-if ('IntersectionObserver' in window) {{
+(function() {{
+  // Fallback: if IntersectionObserver not supported, show all elements
+  if (!('IntersectionObserver' in window)) {{
+    document.querySelectorAll('.reveal').forEach(function(el) {{
+      el.classList.add('in');
+    }});
+    return;
+  }}
+  
   const observer = new IntersectionObserver((entries) => {{
     entries.forEach(entry => {{
       if (entry.isIntersecting) {{
@@ -803,8 +812,24 @@ if ('IntersectionObserver' in window) {{
       }}
     }});
   }}, {{ threshold: 0.1, rootMargin: '0px 0px -50px 0px' }});
-  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-}}
+  
+  // Observe all reveal elements
+  const elements = document.querySelectorAll('.reveal');
+  elements.forEach(el => observer.observe(el));
+  
+  // Immediately check which elements are in viewport and mark them
+  // This ensures above-the-fold content is visible right away
+  requestAnimationFrame(() => {{
+    elements.forEach(el => {{
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {{
+        el.classList.add('in');
+        observer.unobserve(el);
+      }}
+    }});
+  }});
+}})();
+
 // Header scroll state
 window.addEventListener('scroll', () => {{
   document.querySelector('header').classList.toggle('scrolled', window.scrollY > 10);
