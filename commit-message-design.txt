@@ -1,0 +1,37 @@
+Major design system overhaul: Editorial craft + brand identity
+
+Implements comprehensive visual redesign based on user-provided design assets:
+- Template (dark editorial marketing page)
+- Two brand identity systems (GLM 5 Turbo + Mercury 3)
+
+Design System v2:
+- Typography: Fraunces (display, editorial serif) + Inter (body, modern sans)
+- Palette: Espresso (#14110d) + Bone (#f7f2e8) + Ochre (#f0ac3e) + Terracotta (#c96f4a)
+- Motion: cubic-bezier(.22,1,.36,1) ease-out, 350ms transitions
+- Shape: 24px radius cards, 999px pill buttons, warm layered shadows
+- Glass-morphism header with backdrop-filter blur
+- Scroll-triggered reveal animations with staggered delays
+
+Brand Identity (synthesized from Mercury 3 + template):
+- "K" monogram logo in rounded square (espresso on bone)
+- Editorial masthead pattern: kicker → display heading → scopeline
+- Warm, organic, human — anti-AI aesthetic (no neon, no glow)
+
+Component Updates:
+- Job cards: Editorial styling, hover lift, border-color transitions
+- Buttons: Pill-shaped, ochre primary, tactile hover states
+- Chips: Warm bone background, ochre hover, smooth transitions
+- Header: Sticky, glass-morphism, scroll-aware background
+- Feed header: Editorial kicker + Fraunces display heading
+
+Visual Language:
+- Warm bone background (not stark white)
+- Ochre accent for CTAs and highlights
+- Terracotta secondary for warnings/offers
+- Sage green for success states
+- Espresso for primary text and dark elements
+
+This is the foundation for the full application redesign. Next phases will
+apply this design language to the tracker, shortlist, and other pages.
+
+Assets saved to docs/assets/ for reference.

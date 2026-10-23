@@ -1,0 +1,44 @@
+Add Mokaru-inspired functional efficiency features
+
+Core functional improvements borrowed from Mokaru workflow patterns:
+
+Application Tracker Module (new: src/kazikasi/applications.py)
+- Full pipeline: watchlist → saved → applied → screening → interview → offer → rejected
+- Upsert on (account_id, job_id) — one record per job per user
+- Status machine with real transitions and timestamps
+- Pipeline statistics dashboard (counts per stage, active vs terminal)
+- Follow-up reminders per application
+- Contact tracking (recruiter name, email) per application
+- Match score computation: transparent keyword matching vs missing
+
+Match Transparency on Job Cards (Mokaru-style)
+- Shows matching keywords count (green badge)
+- Shows missing keywords count (orange badge)
+- Computed from CV fields vs job title/employer
+- Never fabricates — uses only real CV data
+
+Application Status Badge on Cards
+- Each job card shows current application stage
+- Color-coded pill badges per stage
+- Watchlist (grey), Saved (blue), Applied (green), Screening (yellow),
+  Interview (blue), Offer (pink), Rejected (red)
+
+Database Changes (src/kazikasi/db.py)
+- New applications table with:
+  - Status pipeline (8 stages)
+  - Match score and match details (JSON)
+  - Applied timestamp, last action timestamp
+  - Notes, recruiter contact info
+  - Follow-up reminder timestamp
+  - Salary as seen on listing
+  - Resume version used
+  - Source URL of original listing
+- Migration handles both SQLite and Postgres
+- Indexes on (account_id, status) and (job_id)
+
+Functional Philosophy (from Mokaru)
+- One-click save with instant match computation
+- Transparent scoring: shows what matches AND what's missing
+- Pipeline visibility: see exactly where each application stands
+- No fabrication: uses only real user data
+- Reduces cognitive load: everything in one place
