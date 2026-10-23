@@ -1947,7 +1947,7 @@ def render_account(
     identity = []
     if account is None:
         identity.append(
-            '<p>You're browsing as a guest. <a href="/signin">Sign in</a>'
+            '<p>You are browsing as a guest. <a href="/signin">Sign in</a>'
             " to keep your shortlist across devices and browsers.</p>"
         )
     else:
