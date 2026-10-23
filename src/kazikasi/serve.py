@@ -123,6 +123,30 @@ a:hover{text-decoration:underline;text-underline-offset:2px}
 ::selection{background:var(--forest-soft);color:var(--ink)}
 a{-webkit-tap-highlight-color:transparent}
 
+/* ---- buttons with tactile feedback -------------------------------- */
+button{transition:transform var(--duration-fast) var(--ease-out),
+                 box-shadow var(--duration-fast) var(--ease-out),
+                 background var(--duration-normal) var(--ease-out)}
+button:active{transform:translateY(1px);box-shadow:none}
+button:not(:disabled):hover{transform:translateY(-1px)}
+button[disabled]{opacity:.5;cursor:not-allowed}
+
+/* ---- animations -------------------------------------------------- */
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.animate-fade{animation:fadeIn var(--duration-normal) var(--ease-out)}
+.animate-slide{animation:slideIn var(--duration-normal) var(--ease-out)}
+
+/* Staggered list animations */
+.card:nth-child(1){animation-delay:0ms}
+.card:nth-child(2){animation-delay:30ms}
+.card:nth-child(3){animation-delay:60ms}
+.card:nth-child(4){animation-delay:90ms}
+.card:nth-child(5){animation-delay:120ms}
+.card:nth-child(6){animation-delay:150ms}
+.card:nth-child(7){animation-delay:180ms}
+.card:nth-child(8){animation-delay:210ms}
+
 /* ---- the masthead -------------------------------------------------- */
 header{position:sticky;top:0;z-index:20;background:rgba(251,248,242,.93);
   border-bottom:1px solid var(--line);backdrop-filter:saturate(140%) blur(10px)}
@@ -835,7 +859,7 @@ def render_feed(
             )
 
         cards.append(
-            f"""<article class="card">
+            f"""<article class="card animate-fade">
   <div class="card-top">
     <div>
       <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
