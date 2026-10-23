@@ -4823,7 +4823,11 @@ class _Handler(BaseHTTPRequestHandler):
         body = self._read_body() if method == "POST" else b""
         headers = {key: value for key, value in self.headers.items()}
 
-        conn = db.connect(self.db_path)
+        # Use demo connection when demo mode is enabled
+        if self.demo:
+            conn = demo_connection(thread_safe=True)
+        else:
+            conn = db.connect(self.db_path)
         try:
             response = handle(
                 conn,
