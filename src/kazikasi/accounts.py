@@ -507,6 +507,10 @@ def exchange(
         "email": merged.get("email"),
         "email_verified": bool(merged.get("email_verified")),
         "name": merged.get("name") or merged.get("given_name"),
+        "given_name": merged.get("given_name"),
+        "family_name": merged.get("family_name"),
+        "picture": merged.get("picture"),
+        "locale": merged.get("locale"),
     }
 
 
@@ -521,14 +525,18 @@ def _now(now: datetime | None = None) -> datetime:
 
 def new_account(conn, *, kind: str, provider: str | None = None, subject: str | None = None,
                 email: str | None = None, email_verified: bool = False, name: str | None = None,
+                given_name: str | None = None, family_name: str | None = None,
+                picture: str | None = None, locale: str | None = None,
                 now: datetime | None = None) -> dict:
     moment = _now(now)
     account_id = "acc_" + secrets.token_urlsafe(12)
     conn.execute(
         """INSERT INTO accounts (id, kind, provider, subject, email, email_verified, name,
+                                 given_name, family_name, picture, locale,
                                  created_at, last_seen_at)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (account_id, kind, provider, subject, email, int(email_verified), name,
+         given_name, family_name, picture, locale,
          moment.isoformat(), moment.isoformat()),
     )
     conn.commit()
@@ -556,6 +564,10 @@ def sign_in(conn, provider_key: str, identity: dict, *, now: datetime | None = N
             email=identity.get("email"),
             email_verified=bool(identity.get("email_verified")),
             name=identity.get("name"),
+            given_name=identity.get("given_name"),
+            family_name=identity.get("family_name"),
+            picture=identity.get("picture"),
+            locale=identity.get("locale"),
             now=moment,
         )
     if row["deleted_at"]:
@@ -568,14 +580,24 @@ def sign_in(conn, provider_key: str, identity: dict, *, now: datetime | None = N
             email=identity.get("email"),
             email_verified=bool(identity.get("email_verified")),
             name=identity.get("name"),
+            given_name=identity.get("given_name"),
+            family_name=identity.get("family_name"),
+            picture=identity.get("picture"),
+            locale=identity.get("locale"),
             now=moment,
         )
     conn.execute(
         """UPDATE accounts SET last_seen_at = ?, email = COALESCE(?, email),
-                               email_verified = MAX(email_verified, ?), name = COALESCE(?, name)
+                               email_verified = MAX(email_verified::integer, ?)::smallint, 
+                               name = COALESCE(?, name),
+                               given_name = COALESCE(?, given_name),
+                               family_name = COALESCE(?, family_name),
+                               picture = COALESCE(?, picture),
+                               locale = COALESCE(?, locale)
             WHERE id = ?""",
         (moment.isoformat(), identity.get("email"), int(bool(identity.get("email_verified"))),
-         identity.get("name"), row["id"]),
+         identity.get("name"), identity.get("given_name"), identity.get("family_name"),
+         identity.get("picture"), identity.get("locale"), row["id"]),
     )
     conn.commit()
     return account(conn, row["id"])

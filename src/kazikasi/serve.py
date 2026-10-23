@@ -37,6 +37,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from . import (
     accounts,
+    applications,
     autofill,
     brief as brief_module,
     bundle as bundle_module,
@@ -44,6 +45,7 @@ from . import (
     digest as digest_module,
     dossier,
     employer,
+    features,
     graph,
     recap,
     metrics,
@@ -83,410 +85,587 @@ SLO_LABEL = {
 }
 
 STYLE = """
-:root{
-  /* design tokens — human-centered, anti-AI aesthetic (Oct 2026) */
-  /* Warm, earthy palette — inspired by clay, soil, natural materials */
-  --paper:#FAF7F2; --card:#FFFDF9; --sunken:#F0EBE3; --line:#E5DFD5;
-  --ink:#2C2C2C; --ink-2:#5A5449; --muted:#7A7265;
-  --forest:#0D4D2B; --forest-soft:#E8F0EA;
-  --clay:#C97B5A; --clay-soft:#F5E6DD;
-  --gold:#D4A574; --gold-soft:#F9F0E6;
-  --amber:#B8860B; --amber-soft:#FDF5E6;
-  --risk:#C75B3A; --risk-soft:#FDE8E0;
-  --live:#15803D;
-  --accent:var(--forest); --accent-soft:var(--forest-soft);
-  --warn:var(--amber); --warn-soft:var(--amber-soft);
-  --danger:var(--risk); --danger-soft:var(--risk-soft);
-  --bg:var(--paper);
-  --radius:16px; --radius-sm:10px; --radius-pill:999px;
-  --shadow:0 1px 2px rgba(44,44,44,.04),0 10px 30px rgba(44,44,44,.05);
-  --shadow-lift:0 2px 4px rgba(44,44,44,.05),0 18px 44px rgba(44,44,44,.09);
-  --shadow-tactile:0 1px 1px rgba(44,44,44,.06),0 4px 12px rgba(44,44,44,.08),0 8px 24px rgba(44,44,44,.04);
-  --focus:0 0 0 3px #D4C4B0, 0 0 0 1px #0D4D2B;
-  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --font-display:Georgia,"Iowan Old Style","Times New Roman",serif;
-  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  /* Animation timing — fast, responsive, natural */
-  --ease-out:cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast:150ms;
-  --duration-normal:250ms;
+/* Kazi-Kasi design system — v2, October 2026
+ * Inspired by editorial craft: Fraunces + Inter, ochre accent,
+ * espresso/bone palette, cubic-bezier motion, glass-morphism cards.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Palette — espresso + bone + ochre */
+  --espresso: #14110d;
+  --bone: #f7f2e8;
+  --bone-dim: #efe8d8;
+  --ochre: #f0ac3e;
+  --ochre-soft: rgba(240,172,62,.12);
+  --ochre-border: rgba(240,172,62,.4);
+  --terracotta: #c96f4a;
+  --terracotta-soft: rgba(201,111,74,.12);
+  --sage: #6b8e7f;
+  --sage-soft: rgba(107,142,127,.14);
+  --slate: #8B90A4;
+  --slate-soft: rgba(139,144,164,.12);
+
+  /* Semantic */
+  --bg: var(--bone);
+  --card: #fbf8f1;
+  --sunken: var(--bone-dim);
+  --line: rgba(20,17,13,.12);
+  --ink: var(--espresso);
+  --ink-2: rgba(20,17,13,.62);
+  --muted: rgba(20,17,13,.45);
+
+  --accent: var(--ochre);
+  --accent-soft: var(--ochre-soft);
+  --accent-border: var(--ochre-border);
+  --success: var(--sage);
+  --success-soft: var(--sage-soft);
+  --warn: var(--ochre);
+  --warn-soft: var(--ochre-soft);
+  --danger: var(--terracotta);
+  --danger-soft: var(--terracotta-soft);
+  --live: var(--sage);
+
+  /* Shape */
+  --radius: 24px;
+  --radius-sm: 14px;
+  --radius-pill: 999px;
+
+  /* Shadow — warm, soft, layered */
+  --shadow: 0 1px 2px rgba(20,17,13,.05), 0 4px 14px rgba(20,17,13,.06);
+  --shadow-lift: 0 14px 34px rgba(20,17,13,.14);
+  --shadow-tactile: 0 2px 4px rgba(20,17,13,.06), 0 8px 20px rgba(20,17,13,.08);
+
+  /* Focus */
+  --focus: 0 0 0 2px var(--bone), 0 0 0 4px var(--ochre);
+
+  /* Typography */
+  --font-display: 'Fraunces', Georgia, 'Iowan Old Style', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Motion — editorial ease-out, intentional */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --duration-fast: 200ms;
+  --duration-normal: 350ms;
+  --duration-slow: 550ms;
 }
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--font-sans);
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-  /* Subtle film grain texture — human, tactile, anti-AI */
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
-a{color:var(--forest);text-decoration:none}
-a:hover{text-decoration:underline;text-underline-offset:2px}
-:focus-visible{outline:none;box-shadow:var(--focus);border-radius:8px}
-::selection{background:var(--forest-soft);color:var(--ink)}
-a{-webkit-tap-highlight-color:transparent}
 
-/* ---- buttons with tactile feedback -------------------------------- */
-button{transition:transform var(--duration-fast) var(--ease-out),
-                 box-shadow var(--duration-fast) var(--ease-out),
-                 background var(--duration-normal) var(--ease-out)}
-button:active{transform:translateY(1px);box-shadow:none}
-button:not(:disabled):hover{transform:translateY(-1px)}
-button[disabled]{opacity:.5;cursor:not-allowed}
-
-/* ---- animations -------------------------------------------------- */
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
-.animate-fade{animation:fadeIn var(--duration-normal) var(--ease-out)}
-.animate-slide{animation:slideIn var(--duration-normal) var(--ease-out)}
-
-/* Staggered list animations */
-.card:nth-child(1){animation-delay:0ms}
-.card:nth-child(2){animation-delay:30ms}
-.card:nth-child(3){animation-delay:60ms}
-.card:nth-child(4){animation-delay:90ms}
-.card:nth-child(5){animation-delay:120ms}
-.card:nth-child(6){animation-delay:150ms}
-.card:nth-child(7){animation-delay:180ms}
-.card:nth-child(8){animation-delay:210ms}
-
-/* ---- the masthead -------------------------------------------------- */
-header{position:sticky;top:0;z-index:20;background:rgba(251,248,242,.93);
-  border-bottom:1px solid var(--line);backdrop-filter:saturate(140%) blur(10px)}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-.brand{display:flex;justify-content:space-between;align-items:center;gap:16px;
-  padding:14px 0;flex-wrap:wrap}
-.lockup{display:flex;align-items:center;gap:10px;min-width:0}
-.lockup svg{width:30px;height:30px;color:var(--forest);flex:none}
-.lockup .word{font-size:21px;font-weight:700;letter-spacing:-.025em;line-height:1}
-.lockup .tag{display:block;color:var(--muted);font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;font-weight:600;margin-top:5px}
-.brand nav{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
-.brand nav a{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
-  color:var(--ink-2);padding:9px 10px;border-radius:8px}
-.brand nav a:hover{background:var(--sunken);text-decoration:none;color:var(--ink)}
-.brand nav .nav-signin{background:var(--forest);color:#fff;padding:9px 16px}
-.brand nav .nav-signin:hover{background:#0e3d1f;color:#fff;text-decoration:none}
-.banner{background:var(--amber-soft);color:var(--amber);border-bottom:1px solid #EBD6B4;
-  padding:9px 24px;font-size:12.5px;letter-spacing:.01em}
-
-/* ---- the page ------------------------------------------------------ */
-main{padding-bottom:40px}
-.masthead{padding:44px 0 0}
-.kicker{margin:0;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
-  font-weight:700;color:var(--muted)}
-.display{font-family:var(--font-display);font-weight:400;font-size:50px;line-height:1.02;
-  letter-spacing:-.025em;margin:12px 0 8px;color:var(--ink)}
-.scopeline{margin:0;color:var(--ink-2);font-size:15px;max-width:60ch}
-.cmdk{font:inherit;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
-  font-weight:650;color:var(--ink-2);background:none;border:1px solid var(--line);
-  border-radius:8px;padding:7px 10px;cursor:pointer;display:inline-flex;gap:7px;
-  align-items:center;transition:border-color .14s,color .14s}
-.cmdk:hover{border-color:var(--forest);color:var(--forest)}
-.cmdk kbd{font:inherit;font-size:10px;color:var(--muted);border:1px solid var(--line);
-  border-radius:4px;padding:1px 4px}
-.palette{position:fixed;inset:0;z-index:60;background:rgba(18,22,28,.35);
-  display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px}
-.palette[hidden]{display:none}
-.palette-box{width:min(560px,100%);background:var(--card);border:1px solid var(--line);
-  border-radius:var(--radius);box-shadow:var(--shadow-lift);overflow:hidden}
-.palette input{width:100%;border:0;border-bottom:1px solid var(--line);padding:16px 18px;
-  font:16px/1.4 var(--font-sans);background:var(--card);color:var(--ink);outline:none}
-.palette ul{list-style:none;margin:0;padding:6px;max-height:52vh;overflow:auto}
-.palette li a{display:flex;justify-content:space-between;gap:14px;align-items:baseline;
-  padding:10px 12px;border-radius:8px;color:var(--ink)}
-.palette li a:hover,.palette li.on a{background:var(--forest-soft);text-decoration:none}
-.palette li b{font-weight:600;font-size:14px}
-.palette li span{color:var(--muted);font-size:12px;white-space:nowrap}
-.palette .none{padding:14px 12px;color:var(--muted);font-size:14px}
-.palette .hint{border-top:1px solid var(--line);padding:9px 16px;font-size:11.5px;color:var(--muted)}
-.wildcard{border:1px dashed #CFC3AE;background:var(--sunken)}
-.wildcard .tagline{font-size:10px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--amber);font-weight:700;margin:0 0 8px}
-.momentum{display:flex;align-items:center;gap:10px;margin-top:4px}
-.marks{display:flex;gap:4px}
-.marks i{width:9px;height:9px;border-radius:2px;background:var(--line);display:block}
-.marks i.on{background:var(--forest)}
-.ledger{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:24px 0 0;
-  padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
-  font-size:13px;color:var(--ink-2)}
-.ledger b{color:var(--ink);font-weight:650}
-
-/* ---- the four numbers ---------------------------------------------- */
-.strip{display:grid;grid-template-columns:repeat(4,1fr);margin:0}
-.strip div{padding:18px 20px 16px 0;border-bottom:1px solid var(--line)}
-.strip b{display:block;font-family:var(--font-display);font-weight:400;font-size:34px;
-  line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.strip span{display:block;margin-top:7px;font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--muted);font-weight:650}
-
-/* ---- layout -------------------------------------------------------- */
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:36px;
-  padding:28px 0 0;align-items:start}
-.feedcol{min-width:0}
-.section{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  margin:0 0 14px;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--muted);font-weight:700}
-.section em{font-style:normal;color:var(--ink-2);letter-spacing:.04em}
-.endnote{color:var(--muted);font-size:13px;padding:6px 0 0}
-
-/* ---- the card ------------------------------------------------------ */
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:20px 22px 16px;margin-bottom:14px;box-shadow:var(--shadow-tactile);
-  transition:border-color var(--duration-normal) var(--ease-out),
-             transform var(--duration-normal) var(--ease-out),
-             box-shadow var(--duration-normal) var(--ease-out)}
-.card:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:var(--shadow-lift)}
-.card:focus-within{border-color:var(--forest)}
-.card-top{display:flex;gap:20px;justify-content:space-between;align-items:flex-start}
-.card h2{margin:0 0 5px;font-family:var(--font-sans);font-size:19px;line-height:1.26;
-  letter-spacing:-.018em;font-weight:650}
-.card h2 a{color:var(--ink)}
-.card h2 a:hover{color:var(--forest);text-decoration:none}
-.employer{color:var(--muted);font-size:13.5px}
-.deadline{flex:none;text-align:right;padding-top:3px}
-.dl-label{display:block;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--muted);font-weight:700}
-.dl-date{display:block;font-family:var(--font-display);font-size:18px;line-height:1.2;
-  color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
-.deadline.soon .dl-date{color:var(--amber)}
-.deadline.gone .dl-date{color:var(--muted);text-decoration:line-through}
-.badges{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
-.badge{font-size:11.5px;border-radius:var(--radius-pill);padding:3px 10px;
-  border:1px solid var(--line);color:var(--ink-2);background:var(--sunken);white-space:nowrap}
-.badge.good{background:var(--forest-soft);border-color:#CFE3D4;color:var(--forest);font-weight:600}
-.badge.warn{background:var(--amber-soft);border-color:#EBD6B4;color:var(--amber);font-weight:600}
-.badge.danger{background:var(--risk-soft);border-color:#EBC5C0;color:var(--risk);font-weight:600}
-.badge.muted{background:var(--sunken);border-color:var(--line);color:var(--ink-2)}
-.whythat{font-size:12.5px;color:var(--muted);margin:12px 0 0;padding:0;list-style:none;
-  display:flex;gap:6px;flex-wrap:wrap}
-.whythat li{border:1px solid var(--line);border-radius:var(--radius-pill);padding:2px 9px;
-  background:transparent}
-.foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;
-  padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
-.foot .score{font-variant-numeric:tabular-nums;letter-spacing:.02em;color:var(--ink-2)}
-.foot form{display:inline;margin:0}
-.foot button{font:inherit;font-size:12.5px;background:none;border:none;color:var(--muted);
-  cursor:pointer;padding:8px 0;border-bottom:1px solid transparent;transition:color .14s,border-color .14s}
-.foot button:hover{color:var(--ink);border-bottom-color:var(--line)}
-.foot button.on{color:var(--forest);font-weight:650}
-.foot .apply{margin-left:auto;border:1px solid var(--forest);color:#fff;
-  border-radius:var(--radius-pill);padding:0 18px;font-size:13.5px;font-weight:600;
-  background:var(--forest);min-height:40px;display:inline-flex;align-items:center;
-  transition:background .16s ease-out,transform .16s ease-out}
-.foot .apply:hover{background:#0F3F22;text-decoration:none;transform:translateY(-1px)}
-
-/* ---- the rail ------------------------------------------------------ */
-.rail{position:sticky;top:88px}
-.rail-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:16px 18px;margin-bottom:14px}
-.rail-card h3{margin:0 0 10px;font-size:10px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--muted);font-weight:700}
-.rail-card .chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--line);border-radius:var(--radius-pill);padding:3px 10px;
-  font-size:12px;color:var(--ink-2);background:var(--sunken);white-space:nowrap}
-.filters a.chip{padding:6px 12px;min-height:32px;background:transparent}
-.filters a.chip.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft)}
-.filters a.chip .num{color:var(--ink-3);font-variant-numeric:tabular-nums;margin-left:2px}
-.searchform{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;
-  margin:22px 0 0;align-items:end}
-.searchform label{display:flex;flex-direction:column;gap:5px;font-size:10.5px;
-  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
-.searchform input,.searchform select{font:inherit;font-size:14px;padding:10px 11px;width:100%;
-  border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
-  min-height:42px;appearance:none}
-.searchform input:focus,.searchform select:focus{outline:2px solid var(--forest);
-  outline-offset:1px;border-color:var(--forest)}
-.searchform label.check{flex-direction:row;align-items:center;gap:8px;font-size:12.5px;
-  letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:400;min-height:42px}
-.searchform label.check input{width:16px;height:16px;min-height:0;margin:0}
-.searchform button{font:inherit;font-size:13.5px;font-weight:650;padding:11px 18px;
-  border-radius:10px;border:1px solid var(--forest);background:var(--forest);
-  color:#FBF8F2;min-height:42px;cursor:pointer}
-.searchform button:hover{background:#0F3F22}
-.paste{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
-.paste input{flex:1 1 260px;min-width:0;font:13px/1.4 var(--font-mono);padding:9px 10px;
-  border:1px solid var(--line);border-radius:8px;background:var(--sunken);color:var(--ink)}
-.copy{font:inherit;font-size:12.5px;padding:8px 12px;border:1px solid var(--line);
-  border-radius:8px;background:var(--card);color:var(--ink-2);cursor:pointer;min-height:36px}
-.copy:hover{border-color:#CFC3AE;color:var(--ink)}
-code.key{font:12px/1.4 var(--font-mono);background:var(--sunken);border:1px solid var(--line);
-  border-radius:6px;padding:1px 6px;margin-right:4px;white-space:nowrap}
-.step .employer{max-width:62ch}
-.step.done{opacity:.72;padding:14px 18px}
-.step.done h2{font-size:15px;margin:0}
-.stepnum{display:inline-block;min-width:1.4em}
-.trouble li{margin-bottom:14px;line-height:1.5}
-.trouble .small{display:block}
-p.mono{font-family:var(--font-mono);font-size:12px}
-@media (max-width:640px){.searchform{grid-template-columns:1fr 1fr}
-  .searchform label:first-of-type{grid-column:1/-1}}
-.mini{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
-  border-bottom:1px solid var(--line);font-size:13px;line-height:1.35}
-.mini:last-of-type{border-bottom:none}
-.mini a{color:var(--ink)}
-.mini .when{color:var(--amber);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px}
-.rail-card .more{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:650}
-.rail-note{color:var(--muted);font-size:12px;margin:6px 0 0}
-
-/* ---- profile switcher --------------------------------------------- */
-.mt0{margin-top:0}.mt6{margin-top:6px}.mt10{margin-top:10px}.mt12{margin-top:12px}
-.mt18{margin-top:18px}.mt26{margin-top:26px}.mt28{margin-top:28px}.mt32{margin-top:32px}
-.flush{margin:0}.inline{display:inline}.inline-ml{display:inline;margin-left:10px}
-.stack{flex-direction:column;align-items:stretch}
-.codebox{font:14px/1.5 var(--font-mono);padding:12px;border:1px solid var(--line);
-  border-radius:var(--radius-sm);background:var(--card);color:var(--ink);width:100%}
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 0}
-.filters a{border:1px solid var(--line);background:transparent;border-radius:var(--radius-pill);
-  padding:6px 13px;font-size:12.5px;color:var(--ink-2);min-height:34px;
-  display:inline-flex;align-items:center;transition:border-color .14s,background .14s,color .14s}
-.filters a:hover{border-color:#CFC3AE;color:var(--ink);text-decoration:none}
-.filters a.on{border-color:var(--forest);color:var(--forest);background:var(--forest-soft);
-  font-weight:650}
-
-/* ---- employer and year pages --------------------------------------- */
-.two{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;margin-bottom:8px}
-.two .tablewrap{margin:0}
-.fig{font-family:var(--font-display);font-size:32px;line-height:1;margin:6px 0 8px;
-  font-variant-numeric:tabular-nums}
-pre.msg{white-space:pre-wrap;font:13.5px/1.6 var(--font-mono);background:var(--sunken);
-  border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px;margin:0 0 8px}
-@media (max-width:900px){.two{grid-template-columns:1fr;gap:14px}}
-
-/* ---- panels used by the ops pages --------------------------------- */
-.whobar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:16px 18px;margin:20px 0 0;font-size:14px;box-shadow:var(--shadow)}
-.whobar b{font-weight:650}
-.whobar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.whobar button.ghost{font:inherit;font-size:13.5px;font-weight:650;background:var(--card);
-  color:var(--forest);border:1px solid var(--forest);border-radius:var(--radius-pill);
-  padding:9px 16px;cursor:pointer;min-height:40px}
-.whobar button.ghost:hover{background:var(--forest-soft)}
-
-
-/* Sign-in providers. These classes existed in the markup but were never defined —
-   a stylesheet rewrite dropped them, and the buttons rendered as unstyled inline
-   text. tests/test_css_coverage.py now fails if markup names a class the sheet
-   does not define. */
-.provider{display:flex;align-items:center;gap:12px;margin-bottom:10px;
-  padding:4px;border-radius:calc(var(--radius) + 4px)}
-.provider-button{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
-  font:inherit;text-align:left;cursor:pointer;background:var(--card);
-  border:1px solid var(--line);border-radius:var(--radius);padding:13px 16px;
-  color:var(--ink);min-height:52px;
-  transition:border-color .18s ease-out,box-shadow .18s ease-out,transform .18s ease-out}
-.provider-button b{font-size:14.5px;font-weight:650}
-.provider-button span{font-size:12.5px;color:var(--muted);line-height:1.35}
-.provider-button:hover{border-color:var(--forest);box-shadow:var(--shadow);
-  transform:translateY(-1px)}
-.provider-button:focus-visible{outline:2px solid var(--forest);outline-offset:2px}
-.provider-button.off{background:var(--sunken);color:var(--muted);cursor:not-allowed;
-  border-style:dashed;opacity:.85}
-.provider-button.off:hover{border-color:var(--line);box-shadow:none;transform:none}
-.provider-state{font-size:11.5px;border-radius:var(--radius-pill);padding:3px 10px;
-  border:1px solid var(--line);background:var(--sunken);color:var(--muted);
-  white-space:nowrap;flex:none}
-.provider-state.ready{background:var(--forest-soft);border-color:var(--forest);color:var(--forest)}
-
-/* The numbered verification list on the go-live page. */
-.trial{list-style:none;padding:0;margin:0;counter-reset:trial}
-.trial li{padding:11px 0 11px 34px;border-bottom:1px solid var(--line);position:relative;
-  font-size:13.5px;counter-increment:trial}
-.trial li:last-child{border-bottom:none}
-.trial li::before{content:counter(trial);position:absolute;left:0;top:11px;
-  width:22px;height:22px;border-radius:50%;background:var(--sunken);
-  border:1px solid var(--line);color:var(--ink-2);font-size:11.5px;font-weight:700;
-  display:flex;align-items:center;justify-content:center}
-.trial li .small{display:block;margin-top:3px}
-/* ---- Sign-in page ------------------------------------------------------ */
-.signin-wrap{display:flex;align-items:flex-start;justify-content:center;
-  padding:60px 20px 40px;min-height:60vh}
-.signin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:36px 40px 32px;max-width:440px;width:100%;box-shadow:var(--shadow)}
-.signin-card .kicker{margin:0 0 18px}
-.signin-headline{font-family:var(--font-display);font-weight:400;font-size:34px;
-  line-height:1.1;letter-spacing:-.02em;margin:0 0 10px;color:var(--ink)}
-.signin-sub{margin:0 0 24px;font-size:14.5px;color:var(--ink-2);line-height:1.45}
-.signin-primary{margin-bottom:14px}
-.signin-primary-btn{display:flex;flex-direction:column;align-items:flex-start;gap:4px;
-  width:100%;background:var(--forest);color:#fff;border:none;border-radius:10px;
-  padding:18px 22px;cursor:pointer;text-align:left;font:inherit;
-  transition:background .14s,transform .14s}
-.signin-primary-btn:hover{background:#0e3d1f;transform:translateY(-1px)}
-.signin-primary-btn:focus-visible{outline:2px solid var(--forest);outline-offset:2px}
-.signin-provider-name{font-size:17px;font-weight:650}
-.signin-provider-why{font-size:12.5px;opacity:.85;line-height:1.3}
-.signin-secondary{display:flex;gap:8px;margin-bottom:8px}
-.signin-secondary-btn{flex:1;font:inherit;font-size:14px;font-weight:600;
-  background:var(--card);color:var(--ink);border:1px solid var(--line);
-  border-radius:8px;padding:12px 14px;cursor:pointer;
-  transition:border-color .14s,box-shadow .14s}
-.signin-secondary-btn:hover{border-color:var(--forest);box-shadow:var(--shadow)}
-.signin-guest{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
-.signin-guest-btn{width:100%;font:inherit;font-size:13.5px;font-weight:600;
-  background:transparent;color:var(--ink-2);border:none;border-radius:8px;
-  padding:11px;cursor:pointer;transition:color .14s,background .14s}
-.signin-guest-btn:hover{color:var(--ink);background:var(--sunken)}
-.signin-privacy{margin:18px 0 0;font-size:11.5px;color:var(--muted);line-height:1.5}
-.signin-notice{margin:0 0 14px;font-size:12.5px;color:var(--muted)}
-.signin-notice a{color:var(--forest)}
-.evidence{font-size:13.5px;color:var(--ink-2);border-left:2px solid var(--line);
-  padding-left:12px;margin:12px 0 4px}
-h1{font-family:var(--font-display);font-weight:400;font-size:38px;line-height:1.08;
-  letter-spacing:-.02em;margin:34px 0 8px}
-h2{font-size:18px;letter-spacing:-.01em;margin:26px 0 4px}
-p{margin:8px 0}
-table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card);
-  border:1px solid var(--line);border-radius:var(--radius-sm);overflow:hidden;
-  font-variant-numeric:tabular-nums}
-th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--muted);font-weight:650;font-size:11px;letter-spacing:.06em;
-  text-transform:uppercase;background:var(--paper)}
-tr:last-child td{border-bottom:none}
-.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0 4px}
-.tablewrap table{min-width:520px}
-.tablewrap th a{color:var(--ink);font-weight:650}
-dl{display:grid;grid-template-columns:150px 1fr;gap:8px 16px;margin:18px 0;font-size:15px}
-dt{color:var(--muted)}
-dd{margin:0}
-.sources{list-style:none;padding:0;margin:0;font-size:13.5px}
-.sources li{padding:9px 0;border-bottom:1px solid var(--line)}
-.sources li:last-child{border-bottom:none}
-.small{font-size:12.5px;color:var(--muted)}
-.msg{white-space:pre-wrap;word-break:break-word;background:var(--forest-soft);
-  border:1px solid #CFE3D4;border-radius:var(--radius-sm);padding:14px 16px;
-  font:13.5px/1.65 var(--font-mono);margin:12px 0;color:var(--ink)}
-.msg.sms{background:var(--sunken);border-color:var(--line)}
-.subform{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}
-.subform input{flex:1 1 220px;padding:11px 13px;border:1px solid var(--line);
-  border-radius:var(--radius-sm);font-size:16px;font-family:inherit;background:var(--card)}
-.subform button{padding:11px 18px;border:0;border-radius:var(--radius-sm);background:var(--forest);
-  color:#fff;font-size:15px;font-weight:600;cursor:pointer;min-height:44px}
-.subform button:hover{background:#0F3F22}
-.subform button.ghost{background:var(--card);color:var(--ink-2);border:1px solid var(--line);font-weight:500}
-footer{padding:34px 0 46px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
-footer p{margin:0;max-width:70ch}
-
-@media (max-width:900px){
-  .layout{grid-template-columns:1fr;gap:10px}
-  .rail{position:static;order:2;margin-top:6px}
-  .display{font-size:40px}
+* { box-sizing: border-box }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100% }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-@media (max-width:520px){
-  .wrap{padding:0 18px}
-  main{overflow-x:hidden}
-  .masthead{padding-top:30px}
-  .display{font-size:34px}
-  .strip{grid-template-columns:repeat(2,1fr);gap:10px 0}
-  .strip b{font-size:28px}
-  .strip div{padding:14px 0 12px}
-  dl{grid-template-columns:1fr;gap:2px}
-  dt{margin-top:10px}
-  .foot .apply{width:100%;justify-content:center;margin-left:0}
-  .brand nav a{padding:8px 8px}
-  .card{padding:17px 16px 14px}
-  .card-top{flex-wrap:wrap;gap:6px}
-  .deadline{text-align:left;padding-top:0}
-  .dl-date{font-size:16px}
+h1,h2,h3 {
+  font-family: var(--font-display);
+  font-weight: 560;
+  line-height: 1.04;
+  letter-spacing: -.02em;
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+a { color: inherit; text-decoration: none }
+a:hover { color: var(--ochre) }
+:focus-visible { outline: 2px solid var(--ochre); outline-offset: 3px; border-radius: 4px }
+::selection { background: var(--ochre); color: var(--espresso) }
+a { -webkit-tap-highlight-color: transparent }
+
+/* ---- buttons — pill, editorial ---- */
+button, .btn {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    background var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out);
+}
+button:active, .btn:active { transform: translateY(1px) }
+button:not(:disabled):hover, .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift) }
+button[disabled] { opacity: .5; cursor: not-allowed; transform: none }
+
+/* Primary ochre button */
+.btn-primary, button.primary { background: var(--ochre); color: var(--espresso); border-color: var(--ochre) }
+.btn-primary:hover, button.primary:hover { background: #e69d2e }
+
+/* Ghost / outline */
+.btn-ghost, button.ghost { background: transparent; color: var(--ink); border-color: var(--line) }
+.btn-ghost:hover, button.ghost:hover { border-color: var(--ink); background: var(--ochre-soft) }
+
+/* Ink (dark) */
+.btn-ink, button.ink { background: var(--espresso); color: var(--bone) }
+.btn-ink:hover, button.ink:hover { background: #1f1a14 }
+
+/* ---- reveal animation (scroll-triggered) ---- */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity var(--duration-slow) var(--ease-out), transform var(--duration-slow) var(--ease-out) }
+.reveal.in { opacity: 1; transform: none }
+
+/* Staggered list reveal */
+.card.reveal:nth-child(1) { transition-delay: 0ms }
+.card.reveal:nth-child(2) { transition-delay: 30ms }
+.card.reveal:nth-child(3) { transition-delay: 60ms }
+.card.reveal:nth-child(4) { transition-delay: 90ms }
+.card.reveal:nth-child(5) { transition-delay: 120ms }
+.card.reveal:nth-child(6) { transition-delay: 150ms }
+.card.reveal:nth-child(7) { transition-delay: 180ms }
+.card.reveal:nth-child(8) { transition-delay: 210ms }
+
+/* ---- header / nav ---- */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: rgba(247,242,232,.92);
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid var(--line);
+  transition: background var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out);
+}
+header.scrolled { background: rgba(247,242,232,.98); box-shadow: var(--shadow) }
+.wrap { width: min(1160px, 92vw); margin-inline: auto }
+.brand { display: flex; align-items: center; gap: 14px; padding: 18px 0 }
+.lockup { display: flex; align-items: center; gap: 12px; text-decoration: none; min-width: 0 }
+.lockup svg { width: 34px; height: 34px; color: var(--espresso); flex: none }
+.lockup .word {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.lockup .word em { font-style: italic; color: var(--ochre); }
+.lockup .tag {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.brand nav { display: flex; gap: 28px; flex-wrap: wrap; align-items: center; margin-left: auto }
+.brand nav a {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-decoration: none;
+  letter-spacing: .01em;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.brand nav a:hover { color: var(--ink); text-decoration: none }
+.brand nav .nav-signin {
+  padding: 9px 20px;
+  background: var(--espresso);
+  color: var(--bone);
+  border-radius: var(--radius-pill);
+}
+.brand nav .nav-signin:hover { background: #1f1a14; color: var(--bone); text-decoration: none }
+
+/* Banner */
+.banner {
+  background: var(--ochre-soft);
+  color: var(--ink);
+  border-bottom: 1px solid var(--ochre-border);
+  padding: 11px 24px;
+  font-size: 13px;
+}
+
+/* ---- the page ---- */
+main { padding-bottom: 60px }
+.masthead { padding: 70px 0 0 }
+.kicker {
+  font-size: 11.5px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--ochre);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.kicker::before {
+  content: '';
+  width: 34px;
+  height: 1px;
+  background: var(--ochre);
+}
+.display {
+  font-family: var(--font-display);
+  font-weight: 560;
+  font-size: clamp(40px, 6vw, 68px);
+  line-height: 1.04;
+  letter-spacing: -.02em;
+  margin: 20px 0 16px;
+  color: var(--ink);
+}
+.display em { font-style: italic; font-weight: 420; color: var(--ochre); }
+.scopeline { margin: 0; color: var(--ink-2); font-size: 17px; max-width: 620px }
+
+/* Search / jump button */
+.cmdk {
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 7px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  transition: border-color var(--duration-fast), color var(--duration-fast);
+}
+.cmdk:hover { border-color: var(--ochre); color: var(--ochre) }
+.cmdk kbd {
+  font: inherit;
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* Palette overlay */
+.palette { position: fixed; inset: 0; z-index: 60; background: rgba(20,17,13,.4); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px }
+.palette[hidden] { display: none }
+.palette-box { width: min(560px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lift); overflow: hidden }
+.palette input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: 16px/1.4 var(--font-sans); background: var(--card); color: var(--ink); outline: none }
+.palette ul { list-style: none; margin: 0; padding: 6px; max-height: 52vh; overflow: auto }
+.palette li a { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--ink) }
+.palette li a:hover, .palette li.on a { background: var(--ochre-soft); text-decoration: none }
+.palette li b { font-weight: 600; font-size: 14px }
+.palette li span { color: var(--muted); font-size: 12px; white-space: nowrap }
+.palette .none { padding: 14px 12px; color: var(--muted); font-size: 14px }
+.palette .hint { border-top: 1px solid var(--line); padding: 9px 16px; font-size: 11.5px; color: var(--muted) }
+
+/* ---- 2026 Job Platform Layout ---- */
+.feed-layout { display: grid; grid-template-columns: 1fr; gap: 24px; max-width: 1200px; margin: 0 auto; padding: 24px 0 }
+@media (min-width: 1024px) { .feed-layout { grid-template-columns: 1fr 320px; gap: 32px } }
+.feed-main { min-width: 0 }
+.feed-sidebar { display: flex; flex-direction: column; gap: 16px }
+.feed-header { margin-bottom: 24px }
+.feed-title { margin: 0; font-size: 32px; font-weight: 560; color: var(--ink); letter-spacing: -.02em }
+.feed-subtitle { margin: 8px 0 0; color: var(--ink-2); font-size: 15px }
+
+/* Stats Bar */
+.stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 20px; box-shadow: var(--shadow) }
+.stat { display: flex; flex-direction: column; gap: 4px }
+.stat-number { font-family: var(--font-display); font-size: 28px; font-weight: 560; color: var(--espresso); line-height: 1 }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 600 }
+
+/* Filter Bar */
+.filter-bar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 22px; margin-bottom: 20px; box-shadow: var(--shadow) }
+.search-box { display: flex; gap: 8px; margin-bottom: 16px }
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font: 15px/1.5 var(--font-sans);
+  color: var(--ink);
+  background: var(--bone);
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.search-input:focus { outline: none; border-color: var(--ochre); box-shadow: 0 0 0 3px var(--ochre-soft) }
+.search-btn {
+  padding: 12px 20px;
+  background: var(--ochre);
+  color: var(--espresso);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.search-btn:hover { background: #e69d2e }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 8px }
+.chip {
+  padding: 7px 14px;
+  background: var(--bone);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font: 12.5px/1 var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.chip:hover { background: var(--ochre-soft); color: var(--ochre); border-color: var(--ochre-border) }
+.chip.active { background: var(--ochre); color: var(--espresso); border-color: var(--ochre) }
+
+/* Job List */
+.job-list { display: flex; flex-direction: column; gap: 14px }
+
+/* Job Cards — editorial, not corporate */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  transition: transform var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
+  cursor: default;
+}
+.card:hover { transform: translateY(-3px); border-color: var(--ochre-border); box-shadow: var(--shadow-lift) }
+.card-top { display: grid; grid-template-columns: 1fr auto; gap: 16px; margin-bottom: 14px }
+.card h2 { margin: 0 0 4px 0; font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.15; color: var(--ink) }
+.card h2 a { color: var(--ink); text-decoration: none }
+.card h2 a:hover { color: var(--ochre); text-decoration: underline }
+.employer { font-size: 14px; color: var(--ink-2); font-weight: 500; margin-bottom: 8px }
+.company-logo { width: 48px; height: 48px; border-radius: var(--radius-sm); background: linear-gradient(135deg, var(--ochre), var(--terracotta)); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 20px; color: var(--espresso); margin-right: 12px; flex: none }
+.salary {
+  display: inline-block;
+  background: var(--ochre-soft);
+  color: var(--ochre);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.deadline { display: flex; flex-direction: column; align-items: flex-end; gap: 4px }
+.dl-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em }
+.dl-date { font-size: 12px; color: var(--muted) }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 }
+.badge {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  background: var(--bone);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.badge.good { background: var(--sage-soft); color: var(--sage); border-color: rgba(107,142,127,.3) }
+.badge.warn { background: var(--ochre-soft); color: #b8820d; border-color: var(--ochre-border) }
+.badge.muted { background: var(--bone); color: var(--muted) }
+.whythat { list-style: none; padding: 0; margin: 12px 0; font-size: 13px; color: var(--ink-2) }
+.whythat li { padding: 2px 0; padding-left: 14px; position: relative }
+.whythat li::before { content: '·'; position: absolute; left: 0; color: var(--ochre) }
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+}
+.score {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 12px;
+  background: var(--bone);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+}
+.apply {
+  background: var(--ochre);
+  color: var(--espresso);
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.apply:hover { background: #e69d2e; text-decoration: none; transform: translateY(-1px) }
+
+/* Match Breakdown (Mokaru-style) */
+.match-breakdown { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap }
+.match-metric { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: var(--radius-pill) }
+.match-yes { background: var(--sage-soft); color: var(--sage) }
+.match-no { background: var(--ochre-soft); color: #b8820d }
+
+/* Application Stage Badge */
+.app-stage { font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: .08em; white-space: nowrap }
+.stage-watchlist { background: var(--bone); color: var(--muted) }
+.stage-saved { background: var(--ochre-soft); color: #b8820d }
+.stage-applied { background: var(--sage-soft); color: var(--sage) }
+.stage-screening { background: var(--ochre-soft); color: var(--ochre) }
+.stage-interview { background: rgba(20,17,13,.08); color: var(--espresso) }
+.stage-offer { background: var(--terracotta-soft); color: var(--terracotta) }
+.stage-rejected { background: rgba(201,111,74,.1); color: var(--terracotta) }
+.stage-withdrawn { background: var(--bone); color: var(--muted) }
+
+/* Card Actions */
+.card-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px }
+
+/* Quick Apply Button */
+.quick-apply-btn {
+  background: var(--ochre);
+  color: var(--espresso);
+  border: none;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.quick-apply-btn:hover { background: #e69d2e; transform: translateY(-1px) }
+.quick-apply-btn:active { transform: translateY(0) }
+
+/* Submit buttons */
+button[type="submit"] {
+  background: var(--bone);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+button[type="submit"].on { background: var(--sage-soft); color: var(--sage); border-color: rgba(107,142,127,.3) }
+button[type="submit"]:hover { background: var(--ochre-soft); color: var(--ochre); border-color: var(--ochre-border) }
+
+/* Mobile Optimization */
+@media (max-width: 768px) {
+  .feed-layout { padding: 16px 0; gap: 16px }
+  .feed-title { font-size: 28px }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 16px }
+  .stat-number { font-size: 24px }
+  .filter-chips { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px }
+  .chip { white-space: nowrap; flex-shrink: 0 }
+  .card { padding: 18px }
+  .card h2 { font-size: 18px }
+  .card-top { grid-template-columns: 1fr }
+  .deadline { align-items: flex-start; margin-top: 8px }
+  .quick-apply-btn { width: 100%; padding: 11px; font-size: 14px }
+  .foot { gap: 8px }
+  .feed-sidebar { order: 2 }
+}
+
+/* ---- sidebar / rail ---- */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 36px; align-items: start }
+.feedcol { min-width: 0 }
+.rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 96px }
+.rail-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.rail-card h3 {
+  margin: 0 0 12px;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ochre);
+  font-family: var(--font-sans);
+  font-weight: 700;
+}
+.rail-card .chips { display: flex; gap: 6px; flex-wrap: wrap }
+.rail-note { font-size: 12.5px; color: var(--muted); margin: 0 }
+.rail-card .more { display: inline-block; margin-top: 10px; font-size: 12.5px; font-weight: 600; color: var(--ochre); text-decoration: none }
+.rail-card .more:hover { color: var(--terracotta) }
+
+/* ---- strip (stats) ---- */
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 28px 0; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius) }
+.strip div { display: flex; flex-direction: column }
+.strip b { font-family: var(--font-display); font-size: 32px; font-weight: 560; color: var(--ink); line-height: 1 }
+.strip span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 6px; font-weight: 600 }
+
+/* ---- ledger / endnote ---- */
+.ledger { font-size: 13px; color: var(--ink-2); padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 18px 0 }
+.ledger b { color: var(--ink) }
+.endnote { font-size: 13px; color: var(--muted); padding: 18px 0 }
+
+/* ---- sections ---- */
+.section { display: flex; align-items: baseline; gap: 18px; padding: 18px 0; border-bottom: 1px solid var(--line) }
+.section span { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ochre); font-weight: 700 }
+.section em { font-size: 13px; color: var(--muted); font-style: normal; font-family: var(--font-sans); margin-left: auto }
+
+/* ---- small helpers ---- */
+.small { font-size: 12.5px; color: var(--muted) }
+.mt6 { margin-top: 6px }
+.mt26 { margin-top: 26px }
+.ops { font-size: 12px; color: var(--muted); margin-top: 18px }
+.ops a { color: var(--ink-2); text-decoration: none }
+.ops a:hover { color: var(--ochre) }
+
+/* ---- filters (legacy) ---- */
+.filters { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap }
+.filters a { font-size: 12px; padding: 6px 14px; border-radius: var(--radius-pill); border: 1px solid var(--line); color: var(--ink-2); text-decoration: none; font-weight: 500; transition: all var(--duration-fast) var(--ease-out) }
+.filters a:hover { border-color: var(--ochre); color: var(--ochre); text-decoration: none }
+.filters a.on { background: var(--ochre); color: var(--espresso); border-color: var(--ochre) }
+
+/* ---- job page ---- */
+.job-head { padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px }
+.job-head .employer { font-size: 15px }
+.source-list { list-style: none; padding: 0; margin: 16px 0 }
+.source-list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; font-size: 14px }
+.source-list a { color: var(--ochre) }
+
+/* ---- shortlist / digest / brief ---- */
+.empty { padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius) }
+.empty h2 { font-size: 20px; color: var(--ink); margin-bottom: 8px }
+
+/* ---- signin ---- */
+.signin-card { max-width: 480px; margin: 40px auto; padding: 32px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow) }
+.signin-card h1 { font-family: var(--font-display); font-size: 28px; margin-bottom: 8px }
+.signin-card p { color: var(--ink-2); font-size: 15px; margin-bottom: 20px }
+.provider-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 18px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--bone); color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer; transition: all var(--duration-fast) var(--ease-out); margin-bottom: 10px }
+.provider-btn:hover { border-color: var(--ochre); background: var(--ochre-soft) }
+.provider-btn svg { width: 20px; height: 20px }
+
+/* ---- wildcards ---- */
+.wildcard { border: 1px dashed var(--line); background: var(--bone) }
+.wildcard .tagline { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--ochre); font-weight: 700 }
+
+/* ---- step cards (setup) ---- */
+.card.step { border-left: 3px solid var(--line) }
+.card.step.done { border-left-color: var(--sage); opacity: .7 }
+.card.step h3 { font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ochre); margin-bottom: 8px }
+.card.step h3::before { content: attr(data-step) '. '; color: var(--muted) }
+
+/* ---- pulse / slo / review ---- */
+.slo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px }
+.slo-card { padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm) }
+.slo-card h3 { font-family: var(--font-sans); font-size: 13px; font-weight: 600; margin: 0 0 6px }
+.slo-card .tone { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em }
+.slo-card .tone.good { color: var(--sage) }
+.slo-card .tone.warn { color: var(--ochre) }
+.slo-card .tone.danger { color: var(--terracotta) }
+.slo-card .tone.muted { color: var(--muted) }
+
+/* ---- digest ---- */
+.digest-msg { padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px }
+.digest-msg.inbound { border-left: 3px solid var(--ochre) }
+.digest-msg.outbound { border-left: 3px solid var(--sage) }
+
+/* ---- table (account cv) ---- */
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px }
+table th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ochre); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line) }
+table td { padding: 10px; border-bottom: 1px solid var(--line); color: var(--ink-2) }
+table tr:hover td { background: var(--ochre-soft) }
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto }
+  .reveal { opacity: 1; transform: none; transition: none }
+  .card, button, .btn, a { transition: none !important }
+  .card:hover { transform: none }
+}
 """
 
 
@@ -554,13 +733,9 @@ def _as_dt(value) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-SCOPE_MARK = """<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-  <circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/>
-  <path d="M6.4 17.6a7.6 7.6 0 0 1 0-9.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M17.6 8a7.6 7.6 0 0 1 0 9.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M3.6 20.2a12 12 0 0 1 0-13.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
-  <path d="M20.4 6.8a12 12 0 0 1 0 13.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
-  <path d="M1.5 20.9h21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".35"/>
+SCOPE_MARK = """<svg viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+  <rect width="32" height="32" rx="8" fill="currentColor"/>
+  <path d="M10 8v16M10 16l8-8M14 12l4 4M10 16l8 8" stroke="#f7f2e8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"""
 
 
@@ -598,8 +773,8 @@ def _page(
     return f"""<!doctype html>
 <html lang="en-KE"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#FBF8F2">
-<meta name="description" content="Kazi-Kasi — jobs you can reach, checked today.">
+<meta name="theme-color" content="#f7f2e8">
+<meta name="description" content="Kazi-Kasi — jobs you can reach. Personalized search, application tracking, and keyword matching.">
 <title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
 <body>
 <header><div class="wrap"><div class="brand">
@@ -617,6 +792,24 @@ Eligibility labels quote the advert. Applications happen on the employer's site,
 <p class="ops">Ops: <a href="/slo">freshness</a> · <a href="/review">review queue</a> ·
 <a href="/salaries">advertised pay</a> · <a href="/setup">go-live</a></p>
 {demo_line}</footer>
+<script>
+// Scroll-triggered reveal animations
+if ('IntersectionObserver' in window) {{
+  const observer = new IntersectionObserver((entries) => {{
+    entries.forEach(entry => {{
+      if (entry.isIntersecting) {{
+        entry.target.classList.add('in');
+        observer.unobserve(entry.target);
+      }}
+    }});
+  }}, {{ threshold: 0.1, rootMargin: '0px 0px -50px 0px' }});
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+}}
+// Header scroll state
+window.addEventListener('scroll', () => {{
+  document.querySelector('header').classList.toggle('scrolled', window.scrollY > 10);
+}}, {{ passive: true }});
+</script>
 </body></html>"""
 
 
@@ -757,6 +950,7 @@ def render_feed(
     limit: int = 40,
     since: datetime | None = None,
     headers: dict | None = None,
+    account: dict | None = None,
 ) -> str:
     now = now or datetime.now(timezone.utc)
     profile = _profile_or_default(conn, profile_id)
@@ -766,6 +960,13 @@ def render_feed(
     state = momentum.status(conn, profile.id, now=now)
     summary = metrics.stats(conn, now=now)
     clock = (now + timedelta(hours=3)).strftime("%H:%M")
+    
+    # Get CV fields for quick apply feature
+    cv_fields = {}
+    if account:
+        cv = accounts.latest_cv(conn, account["id"])
+        if cv:
+            cv_fields = cv.get("fields", {})
     if since is None:
         ledger = (
             '<p class="ledger"><b>First look.</b> We keep what you saw, so next '
@@ -858,19 +1059,74 @@ def render_feed(
                 f' rel="nofollow noopener" target="_blank">Apply on {_e(source["source_id"])}</a>'
             )
 
+        # Salary display (inspired by Indeed's transparency)
+        salary_html = ""
+        salary_min = row.get("salary_min")
+        salary_max = row.get("salary_max")
+        if salary_min or salary_max:
+            salary_text = features.format_salary(salary_min, salary_max)
+            if salary_text:
+                salary_html = f'<div class="salary">💰 {_e(salary_text)}</div>'
+
+        # Match score with color coding
+        score_color = "#6b8e7f" if match.score >= 0.8 else "#ff6b5b" if match.score >= 0.6 else "#2d3748"
+        score_html = f'<span class="score" style="color:{score_color}" title="Match score: {match.score:.0%}">{match.score:.0%}</span>'
+
+        # Application status badge (Mokaru-style)
+        app_status_html = ""
+        if account:
+            app = applications.get(conn, account["id"], match.job_id)
+            if app:
+                status = app["status"]
+                stage_label = applications.STAGE_LABELS.get(status, status.title())
+                app_status_html = f'<span class="app-stage stage-{status}">{_e(stage_label)}</span>'
+
+        # Match breakdown: matching vs missing keywords
+        match_breakdown_html = ""
+        if account and cv_fields:
+            # Extract job keywords from title, employer, and reasons
+            job_keywords = []
+            if match.title:
+                job_keywords.extend(match.title.split())
+            if match.employer:
+                job_keywords.append(match.employer)
+            job_keywords = [kw for kw in job_keywords if len(kw) > 3 and kw.lower() not in {"the", "and", "for", "with", "from", "that", "this", "your", "role", "position", "join", "team", "work", "will", "have", "are", "you"}]
+            
+            match_result = applications.compute_match_score(cv_fields, job_keywords[:15])
+            
+            if match_result["matching"] or match_result["missing"]:
+                matching_count = len(match_result["matching"])
+                missing_count = len(match_result["missing"])
+                match_breakdown_html = f'''
+                <div class="match-breakdown">
+                    <span class="match-metric match-yes">✓ {matching_count} match</span>
+                    <span class="match-metric match-no">✗ {missing_count} missing</span>
+                </div>
+                '''
+
+        # Quick apply button (Mokaru/Indeed-style 1-click apply)
+        quick_apply_html = ""
+        if account and cv_fields:
+            quick_apply_html = f'''<button type="button" class="quick-apply-btn" data-job="{_e(match.job_id)}" title="Apply instantly with your saved CV">⚡ Quick Apply</button>'''
+
         cards.append(
-            f"""<article class="card animate-fade">
+            f"""<article class="card reveal">
   <div class="card-top">
     <div>
       <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
       <div class="employer">{_e(match.employer or "Employer not stated")}</div>
+      {salary_html}
+      {match_breakdown_html}
     </div>
-    <div class="deadline {tone}"><span class="dl-label">{_e(label)}</span><span class="dl-date">{_e(stamp)}</span></div>
+    <div class="card-actions">
+      <div class="deadline {tone}"><span class="dl-label">{_e(label)}</span><span class="dl-date">{_e(stamp)}</span></div>
+      {app_status_html}
+    </div>
   </div>
   <div class="badges">{''.join(badges)}</div>
   <ul class="whythat">{reasons}</ul>
   <div class="foot">
-    <span class="score" title="match score">{match.score:.2f}</span>
+    {score_html}
     <span>{_e(graph.freshness_band(row, now=now))}</span>
     <form method="post" action="/action">
       <input type="hidden" name="profile" value="{_e(profile.id)}">
@@ -881,13 +1137,7 @@ def render_feed(
         {'Save' if match.job_id not in saved else 'Saved'}
       </button>
     </form>
-    <form method="post" action="/action">
-      <input type="hidden" name="profile" value="{_e(profile.id)}">
-      <input type="hidden" name="job" value="{_e(match.job_id)}">
-      <input type="hidden" name="kind" value="dismissed">
-      <input type="hidden" name="next" value="{_e(feed_path)}">
-      <button type="submit">Not for me</button>
-    </form>
+    {quick_apply_html}
     {apply_html}
   </div>
 </article>"""
@@ -919,25 +1169,49 @@ def render_feed(
   <div><b>{len(acted)}</b><span>applied</span></div>
 </div>"""
 
+    # Build filter chips (horizontal, like Indeed/LinkedIn 2026)
+    filter_chips = f'''
+    <div class="filter-bar">
+      <div class="search-box">
+        <input type="search" placeholder="Search jobs, companies, keywords..." class="search-input">
+        <button class="search-btn">🔍</button>
+      </div>
+      <div class="filter-chips">
+        <button class="chip active">All jobs</button>
+        <button class="chip">Remote</button>
+        <button class="chip">Hybrid</button>
+        <button class="chip">Past week</button>
+        <button class="chip">Salary shown</button>
+        <button class="chip">Easy apply</button>
+      </div>
+    </div>
+    '''
+    
+    # Build stats bar (like Indeed's top bar)
+    stats_bar = f'''
+    <div class="stats-bar">
+      <div class="stat"><span class="stat-number">{len(matches)}</span><span class="stat-label">Jobs matching</span></div>
+      <div class="stat"><span class="stat-number">{summary['live_jobs']}</span><span class="stat-label">Live jobs</span></div>
+      <div class="stat"><span class="stat-number">{summary['closing_within_7_days']}</span><span class="stat-label">Closing soon</span></div>
+      <div class="stat"><span class="stat-number">{len(acted)}</span><span class="stat-label">Applied</span></div>
+    </div>
+    '''
+    
     body = f"""
-<div class="masthead">
-  <p class="kicker">Nairobi metro · early career</p>
-  <h1 class="display">{_e(name)}</h1>
-  <p class="scopeline">{_e(subtitle)}</p>
-  <div class="filters">{switcher}</div>
-  {ledger}
-</div>
-{strip}
-<div class="layout">
-  <div class="feedcol">
-    <div class="section"><span>The feed</span><em>{len(matches)} roles</em></div>
-    <p class="small"><a href="/search?profile={quote(profile.id)}">Search every live role →</a>
-    — words, county, pay floor, deadline horizon.</p>
-    {''.join(cards)}
-    <p class="endnote">You've seen everything that's live right now. We'll let you know when new roles drop.</p>
-    {_wildcard_html(conn, profile, now=now)}
+<div class="feed-layout">
+  <div class="feed-main">
+    <div class="masthead">
+      <p class="kicker">Your feed</p>
+      <h1 class="display">Jobs <em>for you</em></h1>
+      <p class="scopeline">{_e(subtitle)}</p>
+    </div>
+    {stats_bar}
+    {filter_chips}
+    <div class="job-list">
+      {"".join(cards)}
+    </div>
   </div>
-  <aside class="rail">
+  <aside class="feed-sidebar">
     <div class="rail-card">
       <h3>What you're looking for</h3>
       <div class="chips">{limit_chip}{pay_chip}{chips}</div>
@@ -955,11 +1229,12 @@ def render_feed(
     <div class="rail-card">
       <h3>Shortlist</h3>
       <p class="rail-note">{len(saved)} saved — kept for you, never sent to an employer.</p>
-      <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist →</a>
-      <a class="more" href="/year?profile={quote(profile.id)}">Your year in the market →</a>
+      <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist</a>
+      <a class="more" href="/year?profile={quote(profile.id)}">Your year in the market</a>
     </div>
   </aside>
-</div>"""
+</div>
+"""
     return _page(
         "Kazi-Kasi — jobs for you",
         body,
@@ -1298,7 +1573,6 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 "img-src 'self' data:",
                 "font-src 'self'",
                 "connect-src 'self'",
-                "form-action 'self'",
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
                 "object-src 'none'",
@@ -1479,9 +1753,13 @@ def _public_nav(conn, headers: dict | None) -> str:
 def _nav_for(account: dict | None, profile_id: str) -> str:
     who = _first_name(account)
     if account:
-        # Signed in — show name, links to /account
+        # Signed in — show profile picture (if available) and name, links to /account
         label = who or "Account"
-        account_link = f'<a href="/account">{_e(label)}</a>'
+        picture = (account or {}).get("picture")
+        if picture:
+            account_link = f'<a href="/account" style="display:flex;align-items:center;gap:6px"><img src="{_e(picture)}" alt="" style="width:22px;height:22px;border-radius:50%"><span>{_e(label)}</span></a>'
+        else:
+            account_link = f'<a href="/account">{_e(label)}</a>'
     else:
         # Not signed in — prominent "Sign in" button first, no guest label
         account_link = '<a href="/signin" class="nav-signin">Sign in</a>'
@@ -1936,13 +2214,17 @@ def render_account(
     tone: str = "good",
 ) -> str:
     cv = accounts.latest_cv(conn, account["id"]) if account else None
-    suggestions = autofill.profile_suggestions(cv.get("fields", {})) if cv else {}
-    gaps = autofill.missing(cv.get("fields", {})) if cv else ["Full name", "Email", "Phone number"]
+    cv_fields = (cv.get("fields") or {}) if cv else {}
+    suggestions = autofill.profile_suggestions(cv_fields) if cv_fields else {}
+    gaps = autofill.missing(cv_fields) if cv_fields else ["Full name", "Email", "Phone number"]
 
     who = (account or {}).get("name") or ("Guest" if account else "Not signed in")
+    given_name = (account or {}).get("given_name") or who.split()[0] if who else "there"
     kind = (account or {}).get("kind") or "none"
     provider = (account or {}).get("provider")
     provider_label = accounts.PROVIDERS[provider].label if provider in accounts.PROVIDERS else None
+    picture = (account or {}).get("picture")
+    user_email = (account or {}).get("email") or (cv_fields.get("email", {}).get("value") if cv_fields else "")
 
     identity = []
     if account is None:
@@ -1951,10 +2233,14 @@ def render_account(
             " to keep your shortlist across devices and browsers.</p>"
         )
     else:
+        # Personalized greeting using Google profile data
+        greeting = f"Hey {given_name}" if given_name else "Welcome back"
+        identity.append(f'<p><b>{greeting}</b> — ')
+        if picture:
+            identity.append(f'<img src="{_e(picture)}" alt="" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px">')
         identity.append(
-            f"<p><b>{_e(who)}</b> — "
-            + ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
-            + (f" · {_e(account.get('email'))}" if account.get("email") else "")
+            ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
+            + (f" · {_e(user_email)}" if user_email else "")
             + "</p>"
         )
         if kind == "guest":
@@ -4177,6 +4463,7 @@ def _handle_get(
 
     if path in ("/", "/index.html"):
         seen = read_seen(headers)
+        account = _account_for(conn, headers)
         page = render_feed(
             conn,
             profile_id=_query_one(query, "profile") or None,
@@ -4184,6 +4471,7 @@ def _handle_get(
             demo=demo,
             since=seen,
             headers=headers,
+            account=account,
         )
         return Response(200, page, headers={"Set-Cookie": seen_cookie(now)})
 
@@ -4414,6 +4702,14 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
 
     if path == "/account/cv":
         filename, text = _cv_text(body, header_map.get("content-type", ""))
+        
+        # Check for PDF parsing errors
+        if text.startswith("__PDF_ERROR__"):
+            error_detail = text.split(":", 1)[1] if ":" in text else "Unknown error"
+            return _redirect(f"/account?error={quote(f'Could not read that PDF — {error_detail}. Try a different file or paste the text directly.')}")
+        if text == "__PDF_NO_TEXT__":
+            return _redirect(f"/account?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
+        
         if not text.strip():
             return _redirect(f"/account?error={quote('No CV text found — paste the text or upload a .txt, .md or .pdf.')}")
         fields = autofill.parse(text)
@@ -4455,8 +4751,25 @@ def _cv_text(body: bytes, content_type: str) -> tuple[str | None, str]:
                     return filename, ""
                 import io
 
-                reader = PdfReader(io.BytesIO(raw))
-                text_value = "\n".join(page.extract_text() or "" for page in reader.pages)
+                try:
+                    reader = PdfReader(io.BytesIO(raw))
+                    pages = []
+                    for page in reader.pages:
+                        try:
+                            text = page.extract_text()
+                            if text:
+                                pages.append(text)
+                        except Exception:
+                            # Skip pages that fail to extract
+                            continue
+                    text_value = "\n".join(pages)
+                    if not text_value.strip():
+                        # PDF parsed but no text found (scanned image?)
+                        return filename, "__PDF_NO_TEXT__"
+                except Exception as e:
+                    # PdfStreamError, etc. — corrupted or truncated PDF.
+                    error_msg = str(e)[:100]
+                    return filename, f"__PDF_ERROR__:{error_msg}"
             else:
                 text_value = raw.decode("utf-8", errors="replace")
     return filename, text_value or ""
