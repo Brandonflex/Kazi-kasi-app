@@ -1947,20 +1947,20 @@ def render_account(
     identity = []
     if account is None:
         identity.append(
-            '<p>You are browsing as a guest without a session. <a href="/signin">Sign in</a>'
-            " to keep a shortlist across devices.</p>"
+            '<p>You're browsing as a guest. <a href="/signin">Sign in</a>'
+            " to keep your shortlist across devices and browsers.</p>"
         )
     else:
         identity.append(
             f"<p><b>{_e(who)}</b> — "
-            + ("a guest account" if kind == "guest" else f"signed in with {_e(provider_label or 'a provider')}")
-            + (f", {_e(account.get('email'))}" if account.get("email") else "")
-            + ".</p>"
+            + ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
+            + (f" · {_e(account.get('email'))}" if account.get("email") else "")
+            + "</p>"
         )
         if kind == "guest":
             identity.append(
-                '<p class="small">A guest account lives in this browser. <a href="/signin">'
-                "Sign in</a> and the shortlist and this CV move with you.</p>"
+                '<p class="small">This account lives in this browser only. <a href="/signin">'
+                "Sign in</a> and your shortlist and CV travel with you to any device.</p>"
             )
 
     suggestion_html = ""
@@ -2886,10 +2886,10 @@ def render_search(
         if pay_floor:
             suggestions.append(f'<a href="{_e(keep(pay_floor=None))}">drop the pay floor</a>')
         cards = f"""<div class="card">
-  <h2>Nothing matches that</h2>
-  <p>Every word has to appear, and every filter has to hold. This corpus is small
-  enough that a narrow search is often empty — that is a fact about the market,
-  not a reason to fill the page with roles that do not fit.</p>
+  <h2>No matches right now</h2>
+  <p>That's okay — the market is what it is. Try widening your search: pick a
+  different county, drop a filter, or just browse everything that's live.
+  We'd rather show you nothing than pretend there's something there.</p>
   <ul class="whythat">{''.join(f'<li>{item}</li>' for item in suggestions)}</ul>
 </div>"""
 
