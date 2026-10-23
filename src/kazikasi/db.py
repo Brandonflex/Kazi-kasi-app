@@ -236,7 +236,6 @@ CREATE TABLE IF NOT EXISTS applications (
     created_at     TEXT NOT NULL,
     UNIQUE(account_id, job_id)
 );
-
 -- One in-flight OAuth attempt: the state token and its PKCE verifier, which
 -- must never leave the server except as a hash in the authorize URL.
 CREATE TABLE IF NOT EXISTS oauth_states (
