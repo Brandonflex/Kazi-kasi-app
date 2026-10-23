@@ -4454,8 +4454,13 @@ def _cv_text(body: bytes, content_type: str) -> tuple[str | None, str]:
                     return filename, ""
                 import io
 
-                reader = PdfReader(io.BytesIO(raw))
-                text_value = "\n".join(page.extract_text() or "" for page in reader.pages)
+                try:
+                    reader = PdfReader(io.BytesIO(raw))
+                    text_value = "\n".join(page.extract_text() or "" for page in reader.pages)
+                except Exception:
+                    # PdfStreamError, etc. — corrupted or truncated PDF.
+                    # The CV page should show the error, not 500.
+                    return filename, "__PDF_PARSE_ERROR__"
             else:
                 text_value = raw.decode("utf-8", errors="replace")
     return filename, text_value or ""
