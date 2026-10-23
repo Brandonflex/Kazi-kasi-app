@@ -1478,9 +1478,13 @@ def _public_nav(conn, headers: dict | None) -> str:
 def _nav_for(account: dict | None, profile_id: str) -> str:
     who = _first_name(account)
     if account:
-        # Signed in — show name, links to /account
+        # Signed in — show profile picture (if available) and name, links to /account
         label = who or "Account"
-        account_link = f'<a href="/account">{_e(label)}</a>'
+        picture = (account or {}).get("picture")
+        if picture:
+            account_link = f'<a href="/account" style="display:flex;align-items:center;gap:6px"><img src="{_e(picture)}" alt="" style="width:22px;height:22px;border-radius:50%"><span>{_e(label)}</span></a>'
+        else:
+            account_link = f'<a href="/account">{_e(label)}</a>'
     else:
         # Not signed in — prominent "Sign in" button first, no guest label
         account_link = '<a href="/signin" class="nav-signin">Sign in</a>'
@@ -1935,13 +1939,17 @@ def render_account(
     tone: str = "good",
 ) -> str:
     cv = accounts.latest_cv(conn, account["id"]) if account else None
-    suggestions = autofill.profile_suggestions(cv.get("fields", {})) if cv else {}
-    gaps = autofill.missing(cv.get("fields", {})) if cv else ["Full name", "Email", "Phone number"]
+    cv_fields = (cv.get("fields") or {}) if cv else {}
+    suggestions = autofill.profile_suggestions(cv_fields) if cv_fields else {}
+    gaps = autofill.missing(cv_fields) if cv_fields else ["Full name", "Email", "Phone number"]
 
     who = (account or {}).get("name") or ("Guest" if account else "Not signed in")
+    given_name = (account or {}).get("given_name") or who.split()[0] if who else "there"
     kind = (account or {}).get("kind") or "none"
     provider = (account or {}).get("provider")
     provider_label = accounts.PROVIDERS[provider].label if provider in accounts.PROVIDERS else None
+    picture = (account or {}).get("picture")
+    user_email = (account or {}).get("email") or (cv_fields.get("email", {}).get("value") if cv_fields else "")
 
     identity = []
     if account is None:
@@ -1950,10 +1958,14 @@ def render_account(
             " to keep your shortlist across devices and browsers.</p>"
         )
     else:
+        # Personalized greeting using Google profile data
+        greeting = f"Hey {given_name}" if given_name else "Welcome back"
+        identity.append(f'<p><b>{greeting}</b> — ')
+        if picture:
+            identity.append(f'<img src="{_e(picture)}" alt="" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px">')
         identity.append(
-            f"<p><b>{_e(who)}</b> — "
-            + ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
-            + (f" · {_e(account.get('email'))}" if account.get("email") else "")
+            ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
+            + (f" · {_e(user_email)}" if user_email else "")
             + "</p>"
         )
         if kind == "guest":
@@ -4413,6 +4425,14 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
 
     if path == "/account/cv":
         filename, text = _cv_text(body, header_map.get("content-type", ""))
+        
+        # Check for PDF parsing errors
+        if text.startswith("__PDF_ERROR__"):
+            error_detail = text.split(":", 1)[1] if ":" in text else "Unknown error"
+            return _redirect(f"/account?error={quote(f'Could not read that PDF — {error_detail}. Try a different file or paste the text directly.')}")
+        if text == "__PDF_NO_TEXT__":
+            return _redirect(f"/account?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
+        
         if not text.strip():
             return _redirect(f"/account?error={quote('No CV text found — paste the text or upload a .txt, .md or .pdf.')}")
         fields = autofill.parse(text)
@@ -4456,11 +4476,23 @@ def _cv_text(body: bytes, content_type: str) -> tuple[str | None, str]:
 
                 try:
                     reader = PdfReader(io.BytesIO(raw))
-                    text_value = "\n".join(page.extract_text() or "" for page in reader.pages)
-                except Exception:
+                    pages = []
+                    for page in reader.pages:
+                        try:
+                            text = page.extract_text()
+                            if text:
+                                pages.append(text)
+                        except Exception:
+                            # Skip pages that fail to extract
+                            continue
+                    text_value = "\n".join(pages)
+                    if not text_value.strip():
+                        # PDF parsed but no text found (scanned image?)
+                        return filename, "__PDF_NO_TEXT__"
+                except Exception as e:
                     # PdfStreamError, etc. — corrupted or truncated PDF.
-                    # The CV page should show the error, not 500.
-                    return filename, "__PDF_PARSE_ERROR__"
+                    error_msg = str(e)[:100]
+                    return filename, f"__PDF_ERROR__:{error_msg}"
             else:
                 text_value = raw.decode("utf-8", errors="replace")
     return filename, text_value or ""

@@ -191,6 +191,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     email        TEXT,
     email_verified INTEGER NOT NULL DEFAULT 0,
     name         TEXT,
+    given_name   TEXT,                    -- first name from provider
+    family_name  TEXT,                    -- last name from provider
+    picture      TEXT,                    -- profile photo URL from provider
+    locale       TEXT,                    -- language preference from provider
     created_at   TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     deleted_at   TEXT
@@ -520,6 +524,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     email        TEXT,
     email_verified INTEGER NOT NULL DEFAULT 0,
     name         TEXT,
+    given_name   TEXT,                    -- first name from provider
+    family_name  TEXT,                    -- last name from provider
+    picture      TEXT,                    -- profile photo URL from provider
+    locale       TEXT,                    -- language preference from provider
     created_at   TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     deleted_at   TEXT
@@ -823,6 +831,11 @@ def migrate(conn) -> None:
     _add_column(conn, "subscriptions", "brief_opt_in", "INTEGER NOT NULL DEFAULT 0")
     _add_column(conn, "messages", "run_id", "INTEGER REFERENCES digest_runs(id)")
     _add_column(conn, "messages", "delivered_at", "TEXT")
+    # Add personalization columns to accounts table
+    _add_column(conn, "accounts", "given_name", "TEXT")
+    _add_column(conn, "accounts", "family_name", "TEXT")
+    _add_column(conn, "accounts", "picture", "TEXT")
+    _add_column(conn, "accounts", "locale", "TEXT")
     if _is_postgres(conn):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_run ON messages (run_id, channel, state)")
     else:
