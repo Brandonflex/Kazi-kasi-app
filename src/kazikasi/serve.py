@@ -1298,7 +1298,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 "img-src 'self' data:",
                 "font-src 'self'",
                 "connect-src 'self'",
-                "form-action 'self'",
+                "form-action 'self'",  /* simplified CSP for cross-browser reliability */
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
                 "object-src 'none'",
