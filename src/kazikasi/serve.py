@@ -84,29 +84,39 @@ SLO_LABEL = {
 
 STYLE = """
 :root{
-  /* design tokens — see docs/design/01-visual-system.md */
-  --paper:#FBF8F2; --card:#FFFFFF; --sunken:#F3EEE5; --line:#E3DCCF;
-  --ink:#12161C; --ink-2:#3D4653; --muted:#5C6675;
-  --forest:#14532D; --forest-soft:#E7F0E8;
-  --amber:#9A4E00; --amber-soft:#FBEEDC;
-  --risk:#A3241C; --risk-soft:#FBEAE8;
+  /* design tokens — human-centered, anti-AI aesthetic (Oct 2026) */
+  /* Warm, earthy palette — inspired by clay, soil, natural materials */
+  --paper:#FAF7F2; --card:#FFFDF9; --sunken:#F0EBE3; --line:#E5DFD5;
+  --ink:#2C2C2C; --ink-2:#5A5449; --muted:#7A7265;
+  --forest:#0D4D2B; --forest-soft:#E8F0EA;
+  --clay:#C97B5A; --clay-soft:#F5E6DD;
+  --gold:#D4A574; --gold-soft:#F9F0E6;
+  --amber:#B8860B; --amber-soft:#FDF5E6;
+  --risk:#C75B3A; --risk-soft:#FDE8E0;
   --live:#15803D;
   --accent:var(--forest); --accent-soft:var(--forest-soft);
   --warn:var(--amber); --warn-soft:var(--amber-soft);
   --danger:var(--risk); --danger-soft:var(--risk-soft);
   --bg:var(--paper);
   --radius:16px; --radius-sm:10px; --radius-pill:999px;
-  --shadow:0 1px 2px rgba(18,22,28,.04),0 10px 30px rgba(18,22,28,.05);
-  --shadow-lift:0 2px 4px rgba(18,22,28,.05),0 18px 44px rgba(18,22,28,.09);
-  --focus:0 0 0 3px #B9D4C1, 0 0 0 1px #14532D;
+  --shadow:0 1px 2px rgba(44,44,44,.04),0 10px 30px rgba(44,44,44,.05);
+  --shadow-lift:0 2px 4px rgba(44,44,44,.05),0 18px 44px rgba(44,44,44,.09);
+  --shadow-tactile:0 1px 1px rgba(44,44,44,.06),0 4px 12px rgba(44,44,44,.08),0 8px 24px rgba(44,44,44,.04);
+  --focus:0 0 0 3px #D4C4B0, 0 0 0 1px #0D4D2B;
   --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --font-display:Georgia,"Iowan Old Style","Times New Roman",serif;
   --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* Animation timing — fast, responsive, natural */
+  --ease-out:cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast:150ms;
+  --duration-normal:250ms;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--font-sans);
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  /* Subtle film grain texture — human, tactile, anti-AI */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")}
 a{color:var(--forest);text-decoration:none}
 a:hover{text-decoration:underline;text-underline-offset:2px}
 :focus-visible{outline:none;box-shadow:var(--focus);border-radius:8px}
@@ -195,9 +205,11 @@ main{padding-bottom:40px}
 
 /* ---- the card ------------------------------------------------------ */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:20px 22px 16px;margin-bottom:14px;box-shadow:var(--shadow);
-  transition:border-color .18s ease-out,transform .18s ease-out,box-shadow .18s ease-out}
-.card:hover{border-color:#D5C7B0;transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+  padding:20px 22px 16px;margin-bottom:14px;box-shadow:var(--shadow-tactile);
+  transition:border-color var(--duration-normal) var(--ease-out),
+             transform var(--duration-normal) var(--ease-out),
+             box-shadow var(--duration-normal) var(--ease-out)}
+.card:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:var(--shadow-lift)}
 .card:focus-within{border-color:var(--forest)}
 .card-top{display:flex;gap:20px;justify-content:space-between;align-items:flex-start}
 .card h2{margin:0 0 5px;font-family:var(--font-sans);font-size:19px;line-height:1.26;
@@ -898,14 +910,14 @@ def render_feed(
     <p class="small"><a href="/search?profile={quote(profile.id)}">Search every live role →</a>
     — words, county, pay floor, deadline horizon.</p>
     {''.join(cards)}
-    <p class="endnote">That's all of them. We will tell you when that changes.</p>
+    <p class="endnote">You've seen everything that's live right now. We'll let you know when new roles drop.</p>
     {_wildcard_html(conn, profile, now=now)}
   </div>
   <aside class="rail">
     <div class="rail-card">
-      <h3>Your scope</h3>
+      <h3>What you're looking for</h3>
       <div class="chips">{limit_chip}{pay_chip}{chips}</div>
-      <p class="rail-note">This is the argument for why the feed looks like this.</p>
+      <p class="rail-note">These are the filters shaping your feed. Tweak them anytime.</p>
     </div>
     <div class="rail-card">
       <h3>Closing this week</h3>
@@ -1839,21 +1851,22 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
     body = f"""
 <div class=\"signin-wrap\">
   <div class=\"signin-card\">
-    <p class=\"kicker\">Sign in</p>
-    <h1 class=\"signin-headline\">One account, every job in Kenya.</h1>
-    <p class=\"signin-sub\">Your shortlist follows you across devices, and the
-    application kit fills employer forms from your CV — that's the whole deal.</p>
+    <p class=\"kicker\">Welcome to Kazi-Kasi</p>
+    <h1 class=\"signin-headline\">Find real jobs. Track what matters.</h1>
+    <p class=\"signin-sub\">Sign in once, and your shortlist stays with you — whether
+    you're on your phone at the matatu stage or your laptop at home. We'll even
+    fill in application forms from your CV, so you're not typing the same thing twice.</p>
     {notice_html}
     {primary_html}
     {secondary_html}
     <form method=\"post\" action=\"/auth/guest\" class=\"signin-guest\">
       <input type=\"hidden\" name=\"next\" value=\"/account?guest=1\">
-      <button type=\"submit\" class=\"signin-guest-btn\">Continue without an account</button>
+      <button type=\"submit\" class=\"signin-guest-btn\">Just browsing? That's fine too</button>
     </form>
     {unconfigured_note}
-    <p class=\"signin-privacy\">We store your name, your email, and the fields
-    on your CV. We do not read your contacts or your connections, and deleting
-    your account deletes everything in one click.</p>
+    <p class=\"signin-privacy\">We only keep what we need: your name, email, and CV details.
+    No contacts, no connections, no selling your data. Delete your account anytime —
+    it's one click, gone forever.</p>
   </div>
 </div>"""
     return _page("Sign in — Kazi-Kasi", body, demo=demo)
