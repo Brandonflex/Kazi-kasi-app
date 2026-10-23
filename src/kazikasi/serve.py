@@ -208,7 +208,7 @@ button[disabled] { opacity: .5; cursor: not-allowed; transform: none }
 .btn-ink:hover, button.ink:hover { background: #1f1a14 }
 
 /* ---- reveal animation (scroll-triggered) ---- */
-.reveal { opacity: 0; transform: translateY(24px); transition: opacity var(--duration-slow) var(--ease-out), transform var(--duration-slow) var(--ease-out) }
+.reveal { opacity: 1; transform: none }
 .reveal.in { opacity: 1; transform: none }
 
 /* Staggered list reveal */
