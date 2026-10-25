@@ -669,6 +669,24 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 .quick-apply-btn:hover { background: var(--nairobi-deep); transform: translateY(-1px) }
 
+/* Card quick actions row */
+.card-quick-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+}
+.card-quick-actions .move-btn {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+}
+.card-quick-actions .move-btn.move-forward {
+  font-weight: 700;
+}
+
 /* Save button */
 button[type="submit"] {
   background: var(--bg);
@@ -835,6 +853,267 @@ footer.wrap p { color: var(--muted); font-size: 13px; margin: 0 }
 .strip span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 6px; font-weight: 600 }
 
 /* ---- Reduced motion ---- */
+
+/* ============================================================
+   TRACKER — Kanban Board
+   ============================================================ */
+
+.tracker-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.stat-pill {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-pill-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.stat-pill-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.followup-banner {
+  background: var(--ember-soft);
+  border: 1px solid var(--ember-border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.followup-banner strong { color: var(--nairobi-dark) }
+.followup-banner ul { margin: 6px 0 0 20px; padding: 0; font-size: 13px; color: var(--ink-2) }
+.followup-banner li { margin: 2px 0 }
+.followup-banner a { color: var(--ember-gold); font-weight: 600 }
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.kanban-col {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 300px;
+}
+.kanban-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--line);
+}
+.kanban-col-head h3 {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--nairobi-dark);
+  margin: 0;
+}
+.kanban-count {
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+.kanban-col-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 200px;
+}
+.kanban-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--duration) var(--ease-out), box-shadow var(--duration) var(--ease-out);
+}
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.kanban-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.kanban-card-head h4 {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nairobi-dark);
+  margin: 0;
+  line-height: 1.3;
+}
+.kanban-card-head h4 a { color: var(--nairobi-dark); text-decoration: none }
+.kanban-card-head h4 a:hover { color: var(--ember-gold) }
+.app-score {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--safari-green);
+  white-space: nowrap;
+}
+.kanban-card-employer {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.kanban-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.move-btn {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink-2);
+  transition: all var(--duration-fast);
+}
+.move-btn:hover { border-color: var(--ember-gold); color: var(--ember-gold) }
+.move-forward { background: var(--safari-green); color: white; border-color: var(--safari-green) }
+.move-forward:hover { background: var(--safari-light) }
+.kanban-card-open {
+  font-size: 11px;
+  color: var(--ember-gold);
+  font-weight: 600;
+  margin-left: auto;
+  text-decoration: none;
+}
+.kanban-card-open:hover { text-decoration: underline }
+.kanban-empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+  padding: 20px 0;
+}
+.kanban-card-closed { opacity: .7 }
+.kanban-col-closed { opacity: .85 }
+.kanban-closed-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rift-clay);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+/* ============================================================
+   3D HERO ANIMATION
+   ============================================================ */
+
+.hero-3d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.hero-shape {
+  position: absolute;
+  border-radius: 50%;
+  opacity: .08;
+  animation: hero-float 20s ease-in-out infinite;
+}
+.hero-shape:nth-child(1) {
+  width: 200px; height: 200px;
+  background: var(--ember-gold);
+  top: -60px; right: 10%;
+  animation-delay: 0s;
+  animation-duration: 25s;
+}
+.hero-shape:nth-child(2) {
+  width: 120px; height: 120px;
+  background: var(--safari-green);
+  bottom: 20px; left: 15%;
+  animation-delay: -5s;
+  animation-duration: 20s;
+}
+.hero-shape:nth-child(3) {
+  width: 80px; height: 80px;
+  background: var(--rift-clay);
+  top: 40%; right: 5%;
+  animation-delay: -10s;
+  animation-duration: 22s;
+}
+.hero-shape:nth-child(4) {
+  width: 160px; height: 160px;
+  background: var(--ember-gold);
+  bottom: -40px; right: 30%;
+  animation-delay: -7s;
+  animation-duration: 28s;
+}
+.hero-shape:nth-child(5) {
+  width: 60px; height: 60px;
+  background: var(--safari-green);
+  top: 20%; left: 5%;
+  animation-delay: -3s;
+  animation-duration: 18s;
+}
+
+@keyframes hero-float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25% { transform: translate(20px, -30px) rotate(90deg) scale(1.1); }
+  50% { transform: translate(-10px, -50px) rotate(180deg) scale(.95); }
+  75% { transform: translate(30px, -20px) rotate(270deg) scale(1.05); }
+}
+
+/* Kanga weave pattern overlay on header */
+header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgba(233,162,59,.03) 3px,
+      rgba(233,162,59,.03) 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(233,162,59,.02) 3px,
+      rgba(233,162,59,.02) 4px
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+header > * { position: relative; z-index: 1 }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto }
   .card, button, .btn, a { transition: none !important }
@@ -1372,19 +1651,40 @@ def render_feed(
                 </div>
                 '''
 
-        # Quick apply button (Mokaru/Indeed-style 1-click apply)
-        quick_apply_html = ""
-        if account and cv_fields:
-            quick_apply_html = f'''<button type="button" class="quick-apply-btn" data-job="{_e(match.job_id)}" title="Apply instantly with your saved CV">⚡ Quick Apply</button>'''
+        # Quick action: status transitions (Mokaru-style)
+        quick_actions_html = ""
+        if account:
+            current_app = applications.get(conn, account["id"], match.job_id)
+            if current_app:
+                # Already tracked — show move buttons
+                current_status = current_app["status"]
+                idx = applications.STAGES.index(current_status)
+                move_html = '<div class="card-quick-actions">'
+                if idx > 0:
+                    move_html += '<form method="post" action="/tracker/move" style="display:inline"><input type="hidden" name="id" value="' + str(current_app["id"]) + '"><input type="hidden" name="status" value="' + applications.STAGES[idx-1] + '"><button type="submit" class="move-btn" title="Move to ' + applications.STAGE_LABELS[applications.STAGES[idx-1]] + '">&larr; ' + applications.STAGE_LABELS[applications.STAGES[idx-1]] + '</button></form>'
+                if idx < len(applications.STAGES) - 3:
+                    next_s = applications.STAGES[idx+1]
+                    move_html += '<form method="post" action="/tracker/move" style="display:inline"><input type="hidden" name="id" value="' + str(current_app["id"]) + '"><input type="hidden" name="status" value="' + next_s + '"><button type="submit" class="move-btn move-forward" title="Move to ' + applications.STAGE_LABELS[next_s] + '">' + applications.STAGE_LABELS[next_s] + ' &rarr;</button></form>'
+                move_html += '</div>'
+                quick_actions_html = move_html
+            else:
+                # Not tracked yet — show "Save" button to start tracking
+                quick_actions_html = '<form method="post" action="/action" style="display:inline"><input type="hidden" name="profile" value="' + _e(profile.id) + '"><input type="hidden" name="job" value="' + _e(match.job_id) + '"><input type="hidden" name="kind" value="saved"><input type="hidden" name="next" value="' + _e(feed_path) + '"><button type="submit" class="quick-apply-btn" title="Save to tracker">&#10003; Save to tracker</button></form>'
+
+        # Company initial badge
+        company_initial = (match.employer or "?")[0].upper() if match.employer else "?"
 
         cards.append(
             f"""<article class="card reveal">
   <div class="card-top">
-    <div>
-      <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
-      <div class="employer">{_e(match.employer or "Employer not stated")}</div>
-      {salary_html}
-      {match_breakdown_html}
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div class="company-initial">{company_initial}</div>
+      <div style="min-width:0;flex:1">
+        <h2><a href="/job/{_e(match.job_id)}?profile={quote(profile.id)}">{_e(match.title)}</a></h2>
+        <div class="employer">{_e(match.employer or "Employer not stated")}</div>
+        {salary_html}
+        {match_breakdown_html}
+      </div>
     </div>
     <div class="card-actions">
       <div class="deadline {tone}"><span class="dl-label">{_e(label)}</span><span class="dl-date">{_e(stamp)}</span></div>
@@ -1393,19 +1693,10 @@ def render_feed(
   </div>
   <div class="badges">{''.join(badges)}</div>
   <ul class="whythat">{reasons}</ul>
+  {quick_actions_html}
   <div class="foot">
     {score_html}
     <span>{_e(graph.freshness_band(row, now=now))}</span>
-    <form method="post" action="/action">
-      <input type="hidden" name="profile" value="{_e(profile.id)}">
-      <input type="hidden" name="job" value="{_e(match.job_id)}">
-      <input type="hidden" name="kind" value="{'unsaved' if match.job_id in saved else 'saved'}">
-      <input type="hidden" name="next" value="{_e(feed_path)}">
-      <button type="submit" class="{'on' if match.job_id in saved else ''}">
-        {'Save' if match.job_id not in saved else 'Saved'}
-      </button>
-    </form>
-    {quick_apply_html}
     {apply_html}
   </div>
 </article>"""
@@ -1472,6 +1763,13 @@ def render_feed(
 
     body = f"""
 <div class="spatial-hero">
+  <div class="hero-3d">
+    <div class="hero-shape"></div>
+    <div class="hero-shape"></div>
+    <div class="hero-shape"></div>
+    <div class="hero-shape"></div>
+    <div class="hero-shape"></div>
+  </div>
   <div class="feed-layout">
     <div class="feed-main">
       <div class="masthead">
@@ -2025,10 +2323,14 @@ def _public_nav(conn, headers: dict | None) -> str:
     return _nav_for(_account_for(conn, headers), _profile_or_default(conn, None).id)
 
 
+# Mercury 3 interface icons (inline SVG)
+_ICON_FEED = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>'
+_ICON_TRACKER = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>'
+_ICON_SHORTLIST = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
+
 def _nav_for(account: dict | None, profile_id: str) -> str:
     who = _first_name(account)
     if account:
-        # Signed in — show profile picture (if available) and name, links to /account
         label = who or "Account"
         picture = (account or {}).get("picture")
         if picture:
@@ -2036,15 +2338,12 @@ def _nav_for(account: dict | None, profile_id: str) -> str:
         else:
             account_link = f'<a href="/account">{_e(label)}</a>'
     else:
-        # Not signed in — prominent "Sign in" button first, no guest label
         account_link = '<a href="/signin" class="nav-signin">Sign in</a>'
     return (
         account_link
-        + '<a href="/?profile=' + quote(profile_id) + '">Feed</a>'
-        + '<a href="/shortlist?profile=' + quote(profile_id) + '">Shortlist</a>'
-        + '<a href="/brief?profile=' + quote(profile_id) + '">Brief</a>'
-        + '<a href="/activity?profile=' + quote(profile_id) + '">Activity</a>'
-        + '<a href="/pulse">Pulse</a>'
+        + '<a href="/?profile=' + quote(profile_id) + '">' + _ICON_FEED + ' Feed</a>'
+        + '<a href="/tracker">' + _ICON_TRACKER + ' Tracker</a>'
+        + '<a href="/shortlist?profile=' + quote(profile_id) + '">' + _ICON_SHORTLIST + ' Shortlist</a>'
         + '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
         + "Jump <kbd>⌘K</kbd></button>"
     )
@@ -2359,6 +2658,129 @@ record →</a></p>"""
         nav=_nav_for(_account_for(conn, headers), profile.id),
         head='<meta name="robots" content="noindex">',
     )
+
+
+
+# --------------------------------------------------------------------------
+# Tracker — Mokaru-style Kanban
+# --------------------------------------------------------------------------
+
+def render_tracker(
+    conn: sqlite3.Connection,
+    *,
+    account_id: str | None = None,
+    now: datetime | None = None,
+    demo: bool = False,
+    headers: dict | None = None,
+    notice: str = "",
+    tone: str = "good",
+) -> str:
+    """Kanban board of the user's application pipeline."""
+    now = now or datetime.now(timezone.utc)
+    
+    if not account_id and demo:
+        account_id = "demo-tracker"
+        _seed_demo_applications(conn, account_id, now=now)
+
+    if not account_id:
+        body = '<div class="signin-wrap"><div class="signin-card"><p class="kicker">Tracker</p><h1 class="signin-headline">Sign in to track your applications</h1><p class="signin-sub">The tracker keeps your pipeline in one place.</p><a href="/signin" class="btn btn-primary" style="margin-top:16px;width:100%;justify-content:center">Sign in</a></div></div>'
+        return _page("Tracker — Kazi-Kasi", body, demo=demo)
+
+    all_apps = applications.list_by_status(conn, account_id)
+    stats = applications.stats(conn, account_id)
+    due_followups = applications.follow_ups_due(conn, account_id, now=now)
+    
+    columns = {}
+    for stage in applications.STAGES:
+        columns[stage] = [a for a in all_apps if a["status"] == stage]
+    closed = columns.get("rejected", []) + columns.get("withdrawn", [])
+    
+    notice_html = _notice(tone, notice) if notice else ""
+    
+    stats_html = '<div class="tracker-stats"><div class="stat-pill"><span class="stat-pill-num" style="color:var(--ember-gold)">' + str(stats["total"]) + '</span><span class="stat-pill-label">Total</span></div><div class="stat-pill"><span class="stat-pill-num" style="color:var(--safari-green)">' + str(stats["active"]) + '</span><span class="stat-pill-label">Active</span></div><div class="stat-pill"><span class="stat-pill-num" style="color:var(--rift-clay)">' + str(stats["converted"]) + '</span><span class="stat-pill-label">Offers</span></div></div>'
+    
+    followup_html = ""
+    if due_followups:
+        items = "".join('<li><a href="/job/' + _e(a["job_id"]) + '">' + _e((a.get("job_title") or a["job_id"])[:40]) + '</a> — ' + applications.STAGE_LABELS.get(a["status"], a["status"]) + '</li>' for a in due_followups[:5])
+        followup_html = '<div class="followup-banner"><strong>' + str(len(due_followups)) + ' follow-up(s) due</strong><ul>' + items + '</ul></div>'
+    
+    kanban_columns = []
+    for stage in applications.STAGES:
+        if stage in ("rejected", "withdrawn"):
+            continue
+        
+        items = columns.get(stage, [])
+        cards_html = ""
+        for app in items:
+            job_id = app["job_id"]
+            job_row = graph.job_row(conn, job_id)
+            title = app.get("job_title") or (job_row["title"] if job_row else job_id[:30])
+            employer = app.get("recruiter_name") or (job_row["employer"] if job_row else "Unknown")
+            score = app.get("match_score")
+            score_html = '<span class="app-score">' + ('%.0f' % (score * 100)) + '%</span>' if score is not None else ""
+            
+            move_buttons = ""
+            idx = applications.STAGES.index(stage)
+            if idx > 0:
+                move_buttons += '<form method="post" action="/tracker/move" style="display:inline"><input type="hidden" name="id" value="' + str(app["id"]) + '"><input type="hidden" name="status" value="' + applications.STAGES[idx-1] + '"><button type="submit" class="move-btn" title="Move back">&larr;</button></form>'
+            if idx < len(applications.STAGES) - 3:
+                next_stage = applications.STAGES[idx+1]
+                move_buttons += '<form method="post" action="/tracker/move" style="display:inline"><input type="hidden" name="id" value="' + str(app["id"]) + '"><input type="hidden" name="status" value="' + next_stage + '"><button type="submit" class="move-btn move-forward" title="Move forward">&rarr;</button></form>'
+            
+            cards_html += '<div class="kanban-card"><div class="kanban-card-head"><h4><a href="/job/' + _e(job_id) + '">' + _e(title) + '</a></h4>' + score_html + '</div><div class="kanban-card-employer">' + _e(employer) + '</div><div class="kanban-card-actions">' + move_buttons + '<a href="/job/' + _e(job_id) + '" class="kanban-card-open">Open</a></div></div>'
+        
+        stage_label = applications.STAGE_LABELS[stage]
+        count = len(items)
+        kanban_columns.append('<div class="kanban-col"><div class="kanban-col-head"><h3>' + _e(stage_label) + '</h3><span class="kanban-count">' + str(count) + '</span></div><div class="kanban-col-body">' + (cards_html if cards_html else '<p class="kanban-empty">Nothing here yet</p>') + '</div></div>')
+    
+    # Closed column
+    closed_html = ""
+    for app in closed:
+        job_id = app["job_id"]
+        job_row = graph.job_row(conn, job_id)
+        title = app.get("job_title") or (job_row["title"] if job_row else job_id[:30])
+        employer = app.get("recruiter_name") or (job_row["employer"] if job_row else "Unknown")
+        status_label = applications.STAGE_LABELS.get(app["status"], app["status"])
+        closed_html += '<div class="kanban-card kanban-card-closed"><div class="kanban-card-head"><h4><a href="/job/' + _e(job_id) + '">' + _e(title) + '</a></h4><span class="kanban-closed-tag">' + _e(status_label) + '</span></div><div class="kanban-card-employer">' + _e(employer) + '</div></div>'
+    
+    kanban_columns.append('<div class="kanban-col kanban-col-closed"><div class="kanban-col-head"><h3>Closed</h3><span class="kanban-count">' + str(len(closed)) + '</span></div><div class="kanban-col-body">' + (closed_html if closed_html else '<p class="kanban-empty">No closed applications</p>') + '</div></div>')
+    
+    body = '<div class="spatial-hero"><div class="hero-3d"><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div></div><div class="wrap"><p class="kicker">Pipeline</p><h1 class="display">Your <em>tracker</em></h1><p class="scopeline">Every application, one board. Move jobs through stages as you hear back.</p></div></div><div class="wrap" style="padding-bottom:60px">' + notice_html + stats_html + followup_html + '<div class="kanban-board">' + "".join(kanban_columns) + '</div></div>'
+    
+    profile_id = "demo-fresher"
+    return _page("Tracker — Kazi-Kasi", body, demo=demo, nav=_nav_for(_account_for(conn, headers), profile_id))
+
+
+def _seed_demo_applications(conn, account_id, *, now):
+    """Seed demo applications so the tracker isn't empty."""
+    rows = conn.execute("SELECT id FROM jobs LIMIT 12").fetchall()
+    job_ids = [r["id"] for r in rows]
+    if not job_ids:
+        return
+    
+    stages_demo = [
+        ("watchlist", 0, 0.45),
+        ("saved", 1, 0.62),
+        ("saved", 2, 0.55),
+        ("applied", 3, 0.78),
+        ("applied", 4, 0.71),
+        ("screening", 5, 0.85),
+        ("interview", 6, 0.92),
+        ("offer", 7, 0.95),
+        ("rejected", 8, 0.38),
+        ("withdrawn", 9, 0.50),
+    ]
+    
+    for status, idx, score in stages_demo:
+        if idx >= len(job_ids):
+            continue
+        job_id = job_ids[idx]
+        try:
+            applications.save(conn, account_id, job_id, status=status, match_score=score, match_details={"matching": ["python", "remote"], "missing": ["aws"]}, now=now)
+        except Exception:
+            pass
+    conn.commit()
+
 
 
 def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
@@ -4315,6 +4737,21 @@ def handle(
         return _handle_saved_search(conn, path, body)
     if path in ("/api/cron/run", "/api/cron"):
         return _handle_cron(conn, header_map, query, now=now, demo=demo)
+    if path == "/tracker/move":
+        account = _account_for(conn, headers)
+        if not account:
+            return _redirect("/signin?notice=Sign in to move applications&tone=warn")
+        form = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+        app_id = int((form.get("id") or ["0"])[0])
+        new_status = (form.get("status") or ["saved"])[0]
+        if new_status not in applications.STAGES:
+            return _redirect("/tracker?notice=Invalid status&tone=warn")
+        try:
+            applications.update_status(conn, app_id, new_status, now=now)
+            return _redirect("/tracker?notice=Moved to " + applications.STAGE_LABELS.get(new_status, new_status) + "&tone=good")
+        except Exception as e:
+            return _redirect("/tracker?notice=" + str(e) + "&tone=warn")
+
     if path == "/action":
         if action_limiter is not None and not action_limiter.allow(client):
             return Response(429, "too many actions", "text/plain; charset=utf-8")
@@ -4747,6 +5184,14 @@ def _handle_get(
             now,
         )
         return Response(200, page)
+
+    if path == "/tracker":
+        account = _account_for(conn, headers)
+        account_id = account["id"] if account else None
+        return Response(200, render_tracker(
+            conn, account_id=account_id, demo=demo, headers=headers, now=now,
+            notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good"),
+        ))
 
     if path in ("/", "/index.html"):
         seen = read_seen(headers)
