@@ -1,6 +1,6 @@
 """Saved searches: the search you meant, watched for you.
 
-Phase 12 built the query. A saved search is that query with a name and a clock —
+Phase 12 built the query. A saved search is that query with a name and a clock  - 
 the one feature that turns "there is nothing today" into a message three days
 later when something appears.
 
@@ -8,7 +8,7 @@ Four rules, and every one of them is a test:
 
 * **Consent first.** A saved search is not a subscription. It only ever sends
   through an *active* subscription, and saving one without a subscription is
-  refused with the reason — not queued and quietly dropped.
+  refused with the reason - not queued and quietly dropped.
 * **New means new.** The first run starts at the moment the search was saved, and
   every run advances the watermark to the moment it ran. A job that was already
   there yesterday is not news today.
@@ -138,7 +138,7 @@ def watch(
         """INSERT INTO saved_searches
            (profile_id, label, q, county, family, employment_type, deadline_days,
             pay_floor, remote, cadence, created_at, last_run_at, unsubscribed_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,NULL) RETURNING id""",
         (
             profile_id,
             label,
@@ -154,7 +154,8 @@ def watch(
         ),
     )
     conn.commit()
-    return {"state": "saved", "saved": True, "id": cursor.lastrowid, "label": label}
+    row = cursor.fetchone()
+    return {"state": "saved", "saved": True, "id": row[0] if row else None, "label": label}
 
 
 def stop(conn, profile_id: str, search_id: int, *, now: datetime | None = None) -> bool:
@@ -260,9 +261,9 @@ def message(row: dict, matches, *, base: str | None = None) -> str:
         tail = ""
         if closing:
             try:
-                tail = f" — closes {_fmt_day(closing)}"
+                tail = f" - closes {_fmt_day(closing)}"
             except ValueError:
-                tail = f" — closes {closing}"
+                tail = f" - closes {closing}"
         lines.append(f"{item.match.title} · {employer}{tail}")
     if total > MAX_ITEMS:
         lines.append(f"+{total - MAX_ITEMS} more")

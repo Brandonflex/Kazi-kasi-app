@@ -1,5 +1,5 @@
 """
-Kazi Kasi Feature Enhancements — Research-Driven Improvements
+Kazi Kasi Feature Enhancements - Research-Driven Improvements
 
 Based on analysis of top job platforms:
 - Indeed (61% market share): 1-click apply, salary transparency
@@ -236,7 +236,7 @@ def confidence_badge(field_name: str, confidence: float) -> str:
         icon = "~"
     else:
         color = "#2d3748"
-        label = "Low confidence — please verify"
+        label = "Low confidence - please verify"
         icon = "?"
     
     return f'''

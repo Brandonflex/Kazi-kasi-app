@@ -1,7 +1,7 @@
 """Canary: does this source still look the way we think it does?
 
 Job boards redesign without warning. The failure mode that matters is not an
-exception — it is a page that parses *successfully* into an empty or mangled
+exception - it is a page that parses *successfully* into an empty or mangled
 job. So the canary checks the shape of one real page per source and reports the
 fields that came back.
 

@@ -1,4 +1,4 @@
-"""One role a week that ignores the filters — and says so.
+"""One role a week that ignores the filters - and says so.
 
 Filters are how a scope stays honest, and also how it goes stale. Every week the
 page offers exactly one advert that the person's constraints would have hidden,
@@ -7,7 +7,7 @@ exception, and dismissed with one click like anything else.
 
 The rules that keep it from being a growth trick:
 
-* **One per week, deterministic.** Same person, same week, same role — from a
+* **One per week, deterministic.** Same person, same week, same role - from a
   hash, not a random draw, so a reload is not a slot machine.
 * **Only a single, fixable blocker.** "6 km past your limit" is a widening of
   the scope; "needs 5 years" is not an opportunity, it is a rejection.
@@ -103,6 +103,6 @@ def pick(conn, profile, *, now: datetime | None = None):
 def sentence(item: dict, profile) -> str:
     """Why it is here, in the product's voice: plain, specific, unexcited."""
     return (
-        f"Outside your scope — {item['blocker']}. We thought you would be good at it, "
+        f"Outside your scope - {item['blocker']}. We thought you would be good at it, "
         f"so it is here for this week only."
     )

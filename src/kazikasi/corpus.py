@@ -8,7 +8,7 @@ It is built to contain the awkward cases on purpose:
 
 * the same advert on two boards with the same apply email (must merge);
 * two adverts for the same employer and title with **different deadlines**
-  (must *not* merge — these are separate public-sector posts);
+  (must *not* merge - these are separate public-sector posts);
 * a title variant that is close but not identical (must go to review, not merge);
 * an expired advert, a scam-flagged advert, and a posting with no location.
 

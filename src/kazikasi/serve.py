@@ -492,6 +492,25 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .stat-card:nth-child(2) .stat-number { color: var(--safari-green) }
 .stat-card:nth-child(3) .stat-number { color: var(--rift-clay) }
 .stat-card:nth-child(4) .stat-number { color: var(--nairobi-dark) }
+.stat-card-link {
+  background: linear-gradient(135deg, var(--ember-soft), rgba(233,162,59,0.15));
+  border-color: rgba(233,162,59,0.3);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 100px;
+}
+.stat-card-link:hover {
+  border-color: var(--ember-gold);
+  background: linear-gradient(135deg, var(--ember-soft), rgba(233,162,59,0.25));
+}
+.stat-card-link .stat-number {
+  color: var(--ember-gold);
+  font-size: 24px;
+}
 
 /* Search / Filter bar - floating glass */
 .filter-bar {
@@ -814,53 +833,56 @@ button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--embe
 .empty h2 { font-size: 20px; color: var(--nairobi-dark); margin-bottom: 8px }
 
 /* ---- Sign in ---- */
-.signin-wrap { display: flex; justify-content: center; padding: 60px 0 }
+.signin-wrap { display: flex; justify-content: center; align-items: center; min-height: calc(100vh - 200px); padding: 40px 20px; background: linear-gradient(135deg, var(--nairobi-dark) 0%, #0a2e36 100%) }
 .signin-card {
-  width: min(520px, 100%);
-  padding: 40px 36px;
+  width: min(480px, 100%);
+  padding: 48px 40px;
   background: var(--surface-elevated);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 }
-.signin-card h1 { font-family: var(--font-display); font-size: 28px; margin-bottom: 8px; color: var(--nairobi-dark) }
-.signin-card .kicker { margin-bottom: 16px }
+.signin-card .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--ember-gold); font-weight: 700; margin-bottom: 12px }
+.signin-headline { font-family: var(--font-display); font-size: 32px; line-height: 1.2; margin-bottom: 16px; color: var(--nairobi-dark) }
+.signin-sub { font-size: 15px; color: var(--ink-2); line-height: 1.6; margin-bottom: 32px }
 .signin-primary-btn {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   width: 100%;
-  padding: 14px 20px;
+  padding: 18px 24px;
   background: #fff;
   color: var(--nyeu-ink);
   border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  font-size: 15px;
+  border-radius: var(--radius);
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  text-align: left;
 }
-.signin-primary-btn:hover { border-color: var(--ember-gold); box-shadow: var(--shadow) }
-.signin-provider-why { font-size: 11px; color: var(--muted); font-weight: 500 }
+.signin-primary-btn:hover { border-color: var(--ember-gold); box-shadow: 0 4px 20px rgba(233,162,59,0.2); transform: translateY(-1px) }
+.signin-provider-name { display: flex; align-items: center; gap: 10px; font-size: 16px }
+.signin-provider-why { font-size: 12px; color: var(--muted); font-weight: 400; text-align: left }
 .signin-guest-btn {
   display: block;
   width: 100%;
-  padding: 12px;
+  padding: 14px;
   background: transparent;
   color: var(--ink-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  font-size: 13.5px;
+  border-radius: var(--radius);
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  margin-top: 12px;
+  margin-top: 16px;
   transition: all var(--duration-fast);
 }
-.signin-guest-btn:hover { border-color: var(--ember-gold); color: var(--ember-gold) }
-.signin-privacy { font-size: 12px; color: var(--muted); margin-top: 20px; line-height: 1.6 }
-.signin-notice { font-size: 13px; color: var(--rift-clay); padding: 10px 14px; background: var(--danger-soft); border-radius: var(--radius-sm); margin-bottom: 16px }
+.signin-guest-btn:hover { border-color: var(--ember-gold); color: var(--ember-gold); background: var(--ember-soft) }
+.signin-privacy { font-size: 12px; color: var(--muted); margin-top: 24px; line-height: 1.6; text-align: center }
+.signin-notice { font-size: 13px; color: var(--rift-clay); padding: 12px 16px; background: var(--danger-soft); border-radius: var(--radius-sm); margin-bottom: 20px; border-left: 3px solid var(--rift-clay) }
 
 /* ---- Tables ---- */
 table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px }
@@ -1214,6 +1236,33 @@ header > * { position: relative; z-index: 1 }
   display: block;
 }
 
+.view-3d-link {
+  font-size: 12px;
+  color: var(--ember-gold);
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(233,162,59,0.3);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+.view-3d-link:hover {
+  background: var(--ember-soft);
+  border-color: var(--ember-gold);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.digest-jobs-list {
+  margin: 20px 0;
+}
+
 .digest-job-card {
   background: var(--surface-elevated);
   border: 1px solid var(--line);
@@ -1231,13 +1280,22 @@ header > * { position: relative; z-index: 1 }
   color: var(--nairobi-dark);
 }
 
-.digest-job-card .employer {
-  font-size: 14px;
-  color: var(--ink-2);
-  margin-bottom: 12px;
+.digest-job-card h3 a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.digest-job-card .salary {
+.digest-job-card h3 a:hover {
+  color: var(--ember-gold);
+}
+
+.digest-job-card .digest-employer {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-bottom: 10px;
+}
+
+.digest-job-card .digest-salary {
   display: inline-block;
   background: var(--ember-soft);
   color: var(--ember-gold);
@@ -1245,13 +1303,64 @@ header > * { position: relative; z-index: 1 }
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
+  margin-right: 8px;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+.digest-job-card .digest-deadline {
+  display: inline-block;
+  font-size: 13px;
   color: var(--muted);
+  font-weight: 500;
+}
+
+.digest-message-section {
+  margin: 32px 0 20px;
+}
+
+.digest-message-section h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--nairobi-dark);
+  margin-bottom: 16px;
+}
+
+.phone-frame {
+  max-width: 360px;
+  background: #fff;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  border: 1px solid var(--line);
+}
+
+.phone-header {
+  background: #075E54;
+  color: #fff;
+  padding: 14px 16px;
   font-size: 15px;
+  font-weight: 600;
+}
+
+.phone-body {
+  background: #ECE5DD;
+  padding: 20px 14px;
+  min-height: 100px;
+}
+
+.msg-bubble {
+  background: #fff;
+  border-radius: 0 12px 12px 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #303030;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.digest-message-preview {
+  margin: 20px 0;
 }
 
 
@@ -1733,8 +1842,9 @@ def _page(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0C3B43">
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
-<title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script></head>
+<title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script><script src="/static/loading-states.js" defer></script></head>
 <body>
+<div id="page-loading-overlay" class="loading-overlay" style="display:none"><div class="loading-spinner"></div><div class="loading-message">Loading...</div></div>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi - jobs you can reach">
@@ -1832,6 +1942,40 @@ window.addEventListener('scroll', () => {{
     card.addEventListener('mouseleave', () => {{
       card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
     }});
+  }});
+}})();
+
+// Loading state wiring
+(function() {{
+  var overlay = document.getElementById('page-loading-overlay');
+  if (!overlay) return;
+  
+  // Hide overlay when page fully loads
+  window.addEventListener('load', function() {{
+    setTimeout(function() {{
+      overlay.style.opacity = '0';
+      setTimeout(function() {{ overlay.style.display = 'none'; }}, 300);
+    }}, 200);
+  }});
+  
+  // Show overlay on internal link clicks
+  document.addEventListener('click', function(e) {{
+    var link = e.target.closest('a');
+    if (!link || !link.href) return;
+    if (link.target || link.href.indexOf('#') === link.href.length - 1) return;
+    if (link.href.indexOf(window.location.origin) !== 0 && link.href.indexOf('/') !== 0) return;
+    if (link.classList.contains('no-loading')) return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  }});
+  
+  // Show overlay on form submits
+  document.addEventListener('submit', function(e) {{
+    var form = e.target.closest('form');
+    if (!form) return;
+    if (form.method && form.method.toLowerCase() === 'get') return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
   }});
 }})();
 </script>
@@ -2178,6 +2322,7 @@ def render_feed(
     {score_html}
     <span>{_e(graph.freshness_band(row, now=now))}</span>
     {apply_html}
+    <a href="/verse?focus={_e(match.job_id)}" class="view-3d-link" title="View in 3D Verse">View in 3D</a>
   </div>
 </article>"""
         )
@@ -2238,6 +2383,7 @@ def render_feed(
       <div class="stat-card" data-tilt><span class="stat-number">{summary['live_jobs']}</span><span class="stat-label">Live jobs</span></div>
       <div class="stat-card" data-tilt><span class="stat-number">{summary['closing_within_7_days']}</span><span class="stat-label">Closing soon</span></div>
       <div class="stat-card" data-tilt><span class="stat-number">{len(acted)}</span><span class="stat-label">Applied</span></div>
+      <a href="/verse" class="stat-card stat-card-link" data-tilt><span class="stat-number" style="font-size:24px">3D</span><span class="stat-label">View Universe</span></a>
     </div>
     '''
 
@@ -4948,31 +5094,52 @@ def render_digest(
 
     if messages:
         body = messages[0].body
-        # Build polished card preview
+        # Build polished job cards from digest items
         items_html = ""
+        digest_jobs = []
         for item in (digest.items or []):
-            job = item.job if hasattr(item, 'job') else None
-            if job:
-                title = job.get('title', 'Unknown') if isinstance(job, dict) else str(job)
-                employer = job.get('employer', '') if isinstance(job, dict) else ''
-                salary = job.get('salary_min') if isinstance(job, dict) else None
-                salary_html = f'<div class="salary">KES {salary:,}/month</div>' if salary else ''
+            job_id = item.job_id if hasattr(item, 'job_id') else None
+            if job_id:
+                row = conn.execute("SELECT title, employer_name, salary_min, salary_max, deadline, source_url FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                if row:
+                    digest_jobs.append(dict(row))
+        
+        if digest_jobs:
+            for job in digest_jobs:
+                title = job.get('title', 'Unknown job')
+                employer = job.get('employer_name', '')
+                salary_min = job.get('salary_min')
+                salary_max = job.get('salary_max')
+                deadline = job.get('deadline', '')
+                deadline_html = f'<div class="digest-deadline">Closes {_e(str(deadline)[:10])}</div>' if deadline else ''
+                if salary_min:
+                    salary_range = f"KES {salary_min:,}" + (f" - {salary_max:,}" if salary_max else "") + "/month"
+                    salary_html = f'<div class="digest-salary">{_e(salary_range)}</div>'
+                else:
+                    salary_html = ''
                 items_html += f'''<div class="digest-job-card">
-                    <h3>{_e(title)}</h3>
-                    <div class="employer">{_e(employer)}</div>
+                    <h3><a href="/job/{_e(job_id)}">{_e(title)}</a></h3>
+                    <div class="digest-employer">{_e(employer)}</div>
                     {salary_html}
+                    {deadline_html}
                 </div>'''
         
+        if not items_html:
+            # Fallback: parse the message body for job titles
+            items_html = '<div class="digest-message-preview"><div class="phone-frame"><div class="phone-header">WhatsApp</div><div class="phone-body"><div class="msg-bubble">' + _e(body) + '</div></div></div></div>'
+        
         shown = f'''
-        <div class="digest-preview-tabs">
-            <button class="tab-btn active" onclick="showTab('polished')">Preview</button>
-            <button class="tab-btn" onclick="showTab('raw')">Raw Message</button>
+        <div class="digest-jobs-list">
+            {items_html}
         </div>
-        <div id="tab-polished" class="tab-content active">
-            {items_html if items_html else '<p>No jobs in this digest.</p>'}
-        </div>
-        <div id="tab-raw" class="tab-content">
-            <pre class="msg">{_e(body)}</pre>
+        <div class="digest-message-section">
+            <h3>Message preview</h3>
+            <div class="phone-frame">
+                <div class="phone-header">WhatsApp</div>
+                <div class="phone-body">
+                    <div class="msg-bubble">{_e(body)}</div>
+                </div>
+            </div>
         </div>
         '''
         if len(messages) > 1:
@@ -5019,15 +5186,12 @@ def render_digest(
     body_html = f"""
 <h1>WhatsApp digest</h1>
 <p class="small">One message a day, five jobs at most, closing soonest first, and never the same
-job twice. The body below is produced by the same code that would send it.</p>
+job twice. This is exactly what you would receive.</p>
 <div class="filters">{switcher}</div>
 <div class="whobar"><div><b>{_e(profile.name)}</b></div></div>
 {f'<div class="banner" role="alert">{_e(error)}</div>' if error else ""}
 {consent}
 {shown}
-<h2>If WhatsApp fails</h2>
-<p class="small">After three attempts the message falls back to one SMS segment:</p>
-<pre class="msg sms">{_e(sms_preview)}</pre>
 {skipped_block}
 {log_block}"""
     return _page("WhatsApp digest - Kazi-Kasi", body_html, demo=demo)
@@ -5983,7 +6147,7 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
         # Check for PDF parsing errors
         if text.startswith("__PDF_ERROR__"):
             error_detail = text.split(":", 1)[1] if ":" in text else "Unknown error"
-            return _redirect(f"/account?error={quote(f'Could not read that PDF - {error_detail}. Try a different file or paste the text directly.')}")
+            return _redirect(f"/account?error={quote(f'Could not read that PDF. The file may be corrupted, password-protected, or a scanned image. Try pasting the text directly or uploading a .txt file.')}")
         if text == "__PDF_NO_TEXT__":
             return _redirect(f"/account?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
         

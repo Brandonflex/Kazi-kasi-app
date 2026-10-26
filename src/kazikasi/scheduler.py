@@ -1,8 +1,8 @@
 """The clock: who is due for a digest, when exactly, and how it is spaced.
 
 Without this, "one message a day" is a claim about a command someone remembers
-to run. The scheduler is deliberately tiny — a function you can call from cron,
-a systemd timer, or the `kazikasi run --loop` loop — but the *rules* are here
+to run. The scheduler is deliberately tiny - a function you can call from cron,
+a systemd timer, or the `kazikasi run --loop` loop - but the *rules* are here
 and tested:
 
 * **Cadence is real.** `daily` and `weekly` mean one digest per day or per
@@ -108,7 +108,7 @@ def decide(conn, subscription, *, now: datetime | None = None) -> DueDecision:
     ).strftime("%H:%M")
 
     # Already served this period? That is the honest answer, and it outranks
-    # "your jitter has not elapsed" — the digest already left.
+    # "your jitter has not elapsed" - the digest already left.
     last = _last_served(conn, subscription.profile_id, subscription.channel)
     if last:
         last_date = date.fromisoformat(last)
@@ -144,7 +144,7 @@ def run_due(
 ) -> dict:
     """One tick: compose for everyone due, then try to deliver.
 
-    Composing and sending are separate steps because they fail differently — a
+    Composing and sending are separate steps because they fail differently - a
     ranking bug should not block a delivery, and a provider outage should not
     lose the composition that already happened.
     """
@@ -216,7 +216,7 @@ def tick(
     now: datetime | None = None,
     link_base: str | None = None,
 ) -> dict:
-    """Compose and deliver in one call — what a cron entry actually wants."""
+    """Compose and deliver in one call - what a cron entry actually wants."""
     return run_due(conn, transports, now=now, link_base=link_base)
 
 

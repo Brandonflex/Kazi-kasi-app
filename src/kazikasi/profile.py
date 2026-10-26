@@ -1,4 +1,4 @@
-"""What a jobseeker is actually looking for — constraints, not a CV.
+"""What a jobseeker is actually looking for - constraints, not a CV.
 
 The research was specific about the audience: 0–3 years of experience, all
 white-collar, searching from one place, on a phone, with a commute they can
@@ -150,7 +150,7 @@ class Profile:
 DEMO_PROFILES: tuple[Profile, ...] = (
     Profile(
         id="demo-fresher",
-        name="Wanjiru — IT graduate, 0 years",
+        name="Wanjiru - IT graduate, 0 years",
         home_county="Nairobi",
         home_area="Kasarani",
         max_commute_km=18.0,
@@ -160,7 +160,7 @@ DEMO_PROFILES: tuple[Profile, ...] = (
     ),
     Profile(
         id="demo-two-years",
-        name="Otieno — finance, 2 years",
+        name="Otieno - finance, 2 years",
         home_county="Nairobi",
         home_area="Westlands",
         max_commute_km=12.0,
@@ -170,7 +170,7 @@ DEMO_PROFILES: tuple[Profile, ...] = (
     ),
     Profile(
         id="demo-public-sector",
-        name="Amina — any entry-level public service post",
+        name="Amina - any entry-level public service post",
         home_county="Nairobi",
         home_area="Embakasi",
         max_commute_km=30.0,
@@ -180,7 +180,7 @@ DEMO_PROFILES: tuple[Profile, ...] = (
     ),
     Profile(
         id="demo-remote",
-        name="Brian — remote-only, marketing",
+        name="Brian - remote-only, marketing",
         home_county="Nairobi",
         home_area="Kilimani",
         max_commute_km=None,

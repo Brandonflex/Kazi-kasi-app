@@ -1,7 +1,7 @@
 """A corpus in a file: the deployed site without a database.
 
 The function on Vercel has no writable disk and no database behind it, so it has
-been serving the synthetic corpus — a shop window, not a product. The honest fix
+been serving the synthetic corpus - a shop window, not a product. The honest fix
 is Postgres; the cheap, honest, *working* fix is this: run the sweep somewhere
 with a network, write the result to one JSONL file, and let the deployment load
 it at cold start.
@@ -14,7 +14,7 @@ test.
 Three rules, because a stale corpus is worse than an empty one:
 
 * **the header says when it was built**, and the page says so too;
-* **a line that does not parse is skipped and counted** — one bad advert must not
+* **a line that does not parse is skipped and counted** - one bad advert must not
   take the site down;
 * **a bundle older than ``STALE_HOURS`` is labelled stale** on every page, not
   quietly served as current.
@@ -258,7 +258,7 @@ def notice(*, now: datetime | None = None) -> str:
         return ""
     built = STATE.get("built_at")
     if not built:
-        return "Live data — build time unknown."
+        return "Live data - build time unknown."
     try:
         moment = datetime.fromisoformat(str(built))
     except ValueError:
@@ -267,7 +267,7 @@ def notice(*, now: datetime | None = None) -> str:
         moment = moment.replace(tzinfo=timezone.utc)
     eat = moment.astimezone(timezone(timedelta(hours=3)))
     if _now(now) - moment > timedelta(hours=STALE_HOURS):
-        return f"Data last refreshed {eat:%-d %b %H:%M} EAT — the sweep has not run since."
+        return f"Data last refreshed {eat:%-d %b %H:%M} EAT - the sweep has not run since."
     return f"Live data, refreshed {eat:%-d %b %H:%M} EAT."
 
 

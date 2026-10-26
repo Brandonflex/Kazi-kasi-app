@@ -13,7 +13,7 @@ Two rules:
 * **Presence, never values.** The page answers "is `KAZIKASI_SECRET` set?", never
   "what is it?". A secret that renders is a secret that leaks through a proxy log,
   a screenshot, or a shared link.
-* **Every missing step names its next click** — the console URL to open, the exact
+* **Every missing step names its next click** - the console URL to open, the exact
   redirect URI to paste, and the field in Vercel it goes into. A checklist that
   says "configure OAuth" is a riddle; this one says which box.
 
@@ -57,17 +57,17 @@ def _normalise(name: str) -> str:
 
 
 def _probe(name: str) -> dict:
-    """Why a variable is not usable — the cause, not just the verdict.
+    """Why a variable is not usable - the cause, not just the verdict.
 
     "missing: GOOGLE_CLIENT_ID" is true and useless. On Vercel the same verdict
     covers four very different mistakes, and each has a different fix:
 
     ``blank``  the row exists with an empty value (a paste that selected nothing);
     ``padded`` the value arrived with a newline or spaces, which OAuth rejects as
-               ``invalid_client`` — the value is *there*, so "missing" sends you
+               ``invalid_client`` - the value is *there*, so "missing" sends you
                looking in the wrong place;
-    ``near``   a row with a nearly-identical name exists — a trailing space, a
-               different case, a ``_KEY`` suffix — so the value is in the account,
+    ``near``   a row with a nearly-identical name exists - a trailing space, a
+               different case, a ``_KEY`` suffix - so the value is in the account,
                just not under the name the code reads;
     ``absent`` genuinely not in this build's environment. On Vercel that is
                usually "saved after this deployment was built".
@@ -122,7 +122,7 @@ def _names_like(fragment: str) -> list[str]:
     """Names in this build's environment that contain ``fragment``.
 
     Names only, never values. The point is to answer "did my variable arrive under a
-    name I did not expect" — a missing `GOOGLE_CLIENT_SECRET` and a saved
+    name I did not expect" - a missing `GOOGLE_CLIENT_SECRET` and a saved
     `GOOGLE_CLIENTSECRET` are indistinguishable from a boolean, and one of them costs
     twenty minutes in the wrong console.
     """
@@ -140,10 +140,10 @@ def _names_like(fragment: str) -> list[str]:
 
 #: One sentence per state, used in the step detail line.
 _PROBE_TEXT = {
-    "blank": "{name} exists but its value is empty — re-paste it in Vercel",
-    "padded": "{name} has leading or trailing whitespace — re-paste the value cleanly",
-    "near": "{name} is not set, but a variable named {seen} exists — rename it",
-    "absent": "{name} is not in this build — if you just added it, redeploy",
+    "blank": "{name} exists but its value is empty - re-paste it in Vercel",
+    "padded": "{name} has leading or trailing whitespace - re-paste the value cleanly",
+    "near": "{name} is not set, but a variable named {seen} exists - rename it",
+    "absent": "{name} is not in this build - if you just added it, redeploy",
 }
 
 
@@ -269,7 +269,7 @@ def plan(
 
     ``host`` is the Host header of the request that produced the page. If it does
     not match ``base_url``, every redirect_uri on this page is wrong for the domain
-    the visitor is actually on — which shows up as a sign-in that bounces back with
+    the visitor is actually on - which shows up as a sign-in that bounces back with
     a state-mismatch error, far from the variable that caused it.
     """
     momentum = now or datetime.now(timezone.utc)
@@ -279,7 +279,7 @@ def plan(
 
     steps: list[Step] = []
 
-    # 1 — sessions ---------------------------------------------------------
+    # 1 - sessions ---------------------------------------------------------
     session_env = tuple(name for name in SESSION_ENV if not _has(name))
     steps.append(
         Step(
@@ -302,7 +302,7 @@ def plan(
         )
     )
 
-    # 2 — Google -----------------------------------------------------------
+    # 2 - Google -----------------------------------------------------------
     google = providers["google"]
     steps.append(
         Step(
@@ -328,7 +328,7 @@ def plan(
         )
     )
 
-    # 3 — LinkedIn ---------------------------------------------------------
+    # 3 - LinkedIn ---------------------------------------------------------
     linkedin = providers["linkedin"]
     steps.append(
         Step(
@@ -344,7 +344,7 @@ def plan(
             link=("Open LinkedIn app console", "https://www.linkedin.com/developers/apps/new"),
             note=(
                 "The “LinkedIn Page” field on that form wants the URL of a Company Page "
-                "you administer — not the callback. Create one at "
+                "you administer - not the callback. Create one at "
                 "linkedin.com/company/setup/new, then type its name back into the field "
                 "and pick it from the list. Skip this entirely until Google works."
             ),
@@ -357,7 +357,7 @@ def plan(
         )
     )
 
-    # 4 — Apple ------------------------------------------------------------
+    # 4 - Apple ------------------------------------------------------------
     apple = providers["apple"]
     steps.append(
         Step(
@@ -373,7 +373,7 @@ def plan(
         )
     )
 
-    # 5 — storage ----------------------------------------------------------
+    # 5 - storage ----------------------------------------------------------
     store = _store()
     steps.append(
         Step(
@@ -392,7 +392,7 @@ def plan(
                 "Neon (recommended, free, no card): neon.tech → Sign up → New Project → "
                 "name it 'kazi-kasi' → leave the defaults (Postgres 16, 3 GB, single node) "
                 "→ Create project. The dashboard then shows a connection string that starts "
-                "with postgresql://… — copy the one labelled 'Pooler' (it has ?sslmode=require "
+                "with postgresql://… - copy the one labelled 'Pooler' (it has ?sslmode=require "
                 "already). Paste it into Vercel as DATABASE_URL, tick Production + Preview, "
                 "Save, then redeploy. /setup will flip storage to done on the next build."
             ),
@@ -400,7 +400,7 @@ def plan(
         )
     )
 
-    # 6 — delivery ---------------------------------------------------------
+    # 6 - delivery ---------------------------------------------------------
     whatsapp = _has("WHATSAPP_TOKEN") and _has("WHATSAPP_PHONE_NUMBER_ID")
     sms = _has("AT_USERNAME") and _has("AT_API_KEY")
     steps.append(
@@ -435,7 +435,7 @@ def plan(
         )
     )
 
-    # 7 — the clock --------------------------------------------------------
+    # 7 - the clock --------------------------------------------------------
     cron = _has("CRON_SECRET")
     steps.append(
         Step(
@@ -496,7 +496,7 @@ def plan(
                 "symptom": "Google Cloud shows “403. That’s an error. Your client does not have permission to get URL /”.",
                 "cause": (
                     "That is Google’s own page, not this app: the console could not decide "
-                    "which project or account to open — usually two accounts signed in at once."
+                    "which project or account to open - usually two accounts signed in at once."
                 ),
                 "fix": (
                     "Open a private window, sign in with a single Google account, then go "
@@ -508,7 +508,7 @@ def plan(
                 "symptom": "LinkedIn says “Please input a valid LinkedIn Page URL or type to search by company name.”",
                 "cause": (
                     "The field wants a Company Page you administer. The callback URL from "
-                    "this page belongs in the Auth tab, after the app exists — not there."
+                    "this page belongs in the Auth tab, after the app exists - not there."
                 ),
                 "fix": (
                     "Create a page at linkedin.com/company/setup/new (name, industry, size, "
@@ -520,13 +520,13 @@ def plan(
                 "symptom": "Google warned that the client secret cannot be viewed again once the dialog closes.",
                 "cause": (
                     "That is true of the creation dialog only. The client's detail page in "
-                    "the console still shows the secret, masked, with a copy button — and a "
+                    "the console still shows the secret, masked, with a copy button - and a "
                     "client can hold two live secrets at once."
                 ),
                 "fix": (
                     "Generate a second secret (the client page → Add secret), put it in Vercel, "
                     "redeploy, sign in once to prove it, then delete the old one. Nothing goes "
-                    "down. If a secret was ever shared or committed, rotate it — the exposure is "
+                    "down. If a secret was ever shared or committed, rotate it - the exposure is "
                     "the secret, not the git history."
                 ),
             },
@@ -566,7 +566,7 @@ def _store() -> dict:
 
 
 def _tick(*, synthetic: bool, cron: bool, transport: bool) -> dict:
-    """What the cron endpoint would do if it fired right now — in order."""
+    """What the cron endpoint would do if it fired right now - in order."""
     if not cron:
         return {"runs": False, "answer": "503 cron not configured", "needs": "CRON_SECRET"}
     if synthetic and os.environ.get("KAZIKASI_ALLOW_SYNTHETIC_SEND") != "1":

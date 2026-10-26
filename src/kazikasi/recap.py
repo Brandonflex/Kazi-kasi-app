@@ -1,4 +1,4 @@
-"""Your year in the market — the December artifact, built honestly.
+"""Your year in the market - the December artifact, built honestly.
 
 The temptation is a Spotify-Wrapped confetti page that reveals how many rejections
 you collected. We are not building that. Three constraints hold the whole feature:
@@ -6,7 +6,7 @@ you collected. We are not building that. Three constraints hold the whole featur
 1. **Private by default.** The page is not linked from anywhere public, is not in
    the sitemap, and carries `noindex`. It exists for one person at one URL.
 2. **Only what we actually recorded.** We know what was shown, saved, opened and
-   self-reported. We do **not** know outcomes — no offers, no rejections — and the
+   self-reported. We do **not** know outcomes - no offers, no rejections - and the
    page says so rather than manufacturing an "interview rate".
 3. **The shareable card names no employer.** A single card can leave the page; it
    carries counts, months and a band, never the name of a company someone applied
@@ -138,7 +138,7 @@ def build(conn, profile, *, year: int | None = None, now: datetime | None = None
             dismissed_jobs.add(job_id)
 
     recap.seen = len(seen_jobs)
-    # "Kept" means still on the shortlist and not yet sent — the same rule the
+    # "Kept" means still on the shortlist and not yet sent - the same rule the
     # activity page uses, so the two pages cannot disagree about one job.
     recap.saved = len([job_id for job_id in saved_jobs if job_id not in applied_jobs])
     recap.applied = len(applied_jobs)
@@ -230,7 +230,7 @@ def headline(recap: Recap) -> str:
 
 
 def card_lines(recap: Recap) -> list[str]:
-    """The shareable card. Counts, months, a band — never an employer's name."""
+    """The shareable card. Counts, months, a band - never an employer's name."""
     if not recap.has_history:
         return []
     lines = [f"My {recap.year} in the Nairobi market"]
@@ -253,7 +253,7 @@ def note(recap: Recap) -> str:
     if not recap.has_history:
         return (
             "Nothing recorded yet this year. Open a role, save one, or tell us you "
-            "applied, and this page starts counting — it only ever counts what we "
+            "applied, and this page starts counting - it only ever counts what we "
             "actually saw."
         )
     return (

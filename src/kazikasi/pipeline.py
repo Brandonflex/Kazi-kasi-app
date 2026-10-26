@@ -32,7 +32,7 @@ USER_AGENT = (
 
 
 class UnverifiedSource(RuntimeError):
-    """A source that has never parsed a live page. Not an error in the parser —
+    """A source that has never parsed a live page. Not an error in the parser  - 
     a refusal to let unverified markup into the feed by accident."""
 
 

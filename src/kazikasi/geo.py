@@ -9,7 +9,7 @@ I get there?" and not just "which county is it in?".
 What this module is **not**: a routing engine. It uses straight-line distance
 between approximate area centroids. That is enough to rank and to band
 ("walkable", "one matatu", "far"), and it is wrong by a couple of kilometres in
-places — so it is labelled ``approximate`` everywhere it surfaces, and it never
+places - so it is labelled ``approximate`` everywhere it surfaces, and it never
 decides whether a job is *shown* unless the user set a distance cap.
 
 The matatu GTFS in the research pack is the upgrade path: same interface, real

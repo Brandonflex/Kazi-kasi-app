@@ -8,13 +8,13 @@ The outbox exists because sending is the part that breaks in ways users notice:
 * **A failure must be visible.** Messages carry ``attempts`` and ``last_error``;
   a message that vanished is not a state this schema can represent.
 * **A failure must have a fallback.** After the last retry, a WhatsApp message
-  becomes an SMS if the person gave us a fallback channel — retrying WhatsApp is
+  becomes an SMS if the person gave us a fallback channel - retrying WhatsApp is
   not a fallback.
 * **Consent is checked at send time, not at compose time.** Someone who replies
   STOP between composition and delivery must not receive the message.
 * **Consent has to be revocable through the channel that took it.** Replying
-  STOP works, and every change — including one from a number we cannot match to
-  a profile — lands in ``consent_events``.
+  STOP works, and every change - including one from a number we cannot match to
+  a profile - lands in ``consent_events``.
 * **"Sent" is not "delivered".** Provider receipts are recorded as events and
   move a message forward, never backwards.
 """
@@ -279,7 +279,7 @@ def find_subscription_by_msisdn(conn, msisdn: str) -> Subscription | None:
 
 def opt_out_by_msisdn(conn, msisdn: str, *, source: str, now: datetime | None = None) -> str | None:
     """STOP arriving from a phone. Returns the profile, or None if we never met
-    this number — the opt-out is logged either way."""
+    this number - the opt-out is logged either way."""
     subscription = find_subscription_by_msisdn(conn, msisdn)
     if subscription is None:
         record_consent_event(
@@ -375,7 +375,7 @@ def persist_run(conn, digest: digest_module.Digest, *, channel: str, now: dateti
 
     cursor = conn.execute(
         """INSERT INTO digest_runs (profile_id, channel, run_date, created_at, item_count, state)
-           VALUES (?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?) RETURNING id""",
         (
             digest.profile_id,
             channel,
@@ -385,7 +385,7 @@ def persist_run(conn, digest: digest_module.Digest, *, channel: str, now: dateti
             "empty" if digest.is_empty else "composed",
         ),
     )
-    run_id = int(cursor.lastrowid)
+    run_id = int(cursor.fetchone()[0])
     for item in digest.items:
         conn.execute(
             "INSERT OR IGNORE INTO digest_items (run_id, job_id, position, reason) VALUES (?,?,?,?)",
@@ -567,7 +567,7 @@ def queue_brief(
 
     The idempotency key is the ISO week, not the day: a re-run, a restart and a
     crash all converge on one message, and next Monday gets a new one. A profile
-    with no subscription is not queued at all — the brief is a message, and
+    with no subscription is not queued at all - the brief is a message, and
     messages need consent.
     """
     now = now or datetime.now(timezone.utc)
@@ -694,7 +694,7 @@ def send_due(
             continue
 
         # If consent moved to another channel after this was queued, the queued
-        # message is stale — do not deliver a digest to a channel they left. A
+        # message is stale - do not deliver a digest to a channel they left. A
         # fallback is exempt: it is deliberately a different channel.
         if row["kind"] != "fallback" and row["channel"] != subscription.channel:
             apply(
@@ -877,7 +877,7 @@ def _fold_receipt(conn, message_id: int, status: str, error: str | None, now) ->
             (error or "delivery failed", _now_iso(now), message_id),
         )
         return
-    # "sent" — only meaningful if we had not already recorded it.
+    # "sent" - only meaningful if we had not already recorded it.
     if current == "queued":
         conn.execute(
             "UPDATE messages SET state = 'sent', updated_at = ? WHERE id = ?",

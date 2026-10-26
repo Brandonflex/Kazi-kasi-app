@@ -1,4 +1,4 @@
-"""D10 — link out, and remember what happened.
+"""D10 - link out, and remember what happened.
 
 The product never applies for anyone. It shows a job, links to the original
 advert, and records that the user went. Those records are the only honest way to
@@ -47,11 +47,12 @@ def record(
     if conn.execute("SELECT 1 FROM profiles WHERE id = ?", (profile_id,)).fetchone() is None:
         raise ValueError(f"unknown profile {profile_id!r}; run `kazikasi profiles --seed`")
     cursor = conn.execute(
-        "INSERT INTO apply_events (profile_id, job_id, kind, at, detail) VALUES (?,?,?,?,?)",
+        "INSERT INTO apply_events (profile_id, job_id, kind, at, detail) VALUES (?,?,?,?,?) RETURNING id",
         (profile_id, job_id, kind, _now_iso(now), detail),
     )
+    row_id = int(cursor.fetchone()[0])
     conn.commit()
-    return int(cursor.lastrowid)
+    return row_id
 
 
 def events_for_job(conn, job_id: str) -> list[dict]:

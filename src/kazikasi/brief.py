@@ -1,7 +1,7 @@
 """The weekly brief: what changed in your band, in one message.
 
 The digest answers "what is new that fits". The brief answers the slower, more
-interesting question: *is this market moving toward me or away from me?* — and
+interesting question: *is this market moving toward me or away from me?* - and
 it is the surface that gives a returning visitor something to read when nothing
 new has arrived.
 
@@ -153,7 +153,7 @@ def message(data: dict, profile, *, base: str | None = None) -> str:
         lines.append(band_line(data))
     if data["move"]:
         move = data["move"]
-        lines.append(f"Start with: {move['title']}" + (f" — {move['employer']}" if move["employer"] else ""))
+        lines.append(f"Start with: {move['title']}" + (f" - {move['employer']}" if move["employer"] else ""))
         lines.append(f"{root}/job/{move['job_id']}")
     lines.append(f"{root}/brief")
     return "\n".join(lines)

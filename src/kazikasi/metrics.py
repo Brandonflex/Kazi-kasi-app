@@ -2,9 +2,9 @@
 
 Two of these decide whether the product's core promise is being kept:
 
-* **duplication rate** — if MyJobMag and BrighterMonday overlap by 40–60% (the
+* **duplication rate** - if MyJobMag and BrighterMonday overlap by 40–60% (the
   research estimate) and our rate is near zero, dedupe is broken, not clean.
-* **entry-fit share** — the feed is for people with 0–3 years of experience. If
+* **entry-fit share** - the feed is for people with 0–3 years of experience. If
   most live jobs are ``experienced``, the sources are wrong, not the filter.
 
 Everything here is a read; nothing mutates.

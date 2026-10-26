@@ -380,7 +380,7 @@ def cmd_slo(args: argparse.Namespace) -> int:
             print(f"feed last updated: {payload['feed_last_updated'] or 'never'}")
             print(f"sources within target: {payload['sources_meeting_slo']}/{payload['sources_reporting']}")
             for source in payload["sources"]:
-                age = "—" if source["age_minutes"] is None else f"{source['age_minutes']:.0f} min"
+                age = " - " if source["age_minutes"] is None else f"{source['age_minutes']:.0f} min"
                 print(f"  {source['source_id']:16} {source['state']:14} {age:>10} (target {source['target_minutes']} min)")
         return 0 if payload["slo_rate"] >= args.min_rate else 1
     finally:
@@ -565,7 +565,7 @@ def cmd_alerts(args: argparse.Namespace) -> int:
 
 
 def cmd_bundle(args: argparse.Namespace) -> int:
-    """Build, verify or describe a bundle — the deployment's corpus."""
+    """Build, verify or describe a bundle - the deployment's corpus."""
     if args.action == "build":
         conn = database.connect(args.db)
         try:

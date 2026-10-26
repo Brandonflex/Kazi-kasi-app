@@ -1,7 +1,7 @@
 """Closing-soon alerts: the one message a saved job is worth.
 
 A saved job is a promise to yourself. The failure mode is not "I forgot to look
-at my shortlist" — it is that the deadline moved from three weeks away to
+at my shortlist" - it is that the deadline moved from three weeks away to
 tomorrow while nobody was looking. `shortlist.reminders_due()` already knows
 which saved jobs are inside the window and has the exact text; the /shortlist
 page renders it. What was missing is the *send*.

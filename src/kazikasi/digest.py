@@ -8,7 +8,7 @@ because the hard parts are editorial:
   the person has already seen, applied to, or dismissed. A daily push that
   repeats yesterday's list is a notification people mute.
 * **Every line must survive WhatsApp.** No markdown tables, no nested bullets,
-  no long URLs — WhatsApp renders `*bold*` only, and a URL eats the preview.
+  no long URLs - WhatsApp renders `*bold*` only, and a URL eats the preview.
 * **It has to fit.** WhatsApp caps a text message at 4096 characters. A digest
   that silently truncates mid-sentence is worse than one that sends fewer cards.
 * **Consent is part of the model**, not an afterthought: Kenya's DPA 2019 wants
@@ -98,7 +98,7 @@ def hash_msisdn(msisdn: str) -> str:
 
     A plain SHA-256 of a Kenyan mobile number is not a privacy measure: the whole
     space is roughly 2×10⁸ candidates, which a laptop walks through in minutes.
-    Keying it with a deployment secret (HMAC) is what makes it one — and the
+    Keying it with a deployment secret (HMAC) is what makes it one - and the
     unkeyed fallback says so out loud rather than pretending.
     """
     return hmac.new(_hash_key(), msisdn.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
@@ -225,7 +225,7 @@ def select(
 
     Rules, in order: never re-send, never send something already acted on or
     dismissed, never send a scam-flagged posting, and cap the list. Ordered by
-    the ranking it was given — which already puts closing-soonest first among
+    the ranking it was given - which already puts closing-soonest first among
     equals.
     """
     already_sent = already_sent or set()
@@ -295,10 +295,10 @@ def select(
 
 REASON_PRIORITY = (
     "confirmed on",
-    "internship — entry route",
-    "attachment — entry route",
+    "internship - entry route",
+    "attachment - entry route",
     "pays above",
-    "remote — no commute",
+    "remote - no commute",
     # "closes …" is deliberately absent: the deadline is already a fact on the
     # card, and a digest that says the same thing twice reads like a bug.
 )
@@ -361,7 +361,7 @@ def render_digest(digest: Digest, *, link_base: str | None = None, today: date |
 
     count = len(digest.items)
     plural = "job" if count == 1 else "jobs"
-    lines = [f"*Kazi-Kasi* — {count} {plural} for you today", ""]
+    lines = [f"*Kazi-Kasi* - {count} {plural} for you today", ""]
 
     for item in digest.items:
         lines.append(render_card(item, today, number=item.position))
