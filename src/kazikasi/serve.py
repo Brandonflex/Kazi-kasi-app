@@ -1364,7 +1364,9 @@ header > * { position: relative; z-index: 1 }
 }
 
 
-#page-loading-overlay { display: none; }
+/* Page loading overlay - visible by default, hidden by JS when loaded */
+#page-loading-overlay { display: flex; }
+noscript #page-loading-overlay { display: none; }
 
 /* 3D Tilt Effect */
 [data-tilt] {
