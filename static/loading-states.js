@@ -141,41 +141,26 @@ const LoadingStates = {
 // Expose globally
 window.LoadingStates = LoadingStates;
 
-// Auto-detect page loads
+// Auto-detect page loads - minimal version that doesn't block
 (function() {
-  // Show loading on initial page load
-  const loadingOverlay = document.createElement('div');
-  loadingOverlay.className = 'loading-overlay loading-default';
-  loadingOverlay.innerHTML = `
-    <div class="loading-spinner"></div>
-    <div class="loading-message">Loading...</div>
-  `;
-  document.body.appendChild(loadingOverlay);
-  
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      loadingOverlay.classList.add('hidden');
-      setTimeout(() => {
-        if (loadingOverlay.parentNode) {
-          loadingOverlay.parentNode.removeChild(loadingOverlay);
-        }
-      }, 300);
-    }, 200);
-  });
-  
-  // Show on link clicks
+  // Show on link clicks (only for internal navigation)
   document.addEventListener('click', (e) => {
     const link = e.target.closest('a');
-    if (link && link.href && link.href.indexOf(window.location.origin) === 0 && !link.target && !link.href.includes('#')) {
-      LoadingStates.show('default', 'Loading page...');
-    }
+    if (!link || !link.href) return;
+    if (link.target) return;
+    if (link.href.indexOf('#') !== -1) return;
+    if (link.classList.contains('no-loading')) return;
+    // Only show for internal links
+    const origin = window.location.origin;
+    if (link.href.indexOf(origin) !== 0 && link.href.indexOf('/') !== 0) return;
+    LoadingStates.show('default', 'Loading page...');
   });
   
-  // Show on form submits
+  // Show on form submits (only POST forms)
   document.addEventListener('submit', (e) => {
     const form = e.target.closest('form');
-    if (form) {
-      LoadingStates.show('default', 'Processing...');
-    }
+    if (!form) return;
+    if (form.method && form.method.toLowerCase() === 'get') return;
+    LoadingStates.show('default', 'Processing...');
   });
 })();
