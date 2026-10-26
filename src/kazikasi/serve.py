@@ -47,7 +47,6 @@ from . import (
     dossier,
     employer,
     features,
-    galaxy,
     graph,
     metrics,
     momentum,
@@ -2174,33 +2173,6 @@ SCOPE_MARK = """<svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusabl
 
 
 
-def render_verse_page(*, demo: bool = False) -> str:
-    """Serve the 3D galaxy HTML page."""
-    with open(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'galaxy.html'), 'r') as f:
-        return f.read()
-
-
-def _handle_galaxy_api(conn, query: dict, *, demo: bool, now: datetime) -> Response:
-    """Return galaxy data for 3D visualization."""
-    profile_id = _query_one(query, "profile") or "demo-fresher"
-    prof = _profile_or_default(conn, profile_id)
-    
-    # Get matches
-    matches, _ = _ranked(conn, prof, now=now, limit=200)
-    
-    # Get profile skills (from CV or default)
-    profile_skills = ["python", "javascript", "management", "communication", "data analysis"]
-    
-    # Prepare galaxy data
-    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=150)
-    
-    return Response(
-        200,
-        json.dumps(galaxy_data, indent=2, default=str),
-        "application/json; charset=utf-8",
-    )
-
-
 def _e(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
@@ -2227,7 +2199,7 @@ def _page(
     demo_line = f'<div class="small mt6">demo build {_e(build)}</div>' if demo else ""
     palette_html = _palette_markup(palette or [])
     links = nav or (
-        '<a href="/">Galaxy</a><a href="/feed">Feed</a>'
+        '<a href="/">Feed</a>'
         '<a href="/shortlist">Shortlist</a><a href="/brief">Brief</a>'
         '<a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
         '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
@@ -6263,26 +6235,6 @@ def _handle_get(
             notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good"),
         ))
 
-    if path in ("/verse", "/galaxy", "/universe"):
-        # The 3D galaxy has inline styles, inline module scripts, and loads
-        # Three.js from CDN. Use a permissive policy for this page.
-        verse_csp = "; ".join([
-            "default-src 'none'",
-            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
-            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
-            "font-src 'self' https://fonts.gstatic.com",
-            "connect-src 'self'",
-            "base-uri 'none'",
-            "frame-ancestors 'none'",
-            "object-src 'none'",
-        ])
-        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
-            headers={"Content-Security-Policy": verse_csp})
-
-    if path == "/api/galaxy":
-        return _handle_galaxy_api(conn, query, demo=demo, now=now)
-
 
     if path in ("/", "/index.html"):
         # Check if user is authenticated
@@ -6293,29 +6245,20 @@ def _handle_get(
                 notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good")),
                 "text/html; charset=utf-8")
         
-        # Authenticated: go straight to the galaxy (the full experience)
-        # The galaxy IS Kazi-Kasi - feed, tracker, everything integrated
-        verse_csp = "; ".join([
-            "default-src 'none'",
-            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
-            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
-            "font-src 'self' https://fonts.gstatic.com",
-            "connect-src 'self'",
-            "base-uri 'none'",
-            "frame-ancestors 'none'",
-            "object-src 'none'",
-        ])
-        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
-            headers={"Content-Security-Policy": verse_csp})
+        # Authenticated: show the feed
+        seen = read_seen(headers)
+        page = render_feed(
+            conn,
+            profile_id=_query_one(query, "profile") or None,
+            now=now,
+            demo=demo,
+            since=seen,
+            headers=headers,
+            account=account,
+        )
+        return Response(200, page, headers={"Set-Cookie": seen_cookie(now)})
 
     if path == "/feed":
-        # /feed now redirects to / (the galaxy IS the feed)
-        return Response(303, "", headers={"Location": "/"})
-
-    if path in ("/shortlist", "/tracker"):
-        # These are now integrated into the galaxy
-        return Response(303, "", headers={"Location": "/"})
         seen = read_seen(headers)
         account = _account_for(conn, headers)
         page = render_feed(
