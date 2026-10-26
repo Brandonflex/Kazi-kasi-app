@@ -1172,6 +1172,197 @@ header::before {
 }
 header > * { position: relative; z-index: 1 }
 
+
+
+/* ============================================================
+   DIGEST PAGE UI
+   ============================================================ */
+
+.digest-preview-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  color: var(--ember-gold);
+  border-bottom-color: var(--ember-gold);
+}
+
+.tab-btn:hover {
+  color: var(--ink-2);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.digest-job-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.digest-job-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--nairobi-dark);
+}
+
+.digest-job-card .employer {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+}
+
+.digest-job-card .salary {
+  display: inline-block;
+  background: var(--ember-soft);
+  color: var(--ember-gold);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ============================================================
+   SKELETON LOADING STATES
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg) 0%, var(--bone) 50%, var(--bg) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  height: 180px;
+  margin-bottom: 16px;
+}
+
+.skeleton-stat {
+  height: 80px;
+  border-radius: var(--radius);
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short { width: 60%; }
+.skeleton-text.medium { width: 80%; }
+.skeleton-text.long { width: 100%; }
+
+.skeleton-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+/* Loading overlay for page transitions */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(246, 240, 230, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  transition: opacity 0.3s ease-out;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--bone);
+  border-top-color: var(--ember-gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Auth loading state */
+.auth-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 24px;
+}
+
+.auth-loading .loading-spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
+}
+
+.auth-loading p {
+  font-size: 16px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.auth-loading .subtext {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: -16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto }
   .card, button, .btn, a { transition: none !important }
@@ -1444,6 +1635,8 @@ window.addEventListener('scroll', () => {{
   }});
 }})();
 </script>
+
+
 </body></html>"""
 
 
@@ -4555,12 +4748,38 @@ def render_digest(
 
     if messages:
         body = messages[0].body
-        shown = f'<pre class="msg">{_e(body)}</pre>'
+        # Build polished card preview
+        items_html = ""
+        for item in (digest.items or []):
+            job = item.job if hasattr(item, 'job') else None
+            if job:
+                title = job.get('title', 'Unknown') if isinstance(job, dict) else str(job)
+                employer = job.get('employer', '') if isinstance(job, dict) else ''
+                salary = job.get('salary_min') if isinstance(job, dict) else None
+                salary_html = f'<div class="salary">KES {salary:,}/month</div>' if salary else ''
+                items_html += f'''<div class="digest-job-card">
+                    <h3>{_e(title)}</h3>
+                    <div class="employer">{_e(employer)}</div>
+                    {salary_html}
+                </div>'''
+        
+        shown = f'''
+        <div class="digest-preview-tabs">
+            <button class="tab-btn active" onclick="showTab('polished')">Preview</button>
+            <button class="tab-btn" onclick="showTab('raw')">Raw Message</button>
+        </div>
+        <div id="tab-polished" class="tab-content active">
+            {items_html if items_html else '<p>No jobs in this digest.</p>'}
+        </div>
+        <div id="tab-raw" class="tab-content">
+            <pre class="msg">{_e(body)}</pre>
+        </div>
+        '''
         if len(messages) > 1:
-            shown += f'<p class="small">Split into {len(messages)} messages at card boundaries (WhatsApp caps a text at {digest_module.WHATSAPP_TEXT_LIMIT} characters).</p>'
+            shown += f'<p class="small">Split into {len(messages)} messages (WhatsApp caps at {digest_module.WHATSAPP_TEXT_LIMIT} chars).</p>'
     else:
         shown = (
-            '<div class="card"><p>Nothing to send today: every job that fits has already been '
+            '<div class="empty-state"><p>Nothing to send today: every job that fits has already been '
             'in a digest, applied to, or dismissed. An empty digest is silence, not a '
             '"no jobs" message.</p></div>'
         )
