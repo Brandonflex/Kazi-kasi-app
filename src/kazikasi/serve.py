@@ -1724,6 +1724,7 @@ def _page(
     links = nav or (
         '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
         '<a href="/brief">Brief</a><a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
+        '<a href="/verse">3D Verse</a>'
         '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
         'Jump <kbd>⌘K</kbd></button>'
     )
@@ -5703,7 +5704,7 @@ def _handle_get(
             notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good"),
         ))
 
-    if path == "/verse":
+    if path in ("/verse", "/galaxy"):
         return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8")
 
     if path == "/api/galaxy":
