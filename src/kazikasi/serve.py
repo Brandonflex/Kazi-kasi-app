@@ -2655,7 +2655,7 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
                 # 'unsafe-hashes' needed alongside hashes for inline style attributes (Chrome quirk)
                 f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}' '{NOSCRIPT_STYLE_HASH}' 'self' https://fonts.googleapis.com 'unsafe-hashes'",
                 # Inline script hashes (PALETTE_JS, COPY_JS) + external scripts from self
-                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}' 'self'",
+                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}' 'self' https://vercel.live",
                 # Images from self + data URIs + Google profile pictures + favicons
                 "img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com",
                 # Fonts from self + Google Fonts CDN
@@ -5763,7 +5763,7 @@ def _handle_get(
         verse_csp = "; ".join([
             "default-src 'none'",
             "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
             "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
             "font-src 'self' https://fonts.gstatic.com",
             "connect-src 'self'",
@@ -5785,7 +5785,7 @@ def _handle_get(
         verse_csp = "; ".join([
             "default-src 'none'",
             "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
             "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
             "font-src 'self' https://fonts.gstatic.com",
             "connect-src 'self'",
