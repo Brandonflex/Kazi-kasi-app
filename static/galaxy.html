@@ -344,6 +344,136 @@
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(10px); }
     }
+    
+    /* Account Overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .overlay-content {
+      background: var(--surface-elevated, #FBF8F2);
+      border-radius: var(--radius-lg, 16px);
+      padding: 40px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+      color: var(--nairobi-dark, #0C3B43);
+    }
+    
+    .overlay-content h2 {
+      font-family: var(--font-display, 'Fraunces'), serif;
+      font-size: 32px;
+      margin-bottom: 24px;
+      color: var(--nairobi-dark, #0C3B43);
+    }
+    
+    .overlay-content h3 {
+      font-size: 18px;
+      margin: 24px 0 12px;
+      color: var(--ember-gold, #E9A23B);
+    }
+    
+    .account-section {
+      margin-bottom: 32px;
+    }
+    
+    .account-section form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .account-section input[type="file"],
+    .account-section textarea {
+      padding: 12px;
+      border: 1px solid var(--line, #E3DCCF);
+      border-radius: var(--radius, 12px);
+      font-family: inherit;
+      font-size: 14px;
+      background: white;
+    }
+    
+    .account-section textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+    
+    .account-section button {
+      padding: 12px 24px;
+      background: var(--ember-gold, #E9A23B);
+      color: var(--nairobi-dark, #0C3B43);
+      border: none;
+      border-radius: var(--radius-pill, 999px);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .account-section button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(233, 162, 59, 0.3);
+    }
+    
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      border: 1px solid var(--line, #E3DCCF);
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-2, #5C6675);
+      transition: all 0.2s;
+    }
+    
+    .close-btn:hover {
+      background: var(--ember-soft, rgba(233, 162, 59, 0.1));
+      border-color: var(--ember-gold, #E9A23B);
+      color: var(--ember-gold, #E9A23B);
+    }
+    
+    .nav-btn {
+      background: transparent;
+      border: 1px solid rgba(246, 240, 230, 0.3);
+      color: #F6F0E6;
+      padding: 8px 16px;
+      border-radius: var(--radius-pill, 999px);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .nav-btn:hover {
+      border-color: #E9A23B;
+      color: #E9A23B;
+    }
+    
+    .nav-link {
+      color: rgba(246, 240, 230, 0.7);
+      font-size: 14px;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .nav-link:hover {
+      color: #E9A23B;
+    }
   </style>
 </head>
 <body>
@@ -358,10 +488,29 @@
     <div class="top-bar">
       <a href="/" class="logo">Kazi-Kasi</a>
       <div class="nav-links">
-        <a href="/verse" class="active">Verse</a>
-        <a href="/tracker">Tracker</a>
-        <a href="/stats">Stats</a>
-        <a href="/signin">Sign In</a>
+        <a href="/" class="active">Galaxy</a>
+        <button class="nav-btn" id="btn-account">Account</button>
+        <a href="/auth/signout" class="nav-link">Sign Out</a>
+      </div>
+    </div>
+    
+    <!-- Account Overlay -->
+    <div id="account-overlay" class="overlay" style="display:none;">
+      <div class="overlay-content">
+        <button class="close-btn" id="close-account">&times;</button>
+        <h2>Your Account</h2>
+        <div class="account-section">
+          <h3>Upload CV</h3>
+          <form action="/account/cv" method="post" enctype="multipart/form-data">
+            <input type="file" name="cv_file" accept=".txt,.md,.pdf">
+            <textarea name="cv_text" placeholder="...or paste your CV text here" rows="4"></textarea>
+            <button type="submit">Upload CV</button>
+          </form>
+        </div>
+        <div class="account-section">
+          <h3>Settings</h3>
+          <p>Account settings coming soon.</p>
+        </div>
       </div>
     </div>
     
@@ -469,13 +618,33 @@
     });
     
     document.getElementById('btn-reset').addEventListener('click', () => {
-      camera.position.set(0, 50, 300);
-      camera.lookAt(0, 0, 0);
+      galaxy.resetCamera();
     });
     
     document.getElementById('btn-feed').addEventListener('click', () => {
-      window.location.href = '/feed';
+      window.location.href = '/';
     });
+    
+    // Account overlay
+    const accountBtn = document.getElementById('btn-account');
+    const accountOverlay = document.getElementById('account-overlay');
+    const closeAccount = document.getElementById('close-account');
+    
+    if (accountBtn && accountOverlay && closeAccount) {
+      accountBtn.addEventListener('click', () => {
+        accountOverlay.style.display = 'flex';
+      });
+      
+      closeAccount.addEventListener('click', () => {
+        accountOverlay.style.display = 'none';
+      });
+      
+      accountOverlay.addEventListener('click', (e) => {
+        if (e.target === accountOverlay) {
+          accountOverlay.style.display = 'none';
+        }
+      });
+    }
   </script>
 </body>
 </html>
