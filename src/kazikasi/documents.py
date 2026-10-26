@@ -1,7 +1,7 @@
 """The document lane: advert PDFs and bulletin pages → one candidate per post.
 
 Most of the Kenyan public sector does not publish structured job data. It
-publishes a PDF — one advert, several posts, shared closing date — and expects
+publishes a PDF - one advert, several posts, shared closing date - and expects
 a human to read it. This module is the part of the product that reads it.
 
 Two rules shape the design:
@@ -96,15 +96,15 @@ def _pdf_to_text(data: bytes) -> str:
 #: "VACANCY NO. 1/2026: ASSISTANT OFFICE ADMINISTRATOR - CSG 11"
 _VACANCY_LINE = re.compile(
     r"(?im)^[ \t]*(?:VACANCY|POST|POSITION)\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*"
-    r"(?P<ref>[A-Z0-9][A-Z0-9/\-\.]{0,19})\s*[:\-–—]\s*(?P<title>\S.*)$"
+    r"(?P<ref>[A-Z0-9][A-Z0-9/\-\.]{0,19})\s*[:\-– - ]\s*(?P<title>\S.*)$"
 )
 
-#: "1. ASSISTANT OFFICE ADMINISTRATOR" — numbered, all-caps, no sentence punctuation.
+#: "1. ASSISTANT OFFICE ADMINISTRATOR" - numbered, all-caps, no sentence punctuation.
 _NUMBERED_LINE = re.compile(
     r"(?m)^[ \t]*(?P<num>\d{1,2})[.)]\s+(?P<title>[A-Z][A-Z0-9 ,()/'&.\-]{8,90})$"
 )
 
-_GRADE_SUFFIX = re.compile(r"\s*[-–—]\s*(?:CSG|JOB GROUP|GRADE)\s*[A-Z0-9\-]+\.?\s*$", re.I)
+_GRADE_SUFFIX = re.compile(r"\s*[-– - ]\s*(?:CSG|JOB GROUP|GRADE)\s*[A-Z0-9\-]+\.?\s*$", re.I)
 _POSTS = re.compile(r"number\s+of\s+posts?\s*[:\-]\s*([A-Za-z]+|\d+)\s*(?:\((\d+)\))?", re.I)
 _SALARY_LINE = re.compile(r"(?im)^[ \t]*(?:basic\s+)?salary[^:\n]*[:\-]\s*(.+)$")
 
@@ -161,7 +161,7 @@ def split_bulletin(text: str) -> list[dict]:
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         title = clean_text(match.group("title"))
-        title = _GRADE_SUFFIX.sub("", title).strip(" :—-")
+        title = _GRADE_SUFFIX.sub("", title).strip(" : - -")
         sections.append(
             {
                 "ref": match.groupdict().get("ref") or match.groupdict().get("num"),
@@ -203,8 +203,8 @@ def parse_bulletin(
 ) -> list[JobCandidate]:
     """Turn a bulletin into one candidate per post.
 
-    Fields that are shared by the whole document — closing date, application
-    email, employer — are read once from the full text and applied to every
+    Fields that are shared by the whole document - closing date, application
+    email, employer - are read once from the full text and applied to every
     post, which is how these adverts are actually written.
     """
     sections = split_bulletin(text)
@@ -388,7 +388,7 @@ def looks_scanned(data: bytes) -> bool:
 
 
 def document_title(data: bytes, content_type: str = "") -> str:
-    """First meaningful line — used for logging and as a fallback title."""
+    """First meaningful line - used for logging and as a fallback title."""
     text = bytes_to_text(data, content_type)
     for line in text.splitlines():
         if clean_text(line):

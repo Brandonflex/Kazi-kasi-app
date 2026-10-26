@@ -7,12 +7,12 @@ without credentials or network:
 
 Three implementations:
 
-* ``FakeTransport`` — records what would have been sent. Used by every test and
+* ``FakeTransport`` - records what would have been sent. Used by every test and
   by ``--dry-run``.
-* ``WhatsAppCloudTransport`` — the Meta Cloud API shape (``graph.facebook.com``,
+* ``WhatsAppCloudTransport`` - the Meta Cloud API shape (``graph.facebook.com``,
   ``messaging_product: whatsapp``). Refuses to construct without credentials, so
   a missing token is a startup error and not a silent skip.
-* ``SmsTransport`` — the Africa's Talking shape, used only as the fallback when
+* ``SmsTransport`` - the Africa's Talking shape, used only as the fallback when
   WhatsApp fails. Deliberately not free: an operator bills per segment, so
   ``segments`` is part of the delivery record.
 

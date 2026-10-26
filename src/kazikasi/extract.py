@@ -1,7 +1,7 @@
 """Extraction and normalisation.
 
 Everything here is deterministic: regex, rules, and arithmetic. No model calls.
-That is deliberate — the ingestion critical path must be replayable and cheap.
+That is deliberate - the ingestion critical path must be replayable and cheap.
 
 Where a judgement is uncertain the function must say so in its return value
 (``confidence``, ``evidence``, ``unknown``) rather than guess silently.
@@ -49,7 +49,7 @@ def _soup(markup: str):
     """Parse HTML, importing the parser only when there is HTML to parse.
 
     `beautifulsoup4` is an ingestion dependency, not a serving one. Importing it
-    at module scope made the read-only web app un-importable without a parser —
+    at module scope made the read-only web app un-importable without a parser  - 
     which is exactly the kind of dependency that turns a small deploy into a
     debugging session.
     """
@@ -91,7 +91,7 @@ def normalize_title(title: str) -> str:
     """Lowercased, punctuation-stripped title used for identity, not display."""
     t = clean_text(title).lower()
     t = re.sub(r"\((?:m|f|d|m/f/d|male/female)\)", " ", t)
-    t = re.sub(r"[/\-–—_,;:]+", " ", t)
+    t = re.sub(r"[/\-– - _,;:]+", " ", t)
     t = re.sub(r"[^\w\s+#.]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t
@@ -262,7 +262,7 @@ def parse_pay(value: str | None, *, infer_from_magnitude: bool = True) -> JobPay
     """Parse a free-text salary string into structured pay.
 
     Kenyan boards frequently write "Confidential", so an empty result is a
-    legitimate and common outcome — not an error.
+    legitimate and common outcome - not an error.
     """
     if not value:
         return JobPay()
@@ -352,7 +352,7 @@ def to_monthly(pay: JobPay) -> float | None:
 
 
 # --------------------------------------------------------------------------
-# Entry fit — the field the market is missing
+# Entry fit - the field the market is missing
 # --------------------------------------------------------------------------
 
 _FRESH_PHRASES = (

@@ -1,4 +1,4 @@
-"""The Job Verse — 3D spatial job search experience.
+"""The Job Verse - 3D spatial job search experience.
 
 This is not a feed. This is a universe.
 Jobs are celestial bodies. Skills are stars. You navigate by warping through space.

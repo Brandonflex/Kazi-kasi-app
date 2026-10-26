@@ -1,17 +1,17 @@
 """Accounts: optional sign-in, and a guest that is a first-class citizen.
 
 The product does not gate the feed behind an identity. Signing in exists for two
-reasons only — personalisation and filling forms — and both work without handing
+reasons only - personalisation and filling forms - and both work without handing
 over a social graph.
 
 Three shapes of account:
 
-* **guest** — created on demand, no provider, no email. Gets a session, a CV and
+* **guest** - created on demand, no provider, no email. Gets a session, a CV and
   every feature a member gets except cross-device continuity.
-* **member** — Google, Apple or LinkedIn proved an identity. We store the
+* **member** - Google, Apple or LinkedIn proved an identity. We store the
   provider's stable subject, the address they returned, and their name. Nothing
   else: no contacts, no posts, no profile scrape.
-* **deleted** — a row with ``deleted_at`` set. Everything personal is wiped; the
+* **deleted** - a row with ``deleted_at`` set. Everything personal is wiped; the
   row survives only so a returning sign-in does not silently resurrect it.
 
 The OAuth flow is PKCE with a server-side verifier and a single-use state, and it
@@ -111,7 +111,7 @@ PROVIDERS: dict[str, Provider] = {
 #: What we ask for, in the user's words, on the sign-in page.
 WHY = {
     "google": "Your name and email address. Nothing else.",
-    "apple": "Your name and email address — Apple's private relay is fine.",
+    "apple": "Your name and email address - Apple's private relay is fine.",
     "linkedin": "Your name, headline and email. We do not read your connections.",
 }
 
@@ -121,7 +121,7 @@ WHY = {
 # --------------------------------------------------------------------------
 
 
-#: The secret this build ships with. Named, not hidden — a placeholder that
+#: The secret this build ships with. Named, not hidden - a placeholder that
 #: pretends to be a secret is worse than one that says what it is.
 DEMO_SECRET = "kazi-kasi-demo"
 
@@ -129,8 +129,8 @@ DEMO_SECRET = "kazi-kasi-demo"
 def strict_mode() -> bool:
     """True unless this is explicitly a demo build.
 
-    Strict mode is what turns the two deployment mistakes that matter — shipping
-    the demo session secret, or shipping without one — into loud failures instead
+    Strict mode is what turns the two deployment mistakes that matter - shipping
+    the demo session secret, or shipping without one - into loud failures instead
     of a quietly forgeable cookie.
     """
     return (os.environ.get("KAZIKASI_DEMO", "1") or "1").strip() != "1"
@@ -192,7 +192,7 @@ def read_session(headers: dict | None) -> str | None:
 def readiness(*, base_url: str | None = None) -> dict:
     """What is configured, what is missing, and what must be true before real use.
 
-    No secrets are returned — only whether a variable is present, because the
+    No secrets are returned - only whether a variable is present, because the
     point of the page is to be safe to look at.
     """
     strict = strict_mode()
@@ -286,7 +286,7 @@ def claim_state(conn, state: str, provider_key: str, *, now: datetime | None = N
         raise ValueError("sign-in attempt was for a different provider")
     created = datetime.fromisoformat(row["created_at"])
     if now - created > timedelta(minutes=STATE_MINUTES):
-        raise ValueError("this sign-in attempt expired — start again")
+        raise ValueError("this sign-in attempt expired - start again")
     conn.execute("UPDATE oauth_states SET used_at = ? WHERE state = ?", (now.isoformat(), state))
     conn.commit()
     return row["verifier"]
@@ -349,7 +349,7 @@ def rsa_sha256_verify(signing_input: bytes, signature: bytes, modulus: str, expo
     """Verify an RS256 signature with nothing but integer arithmetic.
 
     Why not a library: the deployed function imports only the standard library
-    (there is no `requirements.txt`, deliberately — see `docs/phase-7-accounts.md`).
+    (there is no `requirements.txt`, deliberately - see `docs/phase-7-accounts.md`).
     PKCS#1 v1.5 verification is small enough to do correctly here, and doing it
     correctly is the whole point of this function.
     """
@@ -399,7 +399,7 @@ def verify_id_token(
     published key, the RS256 signature verifies, `iss` is one this provider may
     use, `aud` is our client id, and the token is inside its lifetime.
 
-    **Fails closed.** If the keys cannot be fetched, this raises — a sign-in that
+    **Fails closed.** If the keys cannot be fetched, this raises - a sign-in that
     "works" because verification was skipped is worse than a sign-in that does
     not work.
     """
@@ -617,7 +617,7 @@ def forget(conn, account_id: str, *, now: datetime | None = None) -> None:
 
     The CV is removed outright; the account becomes anonymous. Keeping the row
     means the same provider identity cannot be quietly re-created behind the
-    person's back — signing in again starts a fresh, empty account.
+    person's back - signing in again starts a fresh, empty account.
     """
     moment = _now(now).isoformat()
     conn.execute("DELETE FROM cvs WHERE account_id = ?", (account_id,))
@@ -638,12 +638,13 @@ def forget(conn, account_id: str, *, now: datetime | None = None) -> None:
 def store_cv(conn, account_id: str, *, filename: str | None, text: str, fields: dict,
              now: datetime | None = None) -> int:
     cursor = conn.execute(
-        "INSERT INTO cvs (account_id, filename, chars, fields, created_at) VALUES (?,?,?,?,?)",
+        "INSERT INTO cvs (account_id, filename, chars, fields, created_at) VALUES (?,?,?,?,?) RETURNING id",
         (account_id, filename, len(text or ""), json.dumps(fields, ensure_ascii=False),
          _now(now).isoformat()),
     )
+    row_id = int(cursor.fetchone()[0])
     conn.commit()
-    return int(cursor.lastrowid)
+    return row_id
 
 
 def latest_cv(conn, account_id: str) -> dict | None:

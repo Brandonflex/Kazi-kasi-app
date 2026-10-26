@@ -2,14 +2,14 @@
 
 The product's promise here is narrow and deliberate: **extract only what the
 document says, show where it came from, and never invent a value.** A CV that
-does not state a phone number produces no phone number — it produces a blank
+does not state a phone number produces no phone number - it produces a blank
 with the label "add this" at the point where it is needed.
 
 Two outputs:
 
-* ``parse()`` — structured fields with the evidence snippet and a confidence,
+* ``parse()`` - structured fields with the evidence snippet and a confidence,
   for the account page, so the person can check what we read before we use it.
-* ``kit()`` — the ordered list of (label, value, source) that an employer's form
+* ``kit()`` - the ordered list of (label, value, source) that an employer's form
   asks for, plus a cover note drawn from the advert and the CV's own words.
 
 There is no auto-apply and no form submission. The kit is a clipboard: the user
@@ -207,7 +207,7 @@ def parse(text: str, *, today: date | None = None) -> dict:
 
 
 def profile_suggestions(fields: dict) -> dict:
-    """What the CV implies for the scope — suggestions, not silent edits."""
+    """What the CV implies for the scope - suggestions, not silent edits."""
     suggestions: dict = {}
     location = (fields.get("location") or {}).get("value")
     if location:

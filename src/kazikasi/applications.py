@@ -91,12 +91,13 @@ def save(
         """INSERT INTO applications
            (account_id, job_id, status, last_action_at, match_score,
             match_details, salary_seen, source_url, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
         (account_id, job_id, status, moment, match_score,
          details_json, salary_seen, source_url, moment),
     )
+    row_id = int(cursor.fetchone()[0])
     conn.commit()
-    return int(cursor.lastrowid)
+    return row_id
 
 
 def update_status(conn, application_id: int, new_status: str, *, now: Optional[datetime] = None) -> None:

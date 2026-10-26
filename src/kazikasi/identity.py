@@ -2,9 +2,9 @@
 
 The distinction this module exists to make:
 
-* an **exclusive** key identifies a posting — a reference number, an ATS
+* an **exclusive** key identifies a posting - a reference number, an ATS
   requisition, or the full cultural key (employer + title + county + deadline);
-* a **shared** key identifies an employer or a campaign — a careers inbox, a
+* a **shared** key identifies an employer or a campaign - a careers inbox, a
   "apply here" URL. A large employer posts twenty jobs all telling you to write
   to ``careers@company.co.ke``. Treating that inbox as identity would collapse
   twenty vacancies into one, which is the single worst thing this system can do.
@@ -109,7 +109,7 @@ def apply_target(candidate: JobCandidate) -> str:
 
     Ordered by precision: reference number > apply email > ATS requisition >
     canonical apply URL > canonical source URL. Used as a display/debug value
-    and as the apply link identity — **not** as proof that two postings are the
+    and as the apply link identity - **not** as proof that two postings are the
     same job. See ``identity_keys`` for that.
     """
     if candidate.reference:
@@ -129,7 +129,7 @@ def dedupe_key(candidate: JobCandidate) -> str:
 
     Deliberately includes the deadline. Two adverts for the same title at the
     same employer with different closing dates are usually distinct
-    requisitions — and in the public sector they are usually distinct *posts*.
+    requisitions - and in the public sector they are usually distinct *posts*.
     """
     parts = [
         employer_key(candidate.employer_name, candidate.employer_domain),

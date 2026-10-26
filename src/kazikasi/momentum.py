@@ -1,7 +1,7 @@
 """Momentum: a weekly run, with one free skip.
 
 Nobody job-hunts every day, so the unit is the week. A week counts if the person
-paid attention — opened the brief, saved something, followed an advert, told us
+paid attention - opened the brief, saved something, followed an advert, told us
 they applied, or dismissed a role as not for them. Applying is not required,
 because the product cannot control outcomes and should not pretend to.
 
@@ -138,12 +138,12 @@ def status(conn: sqlite3.Connection, profile_id: str, *, now: datetime | None = 
 def line(state: dict) -> str:
     """One sentence, the same on the feed, the brief and the digest."""
     if state["run"] == 0:
-        return "No run yet — one week is all it takes to start."
+        return "No run yet - one week is all it takes to start."
     if state["run"] == 1:
         return "Week 1 of your run. One more and it starts to feel like a habit."
     if not state["this_week"]:
         return (
-            f"{state['run']} weeks. This week is untouched — your skip is covering it."
+            f"{state['run']} weeks. This week is untouched - your skip is covering it."
             if state["skip_in_hand"]
             else f"{state['run']} weeks. This week is untouched."
         )

@@ -2,7 +2,7 @@
 
 A saved job is the strongest signal this product gets: the user has told us, in
 advance, what they intend to do. That makes it the only legitimate reason to
-interrupt someone — and the only one we allow ourselves.
+interrupt someone - and the only one we allow ourselves.
 
 Three rules shape this module:
 
@@ -73,8 +73,8 @@ def entries(conn, profile_id: str, *, now: datetime | None = None) -> list[dict]
     """Saved jobs: still-open ones first, soonest deadline first, undated last.
 
     A shortlist that puts a closed job above a live one is a list that has
-    stopped helping. Closed entries stay visible — they are the user's own
-    history — but they never displace something still decidable.
+    stopped helping. Closed entries stay visible - they are the user's own
+    history - but they never displace something still decidable.
     """
     now = now or datetime.now(timezone.utc)
     rows = []
@@ -128,7 +128,7 @@ def reminder_text(row, *, base: str | None = None) -> str:
     employer = row.get("employer_name") or "Employer not stated"
     lines = [f"*{row.get('title') or 'Saved job'}*", employer]
     if when:
-        lines.append(f"{when} — on your shortlist")
+        lines.append(f"{when} - on your shortlist")
     else:
         lines.append("on your shortlist")
     lines.append(f"{root}/job/{row.get('id')}")

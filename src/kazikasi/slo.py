@@ -1,4 +1,4 @@
-"""D8 — the freshness promise, measured and shown.
+"""D8 - the freshness promise, measured and shown.
 
 The product's claim is "current data, constant update". That claim is only worth
 anything if it is a number someone can check. So:

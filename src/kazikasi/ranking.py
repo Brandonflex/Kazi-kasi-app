@@ -3,13 +3,13 @@
 D9 in the research pack. Three stages, in this order, because they answer
 different questions and must not be blended:
 
-1. **Constraints** — can this person take this job at all? Wrong county, wrong
+1. **Constraints** - can this person take this job at all? Wrong county, wrong
    work mode, too little pay, too much experience required: excluded, with the
    reason stated. A gate is not a low score; showing an impossible job at 4% is
    worse than not showing it.
-2. **Relevance** — is this the kind of work they asked for? Role family overlap
+2. **Relevance** - is this the kind of work they asked for? Role family overlap
    and title signal.
-3. **Utility** — is it worth doing something about *today*? Deadline urgency,
+3. **Utility** - is it worth doing something about *today*? Deadline urgency,
    freshness, whether we can corroborate it, how far it is.
 
 Every component is returned with the numbers that produced it, so the card can
@@ -158,7 +158,7 @@ def relevance_score(row: dict, profile: Profile, families: list[str]) -> tuple[f
 
     if (row.get("employment_type") or "") in ("internship", "attachment"):
         score = min(1.0, score + 0.05)
-        reasons.append(f"{row['employment_type']} — entry route")
+        reasons.append(f"{row['employment_type']} - entry route")
     return round(min(1.0, score), 3), reasons
 
 
@@ -244,7 +244,7 @@ def utility_score(row: dict, profile: Profile, now: datetime) -> tuple[float, li
 
 def distance_component(row: dict, profile: Profile) -> tuple[float, geo.Distance | None, list[str]]:
     if row.get("work_mode") == "remote":
-        return 1.0, None, ["remote — no commute"]
+        return 1.0, None, ["remote - no commute"]
     distance = geo.distance_between(
         profile.home_area, profile.home_county, row.get("sub_county"), row.get("county")
     )
@@ -317,7 +317,7 @@ def rank(
 def explain(match: Match) -> str:
     """One line a person can read, for the CLI and logs."""
     if not match.eligible:
-        return f"{match.title}: excluded — {'; '.join(match.blockers)}"
+        return f"{match.title}: excluded - {'; '.join(match.blockers)}"
     return f"{match.title} ({match.score:.2f}): " + " · ".join(match.reasons[:4])
 
 

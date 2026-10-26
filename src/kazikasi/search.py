@@ -2,7 +2,7 @@
 
 The feed answers "what should I look at first?". It does not answer "show me
 every internship in Nairobi that closes in the next ten days and pays something"
-— which is the question someone asks the moment the ranked five do not include
+ -  which is the question someone asks the moment the ranked five do not include
 what they were picturing.
 
 This module is that query, kept as plain data so it can be tested without HTML:
@@ -13,7 +13,7 @@ This module is that query, kept as plain data so it can be tested without HTML:
 * **filters are facts about the advert**, not scores: county, role family,
   employment type, work mode, a pay floor, and a deadline horizon.
 * **the scope still applies.** A role outside your commute or entry fit is not
-  hidden by search — it is shown *after* the roles you can take, with the reason,
+  hidden by search - it is shown *after* the roles you can take, with the reason,
   and only when you ask for it. Hiding it would be tidier and less honest;
   showing it unlabelled would be worse.
 
@@ -112,7 +112,7 @@ def _within(row: dict, days: int | None, now: datetime) -> bool:
 
 
 def _pays(row: dict, floor: float | None) -> bool:
-    """A pay floor excludes adverts that state nothing — and says so.
+    """A pay floor excludes adverts that state nothing - and says so.
 
     Treating "not stated" as a pass would put unpaid adverts in a search for
     paid ones; treating it as a fail silently hides most of the market. This
@@ -297,7 +297,7 @@ def _saved(conn, profile_id: str) -> set[str]:
 
 
 def _facets(conn, ranked, key) -> list[tuple[str, int]]:
-    """What is actually in the corpus, counted — never a hard-coded list."""
+    """What is actually in the corpus, counted - never a hard-coded list."""
     counts: dict[str, int] = {}
     for match in ranked:
         row = dict(match.row or {})

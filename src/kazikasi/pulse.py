@@ -43,7 +43,7 @@ def _as_dt(value) -> datetime | None:
 
 
 def live_rows(conn) -> list[dict]:
-    """Open, unflagged adverts — the only rows a public number may be built from."""
+    """Open, unflagged adverts - the only rows a public number may be built from."""
     rows = conn.execute(_SELECT + " WHERE status IN ('open','needs_review')").fetchall()
     out = []
     for row in rows:
@@ -75,7 +75,7 @@ def monthly_pay(rows: list[dict]) -> list[float]:
 
 
 def _closing(row, now: datetime, days: int) -> bool:
-    """Deadlines are dates, so the window is dates — the same rule as the feed."""
+    """Deadlines are dates, so the window is dates - the same rule as the feed."""
     raw = row.get("deadline")
     if not raw:
         return False

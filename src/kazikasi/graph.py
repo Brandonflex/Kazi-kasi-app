@@ -2,14 +2,14 @@
 
 The rules, in order of strength:
 
-1. **Exclusive keys** — a reference number, an ATS requisition, or the full
+1. **Exclusive keys** - a reference number, an ATS requisition, or the full
    cultural key (employer + normalised title + county + deadline). Two
    observations sharing one of these are the same posting.
-2. **Shared keys, corroborated by title** — a careers inbox or an "apply here"
+2. **Shared keys, corroborated by title** - a careers inbox or an "apply here"
    URL. These prove an *employer*, not a job: a large employer posts twenty
    vacancies all pointing at `careers@company.co.ke`. They merge only when the
    titles agree and the deadlines do not contradict.
-3. **Fuzzy title within the same employer and county** — merged only above a
+3. **Fuzzy title within the same employer and county** - merged only above a
    high threshold, with grade markers ("Analyst" vs "Analyst II") and deadlines
    treated as hard separators. Between the merge and review thresholds the pair
    goes to the review queue instead of being merged.
@@ -153,7 +153,7 @@ def record_observation(conn, candidate: JobCandidate, *, sha256: str | None = No
         """INSERT INTO observations
            (source_id, source_job_id, source_url, fetched_at, parser_version,
             fingerprint, sha256, payload)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
         (
             candidate.source_id,
             candidate.source_job_id,
@@ -165,7 +165,8 @@ def record_observation(conn, candidate: JobCandidate, *, sha256: str | None = No
             json.dumps(candidate.to_dict(), ensure_ascii=False),
         ),
     )
-    return int(cursor.lastrowid), True
+    row_id = int(cursor.fetchone()[0])
+    return row_id, True
 
 
 def _jobs_for_keys(conn, keys: list[IdentityKey]) -> list[tuple[IdentityKey, object]]:
@@ -234,7 +235,7 @@ def upsert_candidate(
     for key, row in _jobs_for_keys(conn, exclusive):
         return _attach(conn, row["id"], candidate, observation_id, f"key_{key.kind}", 1.0, now, keys)
 
-    # 2. A shared key plus agreeing titles is proof enough — unless the two
+    # 2. A shared key plus agreeing titles is proof enough - unless the two
     #    contradict each other on a field that distinguishes real posts.
     for key, row in _jobs_for_keys(conn, shared):
         if not titles_merge(candidate.title, row["title"]):

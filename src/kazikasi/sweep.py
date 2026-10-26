@@ -10,11 +10,11 @@ the raw store. It does not touch the ``jobs`` table, does not track source
 health, and does not decide whether a source is due. The sweep orchestrates
 those concerns:
 
-* ``should_run(source, now)`` — has the source been fetched within its cadence?
-* ``refresh(source, conn, now)`` — fetch, parse, upsert observations, update
+* ``should_run(source, now)`` - has the source been fetched within its cadence?
+* ``refresh(source, conn, now)`` - fetch, parse, upsert observations, update
   ``jobs.last_seen_at`` (and flip status from "closed" back to "open" if we see
   it again), record source health.
-* ``write_job(candidate, conn, now)`` — upsert a single candidate into ``jobs``
+* ``write_job(candidate, conn, now)`` - upsert a single candidate into ``jobs``
   and ``job_members``, keyed by ``source_id + source_job_id``.
 
 The upsert is the whole point: the sweep is the thing that makes "this job was
@@ -52,13 +52,13 @@ CREATE INDEX IF NOT EXISTS idx_source_health_status ON source_health (status);
 
 
 def add_source_health_schema(conn) -> None:
-    """Apply the source_health schema. Safe to call on every startup — every
+    """Apply the source_health schema. Safe to call on every startup - every
     statement is IF NOT EXISTS."""
     if hasattr(conn, "executescript"):
         # sqlite
         conn.executescript(SOURCE_HEALTH_SCHEMA)
     else:
-        # psycopg — split on semicolons
+        # psycopg - split on semicolons
         for stmt in (s.strip() for s in SOURCE_HEALTH_SCHEMA.split(";") if s.strip()):
             conn.execute(stmt)
     conn.commit()
@@ -94,7 +94,7 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
     """Upsert a candidate into jobs + job_members.
 
     Returns the job id (created or existing). The upsert key is
-    ``source_id + source_job_id`` — every source owns its own namespace, so
+    ``source_id + source_job_id`` - every source owns its own namespace, so
     "BM-1001" on BrighterMonday and "BM-1001" on Fuzu are two different jobs.
 
     If the job already exists and its status is "closed", seeing it again flips
@@ -105,7 +105,7 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
     job_id = f"{candidate.source_id}:{candidate.source_job_id}"
     payload = candidate.to_dict()
 
-    # Observation row — append-only, keyed by (source_id, source_job_id, fingerprint).
+    # Observation row - append-only, keyed by (source_id, source_job_id, fingerprint).
     # Fingerprint is a hash of the candidate's identifying fields; if the provenance
     # has no fingerprint method, fall back to the job id.
     try:
@@ -219,7 +219,7 @@ def write_job(candidate: JobCandidate, conn, now: datetime) -> str:
             ),
         )
 
-    # Job membership — link this observation to the job.
+    # Job membership - link this observation to the job.
     if observation_id is not None:
         if _is_postgres(conn):
             conn.execute(

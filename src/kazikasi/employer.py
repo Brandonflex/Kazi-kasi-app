@@ -3,16 +3,16 @@
 There is a tempting version of this feature that scrapes LinkedIn for names,
 guesses email addresses and presents a "hiring team" it cannot verify. We do not
 build that version. Everything below is extracted from the advert we already
-hold, quoted, and labelled with where it came from — and when the advert names
+hold, quoted, and labelled with where it came from - and when the advert names
 nobody, the page says so instead of filling the space.
 
 The shape of the answer:
 
-* **How to apply** — the channel the advert actually specifies (portal, email,
+* **How to apply** - the channel the advert actually specifies (portal, email,
   post, hand delivery), because applying the wrong way is a silent rejection.
 * **A named contact**, if one is written down, with the sentence that named them.
-* **What is missing** — no named contact, no email, no phone: stated plainly.
-* **Connects** — deliberately empty. We do not have somebody's network and will
+* **What is missing** - no named contact, no email, no phone: stated plainly.
+* **Connects** - deliberately empty. We do not have somebody's network and will
   not invent one; the page offers the honest alternative (ask a classmate, use
   the shortlist, or come back once referrals exist).
 """
@@ -141,7 +141,7 @@ def read(description: str | None, *, source_id: str | None = None, employer_doma
 
 
 def opens(conn, job_id: str) -> int:
-    """How many times this advert has been opened here — a real number or nothing."""
+    """How many times this advert has been opened here - a real number or nothing."""
     row = conn.execute(
         "SELECT COUNT(*) AS c FROM apply_events WHERE job_id = ? AND kind = 'viewed'", (job_id,)
     ).fetchone()
