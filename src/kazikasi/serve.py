@@ -1364,6 +1364,258 @@ header > * { position: relative; z-index: 1 }
 }
 
 
+/* ============================================================
+   LANDING PAGE
+   Borrowed from: LinkedIn (hero), Indeed (CTAs), Glassdoor (stats),
+                  Dribbble (gradients), ZipRecruiter (quick start)
+   ============================================================ */
+
+.landing-hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  overflow: hidden;
+}
+
+.landing-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  animation: orb-float 20s ease-in-out infinite;
+}
+
+.orb-1 {
+  width: 600px;
+  height: 600px;
+  background: linear-gradient(135deg, #E9A23B 0%, rgba(233,162,59,0.3) 100%);
+  top: -200px;
+  left: -200px;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, #166E5C 0%, rgba(22,110,92,0.3) 100%);
+  bottom: -150px;
+  right: -150px;
+  animation-delay: -7s;
+}
+
+.orb-3 {
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, #C85C3E 0%, rgba(200,92,62,0.3) 100%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -14s;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -30px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+.landing-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 720px;
+  margin-bottom: 60px;
+}
+
+.landing-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  background: rgba(233, 162, 59, 0.15);
+  border: 1px solid rgba(233, 162, 59, 0.3);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #E9A23B;
+  margin-bottom: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.landing-headline {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--nairobi-dark);
+  margin-bottom: 20px;
+  letter-spacing: -0.02em;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #E9A23B 0%, #C85C3E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-subline {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.landing-form {
+  margin: 0;
+}
+
+.btn-large {
+  padding: 16px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+}
+
+.btn-primary.btn-large {
+  background: var(--ember-gold);
+  color: var(--nairobi-dark);
+  box-shadow: 0 4px 20px rgba(233, 162, 59, 0.3);
+}
+
+.btn-primary.btn-large:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(233, 162, 59, 0.4);
+}
+
+.btn-secondary.btn-large {
+  background: var(--surface-elevated);
+  color: var(--ink-2);
+  border: 1.5px solid var(--line);
+}
+
+.btn-secondary.btn-large:hover {
+  border-color: var(--ember-gold);
+  color: var(--ember-gold);
+  transform: translateY(-2px);
+}
+
+.landing-small {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 24px;
+  text-align: center;
+}
+
+.landing-stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 600px;
+}
+
+.landing-stats .stat-card {
+  background: rgba(246, 240, 230, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(233, 162, 59, 0.2);
+  padding: 24px 32px;
+  border-radius: var(--radius);
+  text-align: center;
+  min-width: 140px;
+}
+
+.landing-stats .stat-number {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--ember-gold);
+  margin-bottom: 4px;
+}
+
+.landing-stats .stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.landing-features {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  max-width: 1000px;
+  margin: 80px auto 0;
+  padding: 0 20px;
+}
+
+.feature-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px;
+  text-align: center;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: rgba(233, 162, 59, 0.3);
+}
+
+.feature-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.feature-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--nairobi-dark);
+  margin-bottom: 8px;
+}
+
+.feature-card p {
+  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+
 /* Page loading overlay - visible by default, hidden by JS when loaded */
 #page-loading-overlay { display: flex; }
 noscript #page-loading-overlay { display: none; }
@@ -3296,6 +3548,112 @@ def _seed_demo_applications(conn, account_id, *, now):
             pass
     conn.commit()
 
+
+
+def render_landing_page(*, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
+    """Landing page with sign in/up/guest options.
+
+    Borrowed concepts:
+    - LinkedIn: Clean hero with clear value prop
+    - Indeed: Simple, focused CTAs
+    - Glassdoor: Trust indicators (stats)
+    - Dribbble: Visual-first design with gradient
+    - ZipRecruiter: Quick start options
+    """
+    notice_html = _notice(tone, notice)
+    
+    # Stats for trust (borrowed from Indeed/Glassdoor)
+    stats = metrics.stats(db.connect(":memory:"), now=datetime.now(timezone.utc)) if demo else {"live_jobs": 0, "closing_within_7_days": 0}
+    
+    body = f"""
+<div class="landing-hero">
+  <div class="landing-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+  
+  <div class="landing-content">
+    <div class="landing-badge"></div>
+    <h1 class="landing-headline">
+      Find your next <span class="gradient-text">career move</span>
+    </h1>
+    <p class="landing-subline">
+      Jobs that match your skills. Applications tracked in one place.
+      No more scattered tabs and forgotten follow-ups.
+    </p>
+    
+    {notice_html}
+    
+    <div class="landing-actions">
+      <form method="post" action="/auth/start" class="landing-form">
+        <input type="hidden" name="provider" value="google">
+        <button type="submit" class="btn btn-primary btn-large">
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continue with Google
+        </button>
+      </form>
+      
+      <form method="post" action="/auth/guest" class="landing-form">
+        <button type="submit" class="btn btn-secondary btn-large">
+          Continue as Guest
+        </button>
+      </form>
+    </div>
+    
+    <p class="landing-small">
+      By continuing, you agree to our Terms. We only use your data to match jobs.
+    </p>
+  </div>
+  
+  <div class="landing-stats">
+    <div class="stat-card">
+      <div class="stat-number">{stats.get('live_jobs', 0)}</div>
+      <div class="stat-label">Live jobs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{stats.get('closing_within_7_days', 0)}</div>
+      <div class="stat-label">Closing this week</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">15+</div>
+      <div class="stat-label">Sources tracked</div>
+    </div>
+  </div>
+</div>
+
+<div class="landing-features">
+  <div class="feature-card">
+    <div class="feature-icon"></div>
+    <h3>Smart Matching</h3>
+    <p>Jobs ranked by fit, not just keywords. See why each job made your feed.</p>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-icon"></div>
+    <h3>Application Tracker</h3>
+    <p>Track every application in one place. Move jobs through stages as you progress.</p>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-icon"></div>
+    <h3>WhatsApp Alerts</h3>
+    <p>Daily job digests via WhatsApp. Never miss a closing deadline again.</p>
+  </div>
+  
+  <div class="feature-card">
+    <div class="feature-icon"></div>
+    <h3>AI-Powered</h3>
+    <p>Auto-fill applications from your CV. Focus on what matters.</p>
+  </div>
+</div>
+"""
+    return _page("Kazi-Kasi: Find your next career move", body, demo=demo, nav="")
 
 
 def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "warn") -> str:
@@ -5757,7 +6115,7 @@ def _handle_get(
             notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good"),
         ))
 
-    if path in ("/verse", "/galaxy"):
+    if path in ("/verse", "/galaxy", "/universe"):
         # The 3D galaxy has inline styles, inline module scripts, and loads
         # Three.js from CDN. Use a permissive policy for this page.
         verse_csp = "; ".join([
@@ -5779,22 +6137,10 @@ def _handle_get(
 
 
     if path in ("/", "/index.html"):
-        # Default experience: 3D galaxy universe
-        # The 3D galaxy has inline styles, inline module scripts, and loads
-        # Three.js from CDN. Use a permissive policy for this page.
-        verse_csp = "; ".join([
-            "default-src 'none'",
-            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
-            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
-            "font-src 'self' https://fonts.gstatic.com",
-            "connect-src 'self'",
-            "base-uri 'none'",
-            "frame-ancestors 'none'",
-            "object-src 'none'",
-        ])
-        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
-            headers={"Content-Security-Policy": verse_csp})
+        # Landing page with sign in/up/guest options
+        return Response(200, render_landing_page(demo=demo,
+            notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good")),
+            "text/html; charset=utf-8")
 
     if path == "/feed":
         seen = read_seen(headers)
