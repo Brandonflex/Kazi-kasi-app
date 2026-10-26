@@ -1254,6 +1254,205 @@ header > * { position: relative; z-index: 1 }
   font-size: 15px;
 }
 
+
+/* 3D Tilt Effect */
+[data-tilt] {
+  transform-style: preserve-3d;
+  transition: transform 100ms linear;
+}
+[data-tilt] > * {
+  transform: translateZ(0);
+}
+
+
+/* ============================================================
+   VARIED LOADING STATES
+   ============================================================ */
+
+/* Auth loading */
+.loading-auth .loading-spinner-large {
+  width: 72px;
+  height: 72px;
+  border: 4px solid rgba(233, 162, 59, 0.15);
+  border-top-color: #E9A23B;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 28px;
+}
+
+.loading-auth .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  color: #F6F0E6;
+  margin-bottom: 12px;
+}
+
+.loading-auth .loading-message {
+  font-size: 14px;
+  color: rgba(246, 240, 230, 0.7);
+  margin-bottom: 32px;
+}
+
+.loading-auth .loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loading-auth .step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(246, 240, 230, 0.5);
+  transition: color 0.3s;
+}
+
+.loading-auth .step.active {
+  color: #E9A23B;
+  font-weight: 600;
+}
+
+.loading-auth .step::before {
+  content: '○';
+  font-size: 14px;
+}
+
+.loading-auth .step.active::before {
+  content: '●';
+}
+
+/* Galaxy loading */
+.loading-galaxy .galaxy-loader {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin-bottom: 32px;
+}
+
+.loading-galaxy .orbit {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(233, 162, 59, 0.25);
+  border-radius: 50%;
+  animation: orbit-spin 4s linear infinite;
+}
+
+.loading-galaxy .orbit:nth-child(2) {
+  inset: 12px;
+  animation-duration: 3s;
+  animation-direction: reverse;
+}
+
+.loading-galaxy .orbit:nth-child(3) {
+  inset: 24px;
+  animation-duration: 2s;
+}
+
+.loading-galaxy .core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #E9A23B;
+  border-radius: 50%;
+  box-shadow: 0 0 20px #E9A23B;
+  animation: pulse-core 1.5s ease-in-out infinite;
+}
+
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-core {
+  0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+.loading-galaxy .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  color: #E9A23B;
+  margin-bottom: 10px;
+}
+
+.loading-galaxy .loading-tips {
+  margin-top: 24px;
+  max-width: 300px;
+}
+
+.loading-galaxy .tip {
+  font-size: 12.5px;
+  color: rgba(246, 240, 230, 0.6);
+  font-style: italic;
+  padding: 10px 14px;
+  background: rgba(233, 162, 59, 0.08);
+  border-radius: 8px;
+  border-left: 2px solid rgba(233, 162, 59, 0.3);
+}
+
+/* Search loading */
+.loading-search .loading-dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.loading-search .loading-dots span {
+  width: 10px;
+  height: 10px;
+  background: #E9A23B;
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.loading-search .loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-search .loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Upload loading */
+.loading-upload .progress-bar {
+  width: 240px;
+  height: 4px;
+  background: rgba(233, 162, 59, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.loading-upload .progress-fill {
+  height: 100%;
+  background: #E9A23B;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.loading-upload .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  color: #F6F0E6;
+  margin-bottom: 10px;
+}
+
+.loading-upload .progress-text {
+  font-size: 13px;
+  color: #E9A23B;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
 /* ============================================================
    SKELETON LOADING STATES
    ============================================================ */
@@ -1482,13 +1681,13 @@ def _handle_galaxy_api(conn, query: dict, *, demo: bool, now: datetime) -> Respo
     prof = _profile_or_default(conn, profile_id)
     
     # Get matches
-    matches, _ = _ranked(conn, prof, now=now, limit=50)
+    matches, _ = _ranked(conn, prof, now=now, limit=200)
     
     # Get profile skills (from CV or default)
     profile_skills = ["python", "javascript", "management", "communication", "data analysis"]
     
     # Prepare galaxy data
-    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=50)
+    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=150)
     
     return Response(
         200,

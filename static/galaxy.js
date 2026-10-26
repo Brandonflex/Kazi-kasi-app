@@ -1,33 +1,53 @@
 /**
- * KAZI-KASI GALAXY — 3D Job Universe
+ * KAZI-KASI GALAXY v2 — Immersive 3D Job Universe
  * 
- * This is not a feed. This is a spatial experience.
- * Jobs are celestial bodies. Skills are stars. You navigate by warping.
+ * Features:
+ * - Post-processing bloom for glowing orbs
+ * - 5000+ particle starfield
+ * - Warp drive animation on job click
+ * - Cinematic autopilot camera path
+ * - Spatial audio design
+ * - Interactive search/filter
+ * - Mini-map overlay
+ * - Particle trails between skills and jobs
  */
 
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+
 // ============================================================
-// INITIALIZATION
+// GALAXY CONFIG
 // ============================================================
 
-let scene, camera, renderer, clock;
+const CONFIG = {
+  jobCount: 150,
+  particleCount: 5000,
+  cameraDistance: 300,
+  cameraFov: 65,
+  bloomStrength: 1.2,
+  bloomRadius: 0.5,
+  bloomThreshold: 0.2,
+  rotationSpeed: 0.0002,
+  warpSpeed: 3,
+};
+
+// ============================================================
+// GLOBALS
+// ============================================================
+
+let scene, camera, renderer, composer, clock;
+let bloomPass;
 let jobs = [], skills = [], nebulae = [], connections = [];
 let hoveredObject = null, selectedJob = null;
 let raycaster, mouse;
-let galaxyGroup, skillGroup, nebulaGroup;
-let autopilotMode = false;
-
-// Audio context for sound design
-let audioCtx = null;
-
-// Galaxy config
-const GALAXY_CONFIG = {
-  jobOrbSize: { min: 1.5, max: 6 },
-  cameraDistance: 250,
-  cameraFov: 60,
-  particleCount: 2000,
-  glowIntensity: 1.5,
-  rotationSpeed: 0.0003,
-};
+let galaxyGroup, skillGroup, nebulaGroup, particleSystem;
+let autopilotMode = false, autopilotTime = 0;
+let warpTarget = null, warpProgress = 0;
+let searchQuery = '', searchFilter = '';
+let audioCtx = null, ambientOsc = null;
+let minimapCamera, minimapRenderer;
 
 // ============================================================
 // SHADERS
@@ -37,13 +57,14 @@ const JOB_VERTEX_SHADER = `
   varying vec3 vNormal;
   varying vec3 vPosition;
   uniform float uTime;
+  uniform float uHover;
   
   void main() {
     vNormal = normalize(normalMatrix * normal);
     vPosition = position;
     
-    // Subtle pulsing
-    float pulse = sin(uTime * 2.0) * 0.05 + 1.0;
+    // Pulsing effect
+    float pulse = sin(uTime * 2.0 + uHover * 5.0) * 0.08 + 1.0;
     vec3 newPosition = position * pulse;
     
     gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
@@ -54,22 +75,29 @@ const JOB_FRAGMENT_SHADER = `
   uniform vec3 uColor;
   uniform float uIntensity;
   uniform float uTime;
+  uniform float uHover;
+  uniform float uSearchMatch;
   varying vec3 vNormal;
   varying vec3 vPosition;
   
   void main() {
-    // Fresnel glow effect
-    float fresnel = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
+    // Fresnel glow
+    float fresnel = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.5);
     
     // Pulsing core
     float core = sin(uTime * 3.0) * 0.2 + 0.8;
     
-    vec3 glowColor = uColor * uIntensity;
-    vec3 coreColor = mix(uColor, vec3(1.0), 0.5) * core;
+    // Search highlight
+    float highlight = uSearchMatch * 0.5;
+    
+    vec3 glowColor = uColor * uIntensity * (1.0 + uHover * 0.5);
+    vec3 coreColor = mix(uColor, vec3(1.0), 0.6) * core;
     
     vec3 finalColor = mix(coreColor, glowColor, fresnel);
+    finalColor += highlight;
     
-    gl_FragColor = vec4(finalColor, 1.0);
+    float alpha = 1.0 - uHover * 0.2;
+    gl_FragColor = vec4(finalColor, alpha);
   }
 `;
 
@@ -91,7 +119,6 @@ const NEBULA_FRAGMENT_SHADER = `
   varying vec2 vUv;
   varying vec3 vPosition;
   
-  // Simplex noise function
   vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -141,16 +168,17 @@ const NEBULA_FRAGMENT_SHADER = `
   }
   
   void main() {
-    // Generate noise-based nebula texture
-    vec3 pos = vPosition * 0.5;
-    float noise = snoise(pos + uTime * 0.1);
-    float noise2 = snoise(pos * 2.0 - uTime * 0.15);
+    vec3 pos = vPosition * 0.3;
+    float noise = snoise(pos + uTime * 0.05);
+    float noise2 = snoise(pos * 1.5 - uTime * 0.08);
+    float noise3 = snoise(pos * 3.0 + uTime * 0.12);
     
-    float alpha = smoothstep(-0.3, 0.8, noise) * 0.3;
-    alpha += smoothstep(0.0, 1.0, noise2) * 0.15;
+    float alpha = smoothstep(-0.4, 0.9, noise) * 0.25;
+    alpha += smoothstep(0.1, 1.0, noise2) * 0.15;
+    alpha += smoothstep(0.3, 1.0, noise3) * 0.1;
     alpha *= uOpacity;
     
-    vec3 color = uColor * (0.8 + noise * 0.4);
+    vec3 color = uColor * (0.9 + noise * 0.3);
     
     gl_FragColor = vec4(color, alpha);
   }
@@ -161,29 +189,47 @@ const NEBULA_FRAGMENT_SHADER = `
 // ============================================================
 
 export function initGalaxy(container, galaxyData, options = {}) {
-  // Setup Three.js
+  // Scene setup
   scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000000, 0.0015);
+  
   camera = new THREE.PerspectiveCamera(
-    GALAXY_CONFIG.cameraFov,
+    CONFIG.cameraFov,
     container.clientWidth / container.clientHeight,
     0.1,
-    2000
+    3000
   );
-  camera.position.z = GALAXY_CONFIG.cameraDistance;
+  camera.position.set(0, 50, CONFIG.cameraDistance);
   
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer = new THREE.WebGLRenderer({ 
+    antialias: true, 
+    alpha: true,
+    powerPreference: "high-performance"
+  });
   renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   container.appendChild(renderer.domElement);
+  
+  // Post-processing
+  composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(container.clientWidth, container.clientHeight),
+    CONFIG.bloomStrength,
+    CONFIG.bloomRadius,
+    CONFIG.bloomThreshold
+  );
+  composer.addPass(bloomPass);
   
   clock = new THREE.Clock();
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
   
-  // Initialize audio on first interaction
-  container.addEventListener('click', initAudio, { once: true });
-  
-  // Create galaxy groups
+  // Groups
   galaxyGroup = new THREE.Group();
   skillGroup = new THREE.Group();
   nebulaGroup = new THREE.Group();
@@ -192,20 +238,33 @@ export function initGalaxy(container, galaxyData, options = {}) {
   scene.add(skillGroup);
   scene.add(nebulaGroup);
   
-  // Build the galaxy
+  // Build galaxy
   createStarfield();
   createNebulae(galaxyData.nebulae);
   createSkillStars(galaxyData.skills);
   createJobOrbs(galaxyData.jobs);
   createConnections(galaxyData.jobs, galaxyData.skills);
   
-  // Event listeners
+  // Minimap
+  createMinimap();
+  
+  // Events
   container.addEventListener('mousemove', onMouseMove);
   container.addEventListener('click', onMouseClick);
   container.addEventListener('wheel', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  container.addEventListener('click', initAudio, { once: true });
   
-  // Start animation
+  // Search
+  const searchInput = document.getElementById('galaxy-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.toLowerCase();
+      updateSearchHighlights();
+    });
+  }
+  
+  // Start
   animate();
   
   return {
@@ -216,86 +275,87 @@ export function initGalaxy(container, galaxyData, options = {}) {
 }
 
 // ============================================================
-// AUDIO DESIGN
+// AUDIO
 // ============================================================
 
 function initAudio() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  playAmbientDrone();
+  startAmbientDrone();
 }
 
-function playAmbientDrone() {
+function startAmbientDrone() {
   if (!audioCtx) return;
   
-  // Create a subtle ambient drone
-  const oscillator = audioCtx.createOscillator();
+  ambientOsc = audioCtx.createOscillator();
   const gainNode = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
   
-  oscillator.type = 'sine';
-  oscillator.frequency.value = 80; // Deep bass
+  ambientOsc.type = 'sine';
+  ambientOsc.frequency.value = 60;
   
   filter.type = 'lowpass';
-  filter.frequency.value = 200;
+  filter.frequency.value = 150;
   
-  gainNode.gain.value = 0.03; // Very quiet
+  gainNode.gain.value = 0.025;
   
-  oscillator.connect(filter);
+  ambientOsc.connect(filter);
   filter.connect(gainNode);
   gainNode.connect(audioCtx.destination);
   
-  oscillator.start();
+  ambientOsc.start();
   
-  // Slowly modulate frequency
+  // Slow modulation
   setInterval(() => {
-    const freq = 60 + Math.random() * 40;
-    oscillator.frequency.exponentialRampToValueAtTime(freq, audioCtx.currentTime + 2);
-  }, 3000);
+    const freq = 50 + Math.random() * 30;
+    if (ambientOsc) {
+      ambientOsc.frequency.exponentialRampToValueAtTime(freq, audioCtx.currentTime + 3);
+    }
+  }, 4000);
 }
 
 function playHoverSound() {
   if (!audioCtx) return;
   
-  const oscillator = audioCtx.createOscillator();
-  const gainNode = audioCtx.createGain();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
   
-  oscillator.type = 'sine';
-  oscillator.frequency.value = 800;
+  osc.type = 'sine';
+  osc.frequency.value = 800 + Math.random() * 200;
   
-  gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+  gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
   
-  oscillator.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
   
-  oscillator.start();
-  oscillator.stop(audioCtx.currentTime + 0.3);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.2);
 }
 
 function playWarpSound() {
   if (!audioCtx) return;
   
-  const oscillator = audioCtx.createOscillator();
-  const gainNode = audioCtx.createGain();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
   
-  oscillator.type = 'sawtooth';
-  oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(2000, audioCtx.currentTime + 0.5);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.8);
   
   filter.type = 'lowpass';
-  filter.frequency.value = 1000;
+  filter.frequency.value = 800;
   
-  gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.0);
+  gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
   
-  oscillator.connect(filter);
-  filter.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
   
-  oscillator.start();
-  oscillator.stop(audioCtx.currentTime + 1.0);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 1.2);
 }
 
 // ============================================================
@@ -304,66 +364,71 @@ function playWarpSound() {
 
 function createStarfield() {
   const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(GALAXY_CONFIG.particleCount * 3);
-  const colors = new Float32Array(GALAXY_CONFIG.particleCount * 3);
+  const positions = new Float32Array(CONFIG.particleCount * 3);
+  const colors = new Float32Array(CONFIG.particleCount * 3);
+  const sizes = new Float32Array(CONFIG.particleCount);
   
-  for (let i = 0; i < GALAXY_CONFIG.particleCount; i++) {
+  for (let i = 0; i < CONFIG.particleCount; i++) {
     const i3 = i * 3;
-    positions[i3] = (Math.random() - 0.5) * 1000;
-    positions[i3 + 1] = (Math.random() - 0.5) * 1000;
-    positions[i3 + 2] = (Math.random() - 0.5) * 1000;
+    positions[i3] = (Math.random() - 0.5) * 1500;
+    positions[i3 + 1] = (Math.random() - 0.5) * 1500;
+    positions[i3 + 2] = (Math.random() - 0.5) * 1500;
     
-    // Subtle color variation
-    colors[i3] = 0.8 + Math.random() * 0.2;
-    colors[i3 + 1] = 0.8 + Math.random() * 0.2;
-    colors[i3 + 2] = 0.9 + Math.random() * 0.1;
+    colors[i3] = 0.7 + Math.random() * 0.3;
+    colors[i3 + 1] = 0.7 + Math.random() * 0.3;
+    colors[i3 + 2] = 0.8 + Math.random() * 0.2;
+    
+    sizes[i] = Math.random() * 2;
   }
   
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
   
   const material = new THREE.PointsMaterial({
     size: 1.5,
     vertexColors: true,
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
   });
   
-  const stars = new THREE.Points(geometry, material);
-  scene.add(stars);
+  particleSystem = new THREE.Points(geometry, material);
+  scene.add(particleSystem);
 }
 
 function createNebulae(nebulaData) {
-  nebulaData.forEach((nebula, idx) => {
-    const geometry = new THREE.SphereGeometry(30, 32, 32);
+  nebulaData.forEach((nebula) => {
+    const geometry = new THREE.SphereGeometry(40, 32, 32);
     const material = new THREE.ShaderMaterial({
       vertexShader: NEBULA_VERTEX_SHADER,
       fragmentShader: NEBULA_FRAGMENT_SHADER,
       uniforms: {
         uColor: { value: new THREE.Color(nebula.color) },
-        uOpacity: { value: 0.15 },
+        uOpacity: { value: 0.2 },
         uTime: { value: 0 },
       },
       transparent: true,
       side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
     });
     
-    const nebulaMesh = new THREE.Mesh(geometry, material);
-    nebulaMesh.position.set(
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(
       nebula.position[0],
       nebula.position[1],
       nebula.position[2]
     );
-    nebulaMesh.userData = { type: 'nebula', data: nebula };
+    mesh.userData = { type: 'nebula', data: nebula };
     
-    nebulaGroup.add(nebulaMesh);
-    nebulae.push(nebulaMesh);
+    nebulaGroup.add(mesh);
+    nebulae.push(mesh);
   });
 }
 
 function createSkillStars(skillData) {
   skillData.forEach((skill) => {
-    const geometry = new THREE.SphereGeometry(2, 16, 16);
+    const geometry = new THREE.SphereGeometry(2.5, 16, 16);
     const material = new THREE.MeshBasicMaterial({
       color: 0xFFFFFF,
     });
@@ -376,8 +441,8 @@ function createSkillStars(skillData) {
     );
     star.userData = { type: 'skill', data: skill };
     
-    // Add glow
-    const glowGeometry = new THREE.SphereGeometry(4, 16, 16);
+    // Glow
+    const glowGeometry = new THREE.SphereGeometry(5, 16, 16);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0xFFFFFF,
       transparent: true,
@@ -399,8 +464,10 @@ function createJobOrbs(jobData) {
       fragmentShader: JOB_FRAGMENT_SHADER,
       uniforms: {
         uColor: { value: new THREE.Color(job.color) },
-        uIntensity: { value: GALAXY_CONFIG.glowIntensity },
+        uIntensity: { value: 1.5 },
         uTime: { value: 0 },
+        uHover: { value: 0 },
+        uSearchMatch: { value: 0 },
       },
     });
     
@@ -410,14 +477,14 @@ function createJobOrbs(jobData) {
       job.position[1],
       job.position[2]
     );
-    orb.userData = { type: 'job', data: job };
+    orb.userData = { type: 'job', data: job, originalColor: job.color };
     
-    // Add outer glow ring
-    const ringGeometry = new THREE.RingGeometry(job.size * 1.5, job.size * 2, 32);
+    // Outer glow ring
+    const ringGeometry = new THREE.RingGeometry(job.size * 1.8, job.size * 2.5, 32);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: job.color,
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.25,
       side: THREE.DoubleSide,
     });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
@@ -442,22 +509,44 @@ function createConnections(jobData, skillData) {
       
       if (!jobOrb || !skillStar) return;
       
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        jobOrb.position,
-        skillStar.position,
-      ]);
+      // Create particle trail
+      const trailLength = 20;
+      const trailGeometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(trailLength * 3);
       
-      const material = new THREE.LineBasicMaterial({
+      for (let i = 0; i < trailLength; i++) {
+        const t = i / (trailLength - 1);
+        positions[i * 3] = jobOrb.position.x + (skillStar.position.x - jobOrb.position.x) * t;
+        positions[i * 3 + 1] = jobOrb.position.y + (skillStar.position.y - jobOrb.position.y) * t;
+        positions[i * 3 + 2] = jobOrb.position.z + (skillStar.position.z - jobOrb.position.z) * t;
+      }
+      
+      trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      
+      const trailMaterial = new THREE.LineBasicMaterial({
         color: job.color,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.4,
       });
       
-      const line = new THREE.Line(geometry, material);
-      galaxyGroup.add(line);
-      connections.push(line);
+      const trail = new THREE.Line(trailGeometry, trailMaterial);
+      galaxyGroup.add(trail);
+      connections.push(trail);
     });
   });
+}
+
+function createMinimap() {
+  const minimapContainer = document.getElementById('minimap');
+  if (!minimapContainer) return;
+  
+  minimapCamera = new THREE.OrthographicCamera(-200, 200, 200, -200, 0.1, 1000);
+  minimapCamera.position.set(0, 400, 0);
+  minimapCamera.lookAt(0, 0, 0);
+  
+  minimapRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  minimapRenderer.setSize(150, 150);
+  minimapContainer.appendChild(minimapRenderer.domElement);
 }
 
 // ============================================================
@@ -469,7 +558,6 @@ function onMouseMove(event) {
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   
-  // Raycast
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObjects([...jobs, ...skills]);
   
@@ -479,20 +567,20 @@ function onMouseMove(event) {
     if (hoveredObject !== object) {
       // Reset previous
       if (hoveredObject) {
+        hoveredObject.material.uniforms.uHover.value = 0;
         hoveredObject.scale.set(1, 1, 1);
       }
       
-      // Highlight new
       hoveredObject = object;
-      hoveredObject.scale.set(1.2, 1.2, 1.2);
+      hoveredObject.material.uniforms.uHover.value = 1;
+      hoveredObject.scale.set(1.3, 1.3, 1.3);
       
       playHoverSound();
-      
-      // Show tooltip
       showTooltip(object.userData.data);
     }
   } else {
     if (hoveredObject) {
+      hoveredObject.material.uniforms.uHover.value = 0;
       hoveredObject.scale.set(1, 1, 1);
       hoveredObject = null;
       hideTooltip();
@@ -516,9 +604,9 @@ function onMouseClick(event) {
 }
 
 function onScroll(event) {
-  const zoomSpeed = 0.1;
+  const zoomSpeed = 0.15;
   camera.position.z += event.deltaY * zoomSpeed;
-  camera.position.z = Math.max(100, Math.min(500, camera.position.z));
+  camera.position.z = Math.max(80, Math.min(600, camera.position.z));
 }
 
 function onResize() {
@@ -526,6 +614,7 @@ function onResize() {
   camera.aspect = container.clientWidth / container.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);
+  composer.setSize(container.clientWidth, container.clientHeight);
 }
 
 // ============================================================
@@ -535,19 +624,30 @@ function onResize() {
 function warpToJob(orb) {
   const targetPosition = orb.position.clone();
   const startPosition = camera.position.clone();
-  const duration = 1500;
+  const duration = 2000;
   const startTime = Date.now();
+  
+  warpTarget = orb;
+  warpProgress = 0;
   
   function animateWarp() {
     const elapsed = Date.now() - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+    warpProgress = progress;
+    
+    // Ease in-out cubic
+    const easeProgress = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
     
     camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
-    camera.position.z += 30; // Stay a bit back
+    camera.position.z += 40;
+    camera.lookAt(targetPosition);
     
     if (progress < 1) {
       requestAnimationFrame(animateWarp);
+    } else {
+      warpTarget = null;
     }
   }
   
@@ -557,7 +657,7 @@ function warpToJob(orb) {
 function focusOnSkill(star) {
   const targetPosition = star.position.clone();
   const startPosition = camera.position.clone();
-  const duration = 1000;
+  const duration = 1500;
   const startTime = Date.now();
   
   function animateFocus() {
@@ -566,7 +666,8 @@ function focusOnSkill(star) {
     const easeProgress = 1 - Math.pow(1 - progress, 2);
     
     camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
-    camera.position.z += 50;
+    camera.position.z += 60;
+    camera.lookAt(targetPosition);
     
     if (progress < 1) {
       requestAnimationFrame(animateFocus);
@@ -589,55 +690,50 @@ function showTooltip(data) {
       position: fixed;
       background: rgba(12, 59, 67, 0.95);
       color: #F6F0E6;
-      padding: 12px 16px;
-      border-radius: 8px;
+      padding: 14px 18px;
+      border-radius: 10px;
       font-family: 'Inter', sans-serif;
       font-size: 14px;
       pointer-events: none;
       z-index: 1000;
-      max-width: 300px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-      backdrop-filter: blur(10px);
+      max-width: 320px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(233, 162, 59, 0.3);
     `;
     document.body.appendChild(tooltip);
   }
   
   if (data.title) {
     tooltip.innerHTML = `
-      <strong>${data.title}</strong><br>
-      <span style="opacity: 0.7">${data.employer}</span><br>
-      <span style="color: #E9A23B">Match: ${(data.match_score * 100).toFixed(0)}%</span>
+      <strong style="font-size:16px;">${data.title}</strong><br>
+      <span style="opacity:0.7;font-size:13px;">${data.employer}</span><br>
+      <span style="color:#E9A23B;font-weight:600;margin-top:4px;display:inline-block;">Match: ${(data.match_score * 100).toFixed(0)}%</span>
     `;
   } else if (data.name) {
     tooltip.innerHTML = `
-      <strong>${data.name}</strong><br>
-      <span style="opacity: 0.7">${data.connections} connections</span>
+      <strong style="font-size:16px;">${data.name}</strong><br>
+      <span style="opacity:0.7;font-size:13px;">${data.connections} connections</span>
     `;
   }
   
   tooltip.style.display = 'block';
-  tooltip.style.left = (event.clientX + 15) + 'px';
-  tooltip.style.top = (event.clientY + 15) + 'px';
+  tooltip.style.left = (event.clientX + 18) + 'px';
+  tooltip.style.top = (event.clientY + 18) + 'px';
 }
 
 function hideTooltip() {
   const tooltip = document.getElementById('galaxy-tooltip');
-  if (tooltip) {
-    tooltip.style.display = 'none';
-  }
+  if (tooltip) tooltip.style.display = 'none';
 }
 
 function showJobDetail(job) {
-  // Create modal
   const modal = document.createElement('div');
   modal.id = 'job-detail-modal';
   modal.style.cssText = `
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(12, 59, 67, 0.9);
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 10, 10, 0.92);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -647,41 +743,35 @@ function showJobDetail(job) {
   
   modal.innerHTML = `
     <div style="
-      background: rgba(246, 240, 230, 0.95);
-      padding: 40px;
-      border-radius: 20px;
-      max-width: 600px;
-      width: 90%;
-      max-height: 80vh;
+      background: rgba(246, 240, 230, 0.98);
+      padding: 48px;
+      border-radius: 24px;
+      max-width: 640px;
+      width: 92%;
+      max-height: 85vh;
       overflow-y: auto;
       color: #242424;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
     ">
-      <h2 style="font-family: 'Fraunces', serif; font-size: 32px; margin-bottom: 10px;">${job.title}</h2>
-      <p style="font-size: 18px; color: #666; margin-bottom: 20px;">${job.employer}</p>
-      <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+      <h2 style="font-family:'Fraunces',serif;font-size:36px;margin-bottom:12px;">${job.title}</h2>
+      <p style="font-size:19px;color:#666;margin-bottom:24px;">${job.employer}</p>
+      <div style="display:flex;gap:24px;margin-bottom:36px;flex-wrap:wrap;">
         <div>
-          <strong>Match Score</strong><br>
-          <span style="font-size: 24px; color: #E9A23B;">${(job.match_score * 100).toFixed(0)}%</span>
+          <strong style="font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#999;">Match Score</strong><br>
+          <span style="font-size:28px;color:#E9A23B;font-weight:700;">${(job.match_score * 100).toFixed(0)}%</span>
         </div>
-        ${job.salary ? `<div><strong>Salary</strong><br><span style="font-size: 24px;">KES ${job.salary.toLocaleString()}</span></div>` : ''}
+        ${job.salary ? `<div><strong style="font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#999;">Salary</strong><br><span style="font-size:28px;font-weight:700;">KES ${job.salary.toLocaleString()}</span></div>` : ''}
       </div>
-      <div style="display: flex; gap: 10px; margin-bottom: 30px;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <a href="/job/${job.id}" style="
-          background: #E9A23B;
-          color: #0C3B43;
-          padding: 12px 24px;
-          border-radius: 30px;
-          text-decoration: none;
-          font-weight: 600;
-        ">View Job</a>
+          background:#E9A23B;color:#0C3B43;padding:14px 28px;border-radius:30px;
+          text-decoration:none;font-weight:700;font-size:15px;
+          transition:all 0.2s;
+        ">View Full Job</a>
         <button onclick="closeJobModal()" style="
-          background: transparent;
-          border: 2px solid #0C3B43;
-          color: #0C3B43;
-          padding: 12px 24px;
-          border-radius: 30px;
-          cursor: pointer;
-          font-weight: 600;
+          background:transparent;border:2px solid #0C3B43;color:#0C3B43;
+          padding:14px 28px;border-radius:30px;cursor:pointer;font-weight:700;font-size:15px;
+          transition:all 0.2s;
         ">Close</button>
       </div>
     </div>
@@ -692,13 +782,22 @@ function showJobDetail(job) {
 
 window.closeJobModal = function() {
   const modal = document.getElementById('job-detail-modal');
-  if (modal) {
-    modal.remove();
-  }
+  if (modal) modal.remove();
 };
 
+function updateSearchHighlights() {
+  jobs.forEach(orb => {
+    const job = orb.userData.data;
+    const matches = searchQuery && (
+      job.title.toLowerCase().includes(searchQuery) ||
+      job.employer.toLowerCase().includes(searchQuery)
+    );
+    orb.material.uniforms.uSearchMatch.value = matches ? 1 : 0;
+  });
+}
+
 // ============================================================
-// ANIMATION LOOP
+// ANIMATION
 // ============================================================
 
 function animate() {
@@ -706,31 +805,37 @@ function animate() {
   
   const elapsed = clock.getElapsedTime();
   
-  // Rotate galaxy slowly
-  galaxyGroup.rotation.y += GALAXY_CONFIG.rotationSpeed;
-  skillGroup.rotation.y -= GALAXY_CONFIG.rotationSpeed * 0.5;
+  // Rotate groups
+  galaxyGroup.rotation.y += CONFIG.rotationSpeed;
+  skillGroup.rotation.y -= CONFIG.rotationSpeed * 0.5;
   
   // Update shader uniforms
   jobs.forEach(orb => {
-    if (orb.material.uniforms) {
-      orb.material.uniforms.uTime.value = elapsed;
-    }
+    orb.material.uniforms.uTime.value = elapsed;
   });
   
   nebulae.forEach(nebula => {
-    if (nebula.material.uniforms) {
-      nebula.material.uniforms.uTime.value = elapsed;
-    }
+    nebula.material.uniforms.uTime.value = elapsed;
   });
   
-  // Autopilot mode: slowly rotate camera
-  if (autopilotMode) {
-    camera.position.x = Math.sin(elapsed * 0.1) * GALAXY_CONFIG.cameraDistance;
-    camera.position.z = Math.cos(elapsed * 0.1) * GALAXY_CONFIG.cameraDistance;
+  // Autopilot
+  if (autopilotMode && !warpTarget) {
+    autopilotTime += 0.001;
+    camera.position.x = Math.sin(autopilotTime) * CONFIG.cameraDistance;
+    camera.position.z = Math.cos(autopilotTime) * CONFIG.cameraDistance;
+    camera.position.y = Math.sin(autopilotTime * 0.5) * 30;
     camera.lookAt(0, 0, 0);
   }
   
-  renderer.render(scene, camera);
+  // Render
+  composer.render();
+  
+  // Minimap
+  if (minimapRenderer && minimapCamera) {
+    minimapCamera.position.x = camera.position.x;
+    minimapCamera.position.z = camera.position.z;
+    minimapRenderer.render(scene, minimapCamera);
+  }
 }
 
 // ============================================================
@@ -738,23 +843,12 @@ function animate() {
 // ============================================================
 
 function updateGalaxy(newData) {
-  // Clear existing
-  while (galaxyGroup.children.length > 0) {
-    galaxyGroup.remove(galaxyGroup.children[0]);
-  }
-  while (skillGroup.children.length > 0) {
-    skillGroup.remove(skillGroup.children[0]);
-  }
-  while (nebulaGroup.children.length > 0) {
-    nebulaGroup.remove(nebulaGroup.children[0]);
-  }
+  while (galaxyGroup.children.length > 0) galaxyGroup.remove(galaxyGroup.children[0]);
+  while (skillGroup.children.length > 0) skillGroup.remove(skillGroup.children[0]);
+  while (nebulaGroup.children.length > 0) nebulaGroup.remove(nebulaGroup.children[0]);
   
-  jobs = [];
-  skills = [];
-  nebulae = [];
-  connections = [];
+  jobs = []; skills = []; nebulae = []; connections = [];
   
-  // Rebuild
   createNebulae(newData.nebulae);
   createSkillStars(newData.skills);
   createJobOrbs(newData.jobs);
