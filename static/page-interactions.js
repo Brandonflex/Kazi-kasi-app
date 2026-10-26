@@ -82,12 +82,19 @@ window.addEventListener('scroll', () => {
   const overlay = document.getElementById('page-loading-overlay');
   if (!overlay) return;
 
-  window.addEventListener('load', function() {
+  // Hide overlay when DOM is ready (faster than 'load' which waits for images/fonts)
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    hideOverlay();
+  } else {
+    document.addEventListener('DOMContentLoaded', hideOverlay);
+  }
+
+  function hideOverlay() {
     setTimeout(function() {
       overlay.style.opacity = '0';
       setTimeout(function() { overlay.style.display = 'none'; }, 300);
-    }, 200);
-  });
+    }, 150);
+  }
 
   document.addEventListener('click', function(e) {
     const link = e.target.closest('a');
