@@ -1364,6 +1364,8 @@ header > * { position: relative; z-index: 1 }
 }
 
 
+#page-loading-overlay { display: none; }
+
 /* 3D Tilt Effect */
 [data-tilt] {
   transform-style: preserve-3d;
@@ -1844,7 +1846,7 @@ def _page(
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
 <title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script><script src="/static/loading-states.js" defer></script></head>
 <body>
-<div id="page-loading-overlay" class="loading-overlay" style="display:none"><div class="loading-spinner"></div><div class="loading-message">Loading...</div></div>
+<div id="page-loading-overlay" class="loading-overlay"><div class="loading-spinner"></div><div class="loading-message">Loading...</div></div>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi - jobs you can reach">
@@ -1861,124 +1863,7 @@ Eligibility labels quote the advert. Applications happen on the employer's site,
 <p class="ops">Ops: <a href="/slo">freshness</a> - <a href="/review">review queue</a> -
 <a href="/salaries">advertised pay</a> - <a href="/setup">go-live</a></p>
 {demo_line}</footer>
-<script>
-// Scroll-triggered reveal animations
-(function() {{
-  // Fallback: if IntersectionObserver not supported, show all elements
-  if (!('IntersectionObserver' in window)) {{
-    document.querySelectorAll('.reveal').forEach(function(el) {{
-      el.classList.add('in');
-    }});
-    return;
-  }}
-  
-  const observer = new IntersectionObserver((entries) => {{
-    entries.forEach(entry => {{
-      if (entry.isIntersecting) {{
-        entry.target.classList.add('in');
-        observer.unobserve(entry.target);
-      }}
-    }});
-  }}, {{ threshold: 0.1, rootMargin: '0px 0px -50px 0px' }});
-  
-  // Observe all reveal elements
-  const elements = document.querySelectorAll('.reveal');
-  elements.forEach(el => observer.observe(el));
-  
-  // Immediately check which elements are in viewport and mark them
-  // This ensures above-the-fold content is visible right away
-  requestAnimationFrame(() => {{
-    elements.forEach(el => {{
-      const rect = el.getBoundingClientRect();
-      if (rect.top < window.innerHeight && rect.bottom > 0) {{
-        el.classList.add('in');
-        observer.unobserve(el);
-      }}
-    }});
-  }});
-}})();
-
-// Header scroll state
-window.addEventListener('scroll', () => {{
-  document.querySelector('header').classList.toggle('scrolled', window.scrollY > 10);
-}}, {{ passive: true }});
-
-// 3D tilt effect on cards
-(function() {{
-  const tiltElements = document.querySelectorAll('[data-tilt]');
-  if (!tiltElements.length) return;
-  
-  tiltElements.forEach(el => {{
-    el.addEventListener('mousemove', (e) => {{
-      const rect = el.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = ((y - centerY) / centerY) * -6;
-      const rotateY = ((x - centerX) / centerX) * 6;
-      el.style.transform = `perspective(600px) rotateX(${{rotateX}}deg) rotateY(${{rotateY}}deg) translateY(-2px)`;
-    }});
-    
-    el.addEventListener('mouseleave', () => {{
-      el.style.transform = 'perspective(600px) rotateX(0) rotateY(0) translateY(0)';
-    }});
-  }});
-  
-  // Also add subtle tilt to job cards on hover
-  const cards = document.querySelectorAll('.card');
-  cards.forEach(card => {{
-    card.addEventListener('mousemove', (e) => {{
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = ((y - centerY) / centerY) * -3;
-      const rotateY = ((x - centerX) / centerX) * 3;
-      card.style.transform = `perspective(1000px) rotateX(${{rotateX}}deg) rotateY(${{rotateY}}deg) translateY(-3px)`;
-    }});
-    
-    card.addEventListener('mouseleave', () => {{
-      card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(0)';
-    }});
-  }});
-}})();
-
-// Loading state wiring
-(function() {{
-  var overlay = document.getElementById('page-loading-overlay');
-  if (!overlay) return;
-  
-  // Hide overlay when page fully loads
-  window.addEventListener('load', function() {{
-    setTimeout(function() {{
-      overlay.style.opacity = '0';
-      setTimeout(function() {{ overlay.style.display = 'none'; }}, 300);
-    }}, 200);
-  }});
-  
-  // Show overlay on internal link clicks
-  document.addEventListener('click', function(e) {{
-    var link = e.target.closest('a');
-    if (!link || !link.href) return;
-    if (link.target || link.href.indexOf('#') === link.href.length - 1) return;
-    if (link.href.indexOf(window.location.origin) !== 0 && link.href.indexOf('/') !== 0) return;
-    if (link.classList.contains('no-loading')) return;
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '1';
-  }});
-  
-  // Show overlay on form submits
-  document.addEventListener('submit', function(e) {{
-    var form = e.target.closest('form');
-    if (!form) return;
-    if (form.method && form.method.toLowerCase() === 'get') return;
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '1';
-  }});
-}})();
-</script>
+<script src="/static/page-interactions.js" defer></script>
 
 
 </body></html>"""
@@ -2750,6 +2635,7 @@ STYLE_HASH = _inline_hash(STYLE)
 SCRIPT_HASH = _inline_hash(PALETTE_JS)
 COPY_HASH = _inline_hash(COPY_JS)
 ERROR_STYLE_HASH = _inline_hash(ERROR_STYLE)
+NOSCRIPT_STYLE_HASH = _inline_hash(".reveal { opacity: 1 !important; transform: none !important; }")
 
 
 def security_headers(*, https: bool | None = None) -> dict[str, str]:
@@ -2765,11 +2651,13 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
         "Content-Security-Policy": "; ".join(
             [
                 "default-src 'none'",
-                # Inline styles (from STYLE and ERROR_STYLE hashes) + external stylesheets from self + Google Fonts + inline style attributes
-                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}' 'self' https://fonts.googleapis.com 'unsafe-inline'",
-                # Inline scripts (PALETTE_JS, COPY_JS hashes) + external scripts from self
+                # Inline style hashes + external stylesheets from self + Google Fonts
+                # 'unsafe-hashes' needed alongside hashes for inline style attributes (Chrome quirk)
+                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}' '{NOSCRIPT_STYLE_HASH}' 'self' https://fonts.googleapis.com 'unsafe-hashes'",
+                # Inline script hashes (PALETTE_JS, COPY_JS) + external scripts from self
                 f"script-src '{SCRIPT_HASH}' '{COPY_HASH}' 'self'",
-                "img-src 'self' data:",
+                # Images from self + data URIs + Google profile pictures + favicons
+                "img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com",
                 # Fonts from self + Google Fonts CDN
                 "font-src 'self' https://fonts.gstatic.com",
                 "connect-src 'self'",
