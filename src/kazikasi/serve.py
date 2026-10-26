@@ -6153,6 +6153,10 @@ class _Handler(BaseHTTPRequestHandler):
         # Redirects skip COOP: it's meant for pages with sensitive content, not
         # for 303s that are part of an OAuth flow coming back from Google.
         policy = security_headers(https=False)
+        # If the response has its own CSP header, use that instead of the
+        # standard one (e.g. the galaxy page needs different permissions).
+        if "Content-Security-Policy" in response.headers:
+            policy = {k: v for k, v in policy.items() if k != "Content-Security-Policy"}
         if response.is_redirect:
             policy = {k: v for k, v in policy.items() if k != "Cross-Origin-Opener-Policy"}
             self.send_response(response.status)
