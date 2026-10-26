@@ -472,18 +472,21 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 .stat-number {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--nairobi-dark);
   line-height: 1;
+  display: block;
+  margin-bottom: 8px;
 }
 .stat-label {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   font-weight: 600;
-  margin-top: 6px;
+  display: block;
+  margin-top: 0;
 }
 .stat-card:nth-child(1) .stat-number { color: var(--ember-gold) }
 .stat-card:nth-child(2) .stat-number { color: var(--safari-green) }
@@ -589,19 +592,30 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 
 /* Company initial badge */
 .company-initial {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--nairobi-dark) 0%, var(--safari-green) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--akala-bone);
   flex: none;
   box-shadow: var(--shadow-sm);
+  margin-top: 4px;
+}
+
+.card h2 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.card .employer {
+  margin-bottom: 10px;
 }
 
 .salary {
@@ -750,23 +764,24 @@ button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--embe
   background: var(--surface-elevated);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px 20px;
+  padding: 20px;
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--duration) var(--ease-out);
+  margin-bottom: 16px;
 }
 .rail-card:hover { box-shadow: var(--shadow) }
 .rail-card h3 {
-  margin: 0 0 10px;
-  font-size: 10px;
-  letter-spacing: .18em;
+  margin: 0 0 14px;
+  font-size: 11px;
+  letter-spacing: .15em;
   text-transform: uppercase;
   color: var(--ember-gold);
   font-family: var(--font-sans);
   font-weight: 700;
 }
-.rail-card .chips { display: flex; gap: 5px; flex-wrap: wrap }
-.rail-note { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.5 }
-.rail-card .more { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--ember-gold); text-decoration: none; transition: color var(--duration-fast) }
+.rail-card .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px }
+.rail-note { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6 }
+.rail-card .more { display: inline-block; margin-top: 12px; margin-right: 12px; font-size: 13px; font-weight: 600; color: var(--ember-gold); text-decoration: none; transition: color var(--duration-fast) }
 .rail-card .more:hover { color: var(--ember-gold) }
 
 /* Momentum dots */
