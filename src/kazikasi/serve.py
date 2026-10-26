@@ -6285,12 +6285,37 @@ def _handle_get(
 
 
     if path in ("/", "/index.html"):
-        # Landing page with sign in/up/guest options
-        return Response(200, render_landing_page(demo=demo,
-            notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good")),
-            "text/html; charset=utf-8")
+        # Check if user is authenticated
+        account = _account_for(conn, headers)
+        if account is None:
+            # Unauthenticated: show landing page
+            return Response(200, render_landing_page(demo=demo,
+                notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good")),
+                "text/html; charset=utf-8")
+        
+        # Authenticated: go straight to the galaxy (the full experience)
+        # The galaxy IS Kazi-Kasi - feed, tracker, everything integrated
+        verse_csp = "; ".join([
+            "default-src 'none'",
+            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+            "script-src 'self' https://esm.sh https://vercel.live 'unsafe-inline'",
+            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+        ])
+        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
+            headers={"Content-Security-Policy": verse_csp})
 
     if path == "/feed":
+        # /feed now redirects to / (the galaxy IS the feed)
+        return Response(303, "", headers={"Location": "/"})
+
+    if path in ("/shortlist", "/tracker"):
+        # These are now integrated into the galaxy
+        return Response(303, "", headers={"Location": "/"})
         seen = read_seen(headers)
         account = _account_for(conn, headers)
         page = render_feed(
@@ -6515,13 +6540,13 @@ def _auth_callback(conn, provider, query: dict, *, demo: bool, now: datetime) ->
     except Exception as exc:  # noqa: BLE001 - the provider's error is the message
         return _redirect(f"/signin?notice={quote('Sign-in failed: ' + str(exc)[:120])}&tone=bad")
     account = accounts.sign_in(conn, provider.key, identity, now=now)
-    return _redirect("/account", cookie=accounts.session_cookie(account["id"], now))
+    return _redirect("/", cookie=accounts.session_cookie(account["id"], now))
 
 
 def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo: bool, now: datetime) -> Response:
     if path == "/auth/guest":
         account = accounts.guest(conn, now=now)
-        return _redirect("/account?guest=1", cookie=accounts.session_cookie(account["id"], now))
+        return _redirect("/", cookie=accounts.session_cookie(account["id"], now))
 
     if path == "/auth/demo":
         form = parse_qs(body.decode("utf-8", errors="replace"))
@@ -6537,7 +6562,7 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
             },
             now=now,
         )
-        return _redirect("/account", cookie=accounts.session_cookie(account["id"], now))
+        return _redirect("/", cookie=accounts.session_cookie(account["id"], now))
 
     if path == "/auth/signout":
         return _redirect(
@@ -6562,16 +6587,16 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
         # Check for PDF parsing errors
         if text.startswith("__PDF_ERROR__"):
             error_detail = text.split(":", 1)[1] if ":" in text else "Unknown error"
-            return _redirect(f"/account?error={quote(f'Could not read that PDF. The file may be corrupted, password-protected, or a scanned image. Try pasting the text directly or uploading a .txt file.')}")
+            return _redirect(f"/?error={quote(f'Could not read that PDF. The file may be corrupted, password-protected, or a scanned image. Try pasting the text directly or uploading a .txt file.')}")
         if text == "__PDF_NO_TEXT__":
-            return _redirect(f"/account?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
+            return _redirect(f"/?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
         
         if not text.strip():
-            return _redirect(f"/account?error={quote('No CV text found - paste the text or upload a .txt, .md or .pdf.')}")
+            return _redirect(f"/?error={quote('No CV text found - paste the text or upload a .txt, .md or .pdf.')}")
         fields = autofill.parse(text)
         accounts.store_cv(conn, account["id"], filename=filename, text=text, fields=fields, now=now)
         accounts.touch(conn, account["id"], now=now)
-        return _redirect("/account?saved=1")
+        return _redirect("/?saved=1")
 
     return Response(404, "not found", "text/plain; charset=utf-8")
 
