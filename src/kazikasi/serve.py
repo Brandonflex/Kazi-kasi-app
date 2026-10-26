@@ -1835,9 +1835,9 @@ def _page(
     demo_line = f'<div class="small mt6">demo build {_e(build)}</div>' if demo else ""
     palette_html = _palette_markup(palette or [])
     links = nav or (
-        '<a href="/">Feed</a><a href="/shortlist">Shortlist</a>'
-        '<a href="/brief">Brief</a><a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
-        '<a href="/verse">3D Verse</a>'
+        '<a href="/">Galaxy</a><a href="/feed">Feed</a>'
+        '<a href="/shortlist">Shortlist</a><a href="/brief">Brief</a>'
+        '<a href="/pulse">Pulse</a><a href="/digest">WhatsApp</a>'
         '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
         'Jump <kbd>⌘K</kbd></button>'
     )
@@ -2209,7 +2209,6 @@ def render_feed(
     {score_html}
     <span>{_e(graph.freshness_band(row, now=now))}</span>
     {apply_html}
-    <a href="/verse?focus={_e(match.job_id)}" class="view-3d-link" title="View in 3D Verse">View in 3D</a>
   </div>
 </article>"""
         )
@@ -2270,7 +2269,6 @@ def render_feed(
       <div class="stat-card" data-tilt><span class="stat-number">{summary['live_jobs']}</span><span class="stat-label">Live jobs</span></div>
       <div class="stat-card" data-tilt><span class="stat-number">{summary['closing_within_7_days']}</span><span class="stat-label">Closing soon</span></div>
       <div class="stat-card" data-tilt><span class="stat-number">{len(acted)}</span><span class="stat-label">Applied</span></div>
-      <a href="/verse" class="stat-card stat-card-link" data-tilt><span class="stat-number" style="font-size:24px">3D</span><span class="stat-label">View Universe</span></a>
     </div>
     '''
 
@@ -5760,9 +5758,8 @@ def _handle_get(
         ))
 
     if path in ("/verse", "/galaxy"):
-        # The 3D verse has its own inline <style>, <script type="module">,
-        # and loads Three.js from cdn.jsdelivr.net. The standard CSP blocks
-        # all of these, so we supply a verse-specific policy.
+        # The 3D galaxy has inline styles, inline module scripts, and loads
+        # Three.js from CDN. Use a permissive policy for this page.
         verse_csp = "; ".join([
             "default-src 'none'",
             "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
@@ -5782,6 +5779,24 @@ def _handle_get(
 
 
     if path in ("/", "/index.html"):
+        # Default experience: 3D galaxy universe
+        # The 3D galaxy has inline styles, inline module scripts, and loads
+        # Three.js from CDN. Use a permissive policy for this page.
+        verse_csp = "; ".join([
+            "default-src 'none'",
+            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+        ])
+        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
+            headers={"Content-Security-Policy": verse_csp})
+
+    if path == "/feed":
         seen = read_seen(headers)
         account = _account_for(conn, headers)
         page = render_feed(
