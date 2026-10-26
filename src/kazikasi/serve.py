@@ -2210,7 +2210,7 @@ def _page(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0C3B43">
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
-<title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script><script src="/static/loading-states.js" defer></script></head>
+<title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
 <body>
 <div id="page-loading-overlay" class="loading-overlay">
   <div class="loading-spinner"></div>
@@ -2221,7 +2221,6 @@ def _page(
     <span></span>
   </div>
 </div>
-<noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi - jobs you can reach">
 {SCOPE_MARK}
@@ -2237,8 +2236,42 @@ Eligibility labels quote the advert. Applications happen on the employer's site,
 <p class="ops">Ops: <a href="/slo">freshness</a> - <a href="/review">review queue</a> -
 <a href="/salaries">advertised pay</a> - <a href="/setup">go-live</a></p>
 {demo_line}</footer>
-<script src="/static/page-interactions.js" defer></script>
 
+<script>
+(function() {{
+  var overlay = document.getElementById('page-loading-overlay');
+  if (!overlay) return;
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {{
+    hideOverlay();
+  }} else {{
+    document.addEventListener('DOMContentLoaded', hideOverlay);
+  }}
+  function hideOverlay() {{
+    setTimeout(function() {{
+      overlay.style.opacity = '0';
+      setTimeout(function() {{ overlay.style.display = 'none'; }}, 300);
+    }}, 150);
+  }}
+  document.addEventListener('click', function(e) {{
+    var link = e.target.closest('a');
+    if (!link || !link.href) return;
+    if (link.target) return;
+    if (link.href.indexOf('#') !== -1) return;
+    if (link.classList.contains('no-loading')) return;
+    var origin = window.location.origin;
+    if (link.href.indexOf(origin) !== 0 && link.href.indexOf('/') !== 0) return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  }});
+  document.addEventListener('submit', function(e) {{
+    var form = e.target.closest('form');
+    if (!form) return;
+    if (form.method && form.method.toLowerCase() === 'get') return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  }});
+}})();
+</script>
 
 </body></html>"""
 
@@ -3023,11 +3056,10 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
         "Content-Security-Policy": "; ".join(
             [
                 "default-src 'none'",
-                # Inline style hashes + external stylesheets from self + Google Fonts
-                # 'unsafe-hashes' needed alongside hashes for inline style attributes (Chrome quirk)
-                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}' '{NOSCRIPT_STYLE_HASH}' 'self' https://fonts.googleapis.com 'unsafe-hashes'",
-                # Inline script hashes (PALETTE_JS, COPY_JS) + external scripts from self
-                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}' 'self' https://vercel.live",
+                # Inline styles allowed (no hashes - Chrome ignores unsafe-inline when hashes present)
+                "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+                # Inline scripts allowed + external scripts from self + Vercel feedback
+                "script-src 'self' https://vercel.live 'unsafe-inline'",
                 # Images from self + data URIs + Google profile pictures + favicons
                 "img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com",
                 # Fonts from self + Google Fonts CDN
