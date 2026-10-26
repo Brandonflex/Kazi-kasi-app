@@ -5758,7 +5758,22 @@ def _handle_get(
         ))
 
     if path in ("/verse", "/galaxy"):
-        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8")
+        # The 3D verse has its own inline <style>, <script type="module">,
+        # and loads Three.js from cdn.jsdelivr.net. The standard CSP blocks
+        # all of these, so we supply a verse-specific policy.
+        verse_csp = "; ".join([
+            "default-src 'none'",
+            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'",
+            "img-src 'self' data: https://*.googleusercontent.com https://lh3.googleusercontent.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "base-uri 'none'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+        ])
+        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8",
+            headers={"Content-Security-Policy": verse_csp})
 
     if path == "/api/galaxy":
         return _handle_galaxy_api(conn, query, demo=demo, now=now)
