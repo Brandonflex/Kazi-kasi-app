@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Job Verse — Kazi-Kasi</title>
+  <meta name="theme-color" content="#0C3B43">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0a0a;
+      color: #F6F0E6;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    
+    #galaxy-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+    
+    /* Floating UI Layer */
+    #ui-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
+    
+    /* Top Bar */
+    .top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 24px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(10,10,10,0.8), transparent);
+      pointer-events: auto;
+    }
+    
+    .logo {
+      font-family: 'Fraunces', serif;
+      font-size: 24px;
+      font-weight: 600;
+      color: #E9A23B;
+      text-decoration: none;
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 32px;
+    }
+    
+    .nav-links a {
+      color: #F6F0E6;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
+    
+    .nav-links a:hover {
+      opacity: 1;
+      color: #E9A23B;
+    }
+    
+    .nav-links a.active {
+      color: #E9A23B;
+      opacity: 1;
+    }
+    
+    /* Info Panel */
+    .info-panel {
+      position: absolute;
+      top: 50%;
+      left: 40px;
+      transform: translateY(-50%);
+      max-width: 320px;
+      pointer-events: auto;
+    }
+    
+    .info-panel h1 {
+      font-family: 'Fraunces', serif;
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    
+    .info-panel h1 em {
+      font-style: italic;
+      color: #E9A23B;
+    }
+    
+    .info-panel p {
+      font-size: 15px;
+      line-height: 1.6;
+      opacity: 0.8;
+      margin-bottom: 24px;
+    }
+    
+    .stats-row {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .stat-number {
+      font-family: 'Fraunces', serif;
+      font-size: 28px;
+      font-weight: 600;
+      color: #E9A23B;
+    }
+    
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0.6;
+    }
+    
+    /* Controls */
+    .controls {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      pointer-events: auto;
+    }
+    
+    .control-btn {
+      background: rgba(233, 162, 59, 0.15);
+      border: 1px solid rgba(233, 162, 59, 0.3);
+      color: #E9A23B;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    .control-btn:hover {
+      background: rgba(233, 162, 59, 0.25);
+      border-color: #E9A23B;
+      transform: translateY(-2px);
+    }
+    
+    .control-btn.active {
+      background: #E9A23B;
+      color: #0C3B43;
+    }
+    
+    /* Legend */
+    .legend {
+      position: absolute;
+      bottom: 40px;
+      right: 40px;
+      background: rgba(12, 59, 67, 0.6);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-radius: 12px;
+      pointer-events: auto;
+    }
+    
+    .legend h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+      opacity: 0.7;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    
+    /* Loading */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: opacity 0.8s;
+    }
+    
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    .loading-text {
+      font-family: 'Fraunces', serif;
+      font-size: 24px;
+      color: #E9A23B;
+      margin-top: 20px;
+    }
+    
+    .loading-sub {
+      font-size: 13px;
+      opacity: 0.6;
+      margin-top: 8px;
+    }
+    
+    /* Instructions */
+    .instructions {
+      position: absolute;
+      top: 50%;
+      right: 40px;
+      transform: translateY(-50%);
+      max-width: 240px;
+      pointer-events: auto;
+    }
+    
+    .instructions h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+      opacity: 0.7;
+    }
+    
+    .instruction {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      opacity: 0.8;
+    }
+    
+    .instruction-icon {
+      width: 24px;
+      height: 24px;
+      background: rgba(233, 162, 59, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    
+    /* Scroll indicator */
+    .scroll-hint {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      opacity: 0.5;
+      text-align: center;
+    }
+    
+    .scroll-hint .arrow {
+      display: block;
+      margin-top: 8px;
+      animation: bounce 2s infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(8px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="loading-text">Entering the Job Verse...</div>
+    <div class="loading-sub">Loading 3D universe</div>
+  </div>
+  
+  <div id="galaxy-container"></div>
+  
+  <div id="ui-layer">
+    <div class="top-bar">
+      <a href="/" class="logo">Kazi-Kasi</a>
+      <div class="nav-links">
+        <a href="/verse" class="active">Verse</a>
+        <a href="/tracker">Tracker</a>
+        <a href="/stats">Stats</a>
+        <a href="/signin">Sign In</a>
+      </div>
+    </div>
+    
+    <div class="info-panel">
+      <h1>The Job <em>Verse</em></h1>
+      <p>Your skills create gravity. Jobs orbit closer when they match. Drag to rotate. Scroll to zoom. Click to explore.</p>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-number" id="stat-jobs">0</div>
+          <div class="stat-label">Jobs</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" id="stat-skills">0</div>
+          <div class="stat-label">Skills</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" id="stat-nebulae">0</div>
+          <div class="stat-label">Industries</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="instructions">
+      <h3>Navigation</h3>
+      <div class="instruction">
+        <div class="instruction-icon">🖱</div>
+        <span>Drag to rotate</span>
+      </div>
+      <div class="instruction">
+        <div class="instruction-icon">⚙</div>
+        <span>Scroll to zoom</span>
+      </div>
+      <div class="instruction">
+        <div class="instruction-icon">👆</div>
+        <span>Click job to explore</span>
+      </div>
+      <div class="instruction">
+        <div class="instruction-icon">✨</div>
+        <span>Click skill to focus</span>
+      </div>
+    </div>
+    
+    <div class="legend">
+      <h3>Industries</h3>
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #E9A23B"></div>
+        <span>Tech</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #166E5C"></div>
+        <span>Finance</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #C85C3E"></div>
+        <span>Healthcare</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #0C3B43"></div>
+        <span>Education</span>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button class="control-btn" id="btn-autopilot"> Autopilot</button>
+      <button class="control-btn" id="btn-reset"> Reset View</button>
+      <button class="control-btn" id="btn-feed"> Traditional View</button>
+    </div>
+    
+    <div class="scroll-hint">
+      <span>Scroll to zoom in/out</span>
+      <span class="arrow">↓</span>
+    </div>
+  </div>
+  
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <script type="module">
+    import { initGalaxy } from '/static/galaxy.js';
+    
+    // Fetch galaxy data
+    const response = await fetch('/api/galaxy');
+    const galaxyData = await response.json();
+    
+    // Update stats
+    document.getElementById('stat-jobs').textContent = galaxyData.meta.total_jobs;
+    document.getElementById('stat-skills').textContent = galaxyData.meta.total_skills;
+    document.getElementById('stat-nebulae').textContent = galaxyData.meta.total_nebulae;
+    
+    // Initialize galaxy
+    const container = document.getElementById('galaxy-container');
+    const galaxy = initGalaxy(container, galaxyData);
+    
+    // Hide loading screen
+    setTimeout(() => {
+      document.getElementById('loading').classList.add('hidden');
+    }, 1500);
+    
+    // Control buttons
+    document.getElementById('btn-autopilot').addEventListener('click', (e) => {
+      e.target.classList.toggle('active');
+      if (e.target.classList.contains('active')) {
+        galaxy.enableAutopilot();
+      } else {
+        galaxy.disableAutopilot();
+      }
+    });
+    
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      // Reset camera position
+      camera.position.set(0, 0, 250);
+      camera.lookAt(0, 0, 0);
+    });
+    
+    document.getElementById('btn-feed').addEventListener('click', () => {
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 """The feed: a tailored, explained, link-out job feed over the job graph.
 
 Server-rendered HTML, no build step, no framework, no client-side state. It is
-still an **internal** surface — the v1 product decision is web feed + WhatsApp
-digest (D5) and WhatsApp is not built — but it is no longer a debug view: it is
+still an **internal** surface - the v1 product decision is web feed + WhatsApp
+digest (D5) and WhatsApp is not built - but it is no longer a debug view: it is
 the thing the ranking, the freshness promise and the apply tracking are for.
 
 Routes:
@@ -13,12 +13,55 @@ Routes:
     /review           the duplicate pairs a human should decide
     /digest           the WhatsApp digest, exactly as it would arrive (D5)
     /webhooks/whatsapp  inbound replies and delivery receipts (Meta Cloud API)
-    /webhooks/sms       inbound SMS and delivery reports (Africa's Talking)
+    /webhooks/sms       inbound SMS and delivery reports (Africas Talking)
     /api/jobs         the same ranked feed as JSON
     /healthz          liveness of the process, not of the data
 """
 
 from __future__ import annotations
+
+import base64
+import hashlib
+import re
+import hmac as _hmac
+import html
+import json
+import os
+import sqlite3
+import time
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, quote, urlencode, urlparse
+
+from . import (
+    accounts,
+    applications,
+    autofill,
+    brief as brief_module,
+    bundle as bundle_module,
+    cover_letter,
+    db,
+    digest as digest_module,
+    dossier,
+    employer,
+    features,
+    galaxy,
+    graph,
+    metrics,
+    momentum,
+    outbox,
+    profile,
+    
+    
+    setup as setup_module,
+    shortlist,
+    sources,
+    sweep,
+    tracking,
+    webhooks,
+)
 
 import base64
 import hashlib
@@ -86,15 +129,15 @@ SLO_LABEL = {
 
 STYLE = """
 /* ============================================================
-   KAZI-KASI — Mercury 3 Design System v3
-   Nairobi Dark · Safari Green · Ember Gold · Akala Bone
-   Kanga weave textures · 3D spatial layout · Fraunces + Inter
+   KAZI-KASI - Mercury 3 Design System v3
+   Nairobi Dark - Safari Green - Ember Gold - Akala Bone
+   Kanga weave textures - 3D spatial layout - Fraunces + Inter
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Mercury 3 — Kazi-Kasi Brand Palette */
+  /* Mercury 3 - Kazi-Kasi Brand Palette */
   --nairobi-dark: #0C3B43;
   --nairobi-deep: #082a30;
   --safari-green: #166E5C;
@@ -142,7 +185,7 @@ STYLE = """
   --radius-pill: 999px;
   --radius-lg: 28px;
 
-  /* Shadow — warm depth, 3D feel */
+  /* Shadow - warm depth, 3D feel */
   --shadow-xs: 0 1px 3px rgba(12,59,67,.06);
   --shadow-sm: 0 2px 6px rgba(12,59,67,.08);
   --shadow: 0 4px 14px rgba(12,59,67,.10);
@@ -193,7 +236,7 @@ a:hover { color: var(--ember-gold) }
 img { max-width: 100%; display: block }
 button { font-family: inherit }
 
-/* ---- Buttons — tactile, pill-shaped ---- */
+/* ---- Buttons - tactile, pill-shaped ---- */
 button, .btn {
   font: inherit;
   display: inline-flex;
@@ -225,7 +268,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none }
 /* ---- Reveal animation ---- */
 .reveal { opacity: 1; transform: none }
 
-/* ---- Header — glass-morphism, Nairobi Dark ---- */
+/* ---- Header - glass-morphism, Nairobi Dark ---- */
 header {
   position: sticky;
   top: 0;
@@ -325,7 +368,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .palette .hint { border-top: 1px solid var(--line); padding: 9px 16px; font-size: 11.5px; color: var(--muted) }
 
 /* ============================================================
-   SPATIAL FEED LAYOUT — 3D Depth + Perspective
+   SPATIAL FEED LAYOUT - 3D Depth + Perspective
    ============================================================ */
 
 /* Spatial hero with gradient depth */
@@ -356,7 +399,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 .spatial-hero > * { position: relative; z-index: 2 }
 
-/* Kicker — Ember Gold accent line */
+/* Kicker - Ember Gold accent line */
 .kicker {
   font-size: 11px;
   letter-spacing: .28em;
@@ -388,7 +431,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .display em { font-style: italic; font-weight: 400; color: var(--ember-gold) }
 .scopeline { margin: 0; color: var(--ink-2); font-size: 16px; max-width: 580px; line-height: 1.6 }
 
-/* Feed layout — spatial grid */
+/* Feed layout - spatial grid */
 .feed-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -404,7 +447,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .feed-sidebar { display: flex; flex-direction: column; gap: 16px }
 @media (min-width: 1080px) { .feed-sidebar { position: sticky; top: 80px; align-self: start } }
 
-/* Stats — floating glass cards with 3D tilt */
+/* Stats - floating glass cards with 3D tilt */
 .stats-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -447,7 +490,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .stat-card:nth-child(3) .stat-number { color: var(--rift-clay) }
 .stat-card:nth-child(4) .stat-number { color: var(--nairobi-dark) }
 
-/* Search / Filter bar — floating glass */
+/* Search / Filter bar - floating glass */
 .filter-bar {
   background: var(--surface-elevated);
   border: 1px solid var(--line);
@@ -509,7 +552,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 /* Job List */
 .job-list { display: flex; flex-direction: column; gap: 14px }
 
-/* Job Cards — 3D depth, spatial hover */
+/* Job Cards - 3D depth, spatial hover */
 .card {
   background: var(--surface-elevated);
   border: 1px solid var(--line);
@@ -855,7 +898,7 @@ footer.wrap p { color: var(--muted); font-size: 13px; margin: 0 }
 /* ---- Reduced motion ---- */
 
 /* ============================================================
-   TRACKER — Kanban Board
+   TRACKER - Kanban Board
    ============================================================ */
 
 .tracker-stats {
@@ -1149,7 +1192,7 @@ def _constant_time_equal(left: str, right: str) -> bool:
 # The ledger: what changed since this visitor last looked.
 #
 # The single most valuable thing this product can say is a diff. It needs one
-# fact — when the person was last here — and it must not become an identity:
+# fact - when the person was last here - and it must not become an identity:
 # the value is a timestamp, signed so it cannot be forged into "you last looked
 # in 1970", and readable by nothing but us.
 # --------------------------------------------------------------------------
@@ -1219,6 +1262,35 @@ SCOPE_MARK = """<svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusabl
 </svg>"""
 
 
+
+
+def render_verse_page(*, demo: bool = False) -> str:
+    """Serve the 3D galaxy HTML page."""
+    with open(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'galaxy.html'), 'r') as f:
+        return f.read()
+
+
+def _handle_galaxy_api(conn, query: dict, *, demo: bool, now: datetime) -> Response:
+    """Return galaxy data for 3D visualization."""
+    profile_id = _query_one(query, "profile") or "demo-fresher"
+    prof = _profile_or_default(conn, profile_id)
+    
+    # Get matches
+    matches, _ = _ranked(conn, prof, now=now, limit=50)
+    
+    # Get profile skills (from CV or default)
+    profile_skills = ["python", "javascript", "management", "communication", "data analysis"]
+    
+    # Prepare galaxy data
+    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=50)
+    
+    return Response(
+        200,
+        json.dumps(galaxy_data, indent=2, default=str),
+        "application/json; charset=utf-8",
+    )
+
+
 def _e(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
@@ -1236,7 +1308,7 @@ def _page(
     notice = bundle_module.notice()
     if demo:
         banner = (
-            '<div class="banner">Synthetic demo data — no real vacancies are shown on this page.</div>'
+            '<div class="banner">Synthetic demo data - no real vacancies are shown on this page.</div>'
         )
     elif notice:
         banner = f'<div class="banner">{_e(notice)}</div>'
@@ -1254,12 +1326,12 @@ def _page(
 <html lang="en-KE"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0C3B43">
-<meta name="description" content="Kazi-Kasi — Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
+<meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
 <title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
 <body>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
-<a class="lockup" href="/" aria-label="Kazi-Kasi — jobs you can reach">
+<a class="lockup" href="/" aria-label="Kazi-Kasi - jobs you can reach">
 {SCOPE_MARK}
 <span><span class="word">Kazi-Kasi</span>
 <span class="tag">Kazi wenye kasi</span></span>
@@ -1270,8 +1342,8 @@ def _page(
 {palette_html}
 <footer class="wrap"><p>Every card says when it was last checked and why it was shown.
 Eligibility labels quote the advert. Applications happen on the employer's site, never here.</p>
-<p class="ops">Ops: <a href="/slo">freshness</a> · <a href="/review">review queue</a> ·
-<a href="/salaries">advertised pay</a> · <a href="/setup">go-live</a></p>
+<p class="ops">Ops: <a href="/slo">freshness</a> - <a href="/review">review queue</a> -
+<a href="/salaries">advertised pay</a> - <a href="/setup">go-live</a></p>
 {demo_line}</footer>
 <script>
 // Scroll-triggered reveal animations
@@ -1381,7 +1453,7 @@ def _job_posting(row, description: str) -> str:
     Google's rules are unusually concrete: exactly one block per page, on the
     page that shows that job, with a description that is more than the title,
     and no markup for a job that has no way to apply. We emit nothing rather
-    than emit something thin — a page that lies in its markup is worse than a
+    than emit something thin - a page that lies in its markup is worse than a
     page that is simply not rich.
 
     `directApply` is false on purpose: the application happens on the employer's
@@ -1472,11 +1544,11 @@ def _deadline_view(row, now: datetime) -> tuple[str, str, str]:
     """Label, date, tone. The deadline is the decision field; it gets the corner."""
     raw = row.get("deadline")
     if not raw:
-        return "no deadline", "—", ""
+        return "no deadline", "-", ""
     try:
         day = date.fromisoformat(str(raw)[:10])
     except ValueError:
-        return "no deadline", "—", ""
+        return "no deadline", "-", ""
     stamp = f"{day.day:02d} {day:%b}"
     # Constructed rather than `datetime.combine(day, time(23, 59))`: importing
     # `time` from datetime here would shadow the stdlib module the rate limiter
@@ -1542,11 +1614,11 @@ def render_feed(
             else f"<b>Nothing new</b> since {when}"
         )
         ledger = (
-            f'<p class="ledger">{lead} · {summary["closing_within_7_days"]} closing this week · '
+            f'<p class="ledger">{lead} - {summary["closing_within_7_days"]} closing this week - '
             f"checked {clock} EAT</p>"
         )
 
-    name, _, tagline = profile.name.partition(" — ")
+    name, _, tagline = profile.name.partition(" - ")
     subtitle = tagline.strip() or "the scope this feed was ranked against"
 
     chips = "".join(
@@ -1564,7 +1636,7 @@ def render_feed(
     )
 
     switcher = " ".join(
-        f'<a class="{"on" if other.id == profile.id else ""}" href="/?profile={quote(other.id)}">{_e(other.name.split(" — ")[0])}</a>'
+        f'<a class="{"on" if other.id == profile.id else ""}" href="/?profile={quote(other.id)}">{_e(other.name.split(" - ")[0])}</a>'
         for other in _profiles(conn)
     )
 
@@ -1656,7 +1728,7 @@ def render_feed(
         if account:
             current_app = applications.get(conn, account["id"], match.job_id)
             if current_app:
-                # Already tracked — show move buttons
+                # Already tracked - show move buttons
                 current_status = current_app["status"]
                 idx = applications.STAGES.index(current_status)
                 move_html = '<div class="card-quick-actions">'
@@ -1668,7 +1740,7 @@ def render_feed(
                 move_html += '</div>'
                 quick_actions_html = move_html
             else:
-                # Not tracked yet — show "Save" button to start tracking
+                # Not tracked yet - show "Save" button to start tracking
                 quick_actions_html = '<form method="post" action="/action" style="display:inline"><input type="hidden" name="profile" value="' + _e(profile.id) + '"><input type="hidden" name="job" value="' + _e(match.job_id) + '"><input type="hidden" name="kind" value="saved"><input type="hidden" name="next" value="' + _e(feed_path) + '"><button type="submit" class="quick-apply-btn" title="Save to tracker">&#10003; Save to tracker</button></form>'
 
         # Company initial badge
@@ -1800,7 +1872,7 @@ def render_feed(
       </div>
       <div class="rail-card">
         <h3>Shortlist</h3>
-        <p class="rail-note">{len(saved)} saved — kept for you, never sent to an employer.</p>
+        <p class="rail-note">{len(saved)} saved - kept for you, never sent to an employer.</p>
         <a class="more" href="/shortlist?profile={quote(profile.id)}">Open the shortlist</a>
         <a class="more" href="/year?profile={quote(profile.id)}">Your year in the market</a>
       </div>
@@ -1809,7 +1881,7 @@ def render_feed(
 </div>
 """
     return _page(
-        "Kazi-Kasi — jobs for you",
+        "Kazi-Kasi - jobs for you",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -1852,7 +1924,7 @@ def render_shortlist(
             deadline = shortlist.deadline_at(upcoming)
             reminder_block = (
                 f'<p class="small">No reminder due. Next: {_e(upcoming["title"])} closes '
-                f"{deadline:%a %-d %b} — one message, {shortlist.REMINDER_HOURS} hours before.</p>"
+                f"{deadline:%a %-d %b} - one message, {shortlist.REMINDER_HOURS} hours before.</p>"
             )
     if due:
         item = due[0]
@@ -1861,7 +1933,7 @@ def render_shortlist(
         if delivers:
             delivery_note = (
                 f'Queued for your {_e(subscription.channel)} '
-                f'({_e(subscription.msisdn)}) at the next daily tick — once per job, per deadline.'
+                f'({_e(subscription.msisdn)}) at the next daily tick - once per job, per deadline.'
             )
         else:
             delivery_note = (
@@ -1872,7 +1944,7 @@ def render_shortlist(
         reminder_block = f"""
 <div class="whobar">
   <div><b>{len(due)} reminder{'s' if len(due) != 1 else ''} due now</b>
-    <span class="small">— saved jobs closing within {shortlist.REMINDER_HOURS} hours.</span></div>
+    <span class="small">- saved jobs closing within {shortlist.REMINDER_HOURS} hours.</span></div>
   <div class="msg">{_e(item['text'])}</div>
   <p class="small">{delivery_note}</p>
 </div>"""
@@ -1955,14 +2027,14 @@ with an employer, and a save is never sold as a lead.</p>
 <h1>Shortlist</h1>
 <div class="card">
   <h2>Nothing saved yet</h2>
-  <p>Save a job from the feed and it waits here with its deadline — and earns
+  <p>Save a job from the feed and it waits here with its deadline - and earns
   one reminder before it closes. That is the whole feature: your intent, kept for
   you, mentioned once.</p>
   <p><a class="apply" href="{_e(feed_path)}">Back to the feed</a></p>
 </div>"""
 
     return _page(
-        "Shortlist — Kazi-Kasi",
+        "Shortlist - Kazi-Kasi",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -1978,7 +2050,7 @@ with an employer, and a save is never sold as a lead.</p>
 def synthetic_build() -> bool:
     """Is the data on this instance synthetic?
 
-    True until a real store — or a published bundle — is configured
+    True until a real store - or a published bundle - is configured
     (`DATABASE_URL` / `KAZIKASI_BUNDLE`). Deliberately
     independent of `KAZIKASI_DEMO`, which governs session strictness: turning on
     real secret hygiene must never un-label synthetic vacancies, because the
@@ -2006,7 +2078,7 @@ def _band_line(band: dict | None, *, prefix: str = "KES ") -> str:
         return "not stated in enough adverts"
     if band["p25"] == band["p75"]:
         return f"{prefix}{band['median']:,.0f}"
-    return f"{prefix}{band['p25']:,.0f}–{band['p75']:,.0f}"
+    return f"{prefix}{band['p25']:,.0f}-{band['p75']:,.0f}"
 
 
 def _n(n: int, one: str, many: str) -> str:
@@ -2015,7 +2087,7 @@ def _n(n: int, one: str, many: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# ⌘K — one entry point, invisible until it is wanted
+# ⌘K - one entry point, invisible until it is wanted
 # --------------------------------------------------------------------------
 
 PALETTE_JS = """
@@ -2106,7 +2178,7 @@ def _inline_hash(source: str) -> str:
 
     The style sheet and the one script are the only inline assets on the site.
     Hashing them means the policy can say `'none'` for everything else and still
-    let the page work — which is the difference between a header that is present
+    let the page work - which is the difference between a header that is present
     and a header that is doing something.
     """
     digest = hashlib.sha256(source.encode("utf-8")).digest()
@@ -2183,7 +2255,7 @@ def _palette_markup(index: list) -> str:
     <input id="kazi-q" type="search" placeholder="Jump to a job, county or page"
            aria-label="Search jobs, counties and pages" autocomplete="off" spellcheck="false">
     <ul id="kazi-results"></ul>
-    <div class="hint">↑ ↓ to move · Enter to open · Esc to close</div>
+    <div class="hint">↑ ↓ to move - Enter to open - Esc to close</div>
   </div>
 </div>
 <script type="application/json" id="kazi-index">{payload}</script>
@@ -2192,14 +2264,14 @@ def _palette_markup(index: list) -> str:
 
 
 def palette_index(conn, profile, *, now: datetime) -> list:
-    """Jobs, then counties, then pages — the order people look for things in."""
+    """Jobs, then counties, then pages - the order people look for things in."""
     index = []
     seen = set()
     for match in _ranked(conn, profile, now=now, limit=25)[0]:
         index.append(
             {
                 "label": match.title,
-                "meta": "job · " + (match.employer or "employer not stated"),
+                "meta": "job - " + (match.employer or "employer not stated"),
                 "href": f"/job/{quote(match.job_id)}?profile={quote(profile.id)}",
             }
         )
@@ -2213,7 +2285,7 @@ def palette_index(conn, profile, *, now: datetime) -> list:
         index.append(
             {
                 "label": row["title"],
-                "meta": "job · " + (row.get("county") or "county not stated"),
+                "meta": "job - " + (row.get("county") or "county not stated"),
                 "href": f"/job/{quote(row['id'])}?profile={quote(profile.id)}",
             }
         )
@@ -2221,14 +2293,14 @@ def palette_index(conn, profile, *, now: datetime) -> list:
         index.append(
             {
                 "label": item["county"],
-                "meta": f"county · {item['live']} live",
+                "meta": f"county - {item['live']} live",
                 "href": f"/county/{pulse.slug(item['county'])}",
             }
         )
     index.append(
         {
             "label": "Search every live role",
-            "meta": "page · words, county, pay, deadline",
+            "meta": "page - words, county, pay, deadline",
             "href": f"/search?profile={quote(profile.id)}",
         }
     )
@@ -2236,7 +2308,7 @@ def palette_index(conn, profile, *, now: datetime) -> list:
         index.append(
             {
                 "label": entry["name"],
-                "meta": f"employer · {entry['live']} live",
+                "meta": f"employer - {entry['live']} live",
                 "href": f"/employer/{quote(entry['slug'])}",
             }
         )
@@ -2272,7 +2344,7 @@ def _wildcard_html(conn, profile, *, now: datetime) -> str:
     href = f"/job/{quote(item['job_id'])}?profile={quote(profile.id)}"
     feed_path = f"/?profile={quote(profile.id)}"
     return f"""<article class="card wildcard">
-  <p class="tagline">Outside your scope · this week only</p>
+  <p class="tagline">Outside your scope - this week only</p>
   <div class="card-top">
     <div>
       <h2><a href="{href}">{_e(item['title'])}</a></h2>
@@ -2451,16 +2523,16 @@ def render_employers(conn, *, now: datetime | None = None, demo: bool = False, h
         )
     body = f"""
 <div class="masthead">
-  <p class="kicker">Employers · {len(rows)} hiring now</p>
+  <p class="kicker">Employers - {len(rows)} hiring now</p>
   <h1 class="display">Who is actually hiring</h1>
   <p class="scopeline">Every employer with a live advert, and what their own
-  adverts say about pay. Ranked by open roles, then alphabetically — never by
+  adverts say about pay. Ranked by open roles, then alphabetically - never by
   anything an employer can buy.</p>
 </div>
 <div class="strip">
   <div><b>{len(rows)}</b><span>employers with live adverts</span></div>
   <div><b>{live}</b><span>open roles between them</span></div>
-  <div><b>{f"{round(sum(paid) / len(paid)):,.0f}" if paid else "—"}</b><span>median of employer medians (n={len(paid)})</span></div>
+  <div><b>{f"{round(sum(paid) / len(paid)):,.0f}" if paid else "-"}</b><span>median of employer medians (n={len(paid)})</span></div>
 </div>
 <div class="tablewrap mt26"><table>
   <tr><th>Employer</th><th>Open now</th><th>Median advertised minimum (KES)</th><th>Where</th></tr>
@@ -2470,7 +2542,7 @@ def render_employers(conn, *, now: datetime | None = None, demo: bool = False, h
 they publish pay, and how long they leave an advert open. It is a record, not a
 rating, and it is not for sale. <a href="/search">Search every live role →</a></p>"""
     return _page(
-        "Employers hiring now — Kazi-Kasi",
+        "Employers hiring now - Kazi-Kasi",
         body,
         demo=demo,
         nav=_public_nav(conn, headers),
@@ -2496,8 +2568,8 @@ def render_employer(
     jobs = "".join(
         f"""<tr>
   <td><a href="/job/{_e(job['id'])}?profile={quote(profile.id)}">{_e(job['title'])}</a></td>
-  <td>{_e(job['county'] or '—')}</td>
-  <td>{_e(job['deadline'] or '—')}</td>
+  <td>{_e(job['county'] or '-')}</td>
+  <td>{_e(job['deadline'] or '-')}</td>
   <td>{f"KES {job['pay_min']:,.0f}" if job.get('pay_min') else 'not stated'}</td>
 </tr>"""
         for job in data.jobs
@@ -2506,7 +2578,7 @@ def render_employer(
         f'<tr><td>{_e(family.replace("_", " "))}</td><td>{count}</td></tr>'
         for family, count in data.families
     )
-    counties = "".join(f"<li>{_e(name)} · {count}</li>" for name, count in data.counties)
+    counties = "".join(f"<li>{_e(name)} - {count}</li>" for name, count in data.counties)
     checks = "".join(
         f'<tr><td>{_e(check["label"])}</td><td>{_e(check["value"])}</td>'
         f'<td class="small">{"" if check["ok"] else "worth a second look"}</td></tr>'
@@ -2528,7 +2600,7 @@ def render_employer(
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Employer · last checked {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
+  <p class="kicker">Employer - last checked {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
   <h1 class="display">{_e(data.name)}</h1>
   <p class="scopeline">{_e(dossier.line(data))}. Everything below is read from their
   own adverts, with the sample size attached.</p>
@@ -2537,7 +2609,7 @@ def render_employer(
   <div><b>{data.live}</b><span>open now</span></div>
   <div><b>{data.total}</b><span>adverts we have seen</span></div>
   <div><b>{_pay_cell(pay)}</b><span>median advertised minimum (n={pay['stated']})</span></div>
-  <div><b>{f"{closing['median_days']} days" if closing['median_days'] is not None else "—"}</b><span>median run to deadline (n={closing['n']})</span></div>
+  <div><b>{f"{closing['median_days']} days" if closing['median_days'] is not None else "-"}</b><span>median run to deadline (n={closing['n']})</span></div>
 </div>
 {merged}
 <h2>Open roles</h2>
@@ -2548,7 +2620,7 @@ def render_employer(
 }
 <h2>What they advertise</h2>
 <div class="two">
-  <div class="tablewrap"><table><tr><th>Family</th><th>Adverts</th></tr>{families or '<tr><td>—</td><td>0</td></tr>'}</table></div>
+  <div class="tablewrap"><table><tr><th>Family</th><th>Adverts</th></tr>{families or '<tr><td>-</td><td>0</td></tr>'}</table></div>
   <div>
     <p class="small">Where these roles are:</p>
     <ul class="sources">{counties or '<li>county not stated</li>'}</ul>
@@ -2565,7 +2637,7 @@ change it, and no ordering on Kazi-Kasi is for sale. If that ever changes it wil
 be labelled in the same type size as the job.</p>
 <p class="small"><a href="/employers">← all employers hiring now</a></p>"""
     return _page(
-        f"{data.name} — Kazi-Kasi",
+        f"{data.name} - Kazi-Kasi",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -2594,10 +2666,10 @@ def render_year(
     if data.almost:
         almost = f"""
 <div class="card">
-  <p class="tagline">{"Closed without an application" if data.almost["closed"] else "Still open — still unapplied"}</p>
+  <p class="tagline">{"Closed without an application" if data.almost["closed"] else "Still open - still unapplied"}</p>
   <h2><a href="/job/{_e(data.almost['job_id'])}?profile={quote(profile.id)}">{_e(data.almost['title'])}</a></h2>
-  <p class="small">{_e(data.almost['employer'] or 'employer not stated')} · closes
-  {_e(data.almost['deadline'] or 'no deadline stated')} ·
+  <p class="small">{_e(data.almost['employer'] or 'employer not stated')} - closes
+  {_e(data.almost['deadline'] or 'no deadline stated')} -
   {("you opened it " + str(data.almost["opened"]) + (" times" if data.almost["opened"] != 1 else " time")) if data.almost["opened"] else "you kept it and never sent anything"}</p>
 </div>"""
     bands = ""
@@ -2607,17 +2679,17 @@ def render_year(
 <div class="two">
   <div class="rail-card flush">
     <p class="small">Band you kept choosing</p>
-    <p class="fig">{f"{data.band_aimed:,.0f}" if data.band_aimed else "—"}</p>
+    <p class="fig">{f"{data.band_aimed:,.0f}" if data.band_aimed else "-"}</p>
     <p class="small">median advertised minimum across {data.band_aimed_n} role{'s' if data.band_aimed_n != 1 else ''} you kept or applied to</p>
   </div>
   <div class="rail-card flush">
     <p class="small">Band around you today</p>
-    <p class="fig">{f"{data.band_in_scope:,.0f}" if data.band_in_scope else "—"}</p>
+    <p class="fig">{f"{data.band_in_scope:,.0f}" if data.band_in_scope else "-"}</p>
     <p class="small">median across {data.band_in_scope_n} role{'s' if data.band_in_scope_n != 1 else ''} inside your scope</p>
   </div>
 </div>
 <p class="small">Both are advertised minimums, in KES a month. We never learn what
-anyone was offered, so this is not an outcome comparison — it is the range you
+anyone was offered, so this is not an outcome comparison - it is the range you
 were looking at, next to the range that was looking at you.</p>"""
     share = ""
     if card:
@@ -2630,7 +2702,7 @@ whole record →</a></p>"""
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Your year · {data.year} · private</p>
+  <p class="kicker">Your year - {data.year} - private</p>
   <h1 class="display">{_e(recap.headline(data))}</h1>
   <p class="scopeline">{_e(recap.note(data))}</p>
 </div>
@@ -2646,13 +2718,13 @@ whole record →</a></p>"""
 {share}
 <h2>What this page will never say</h2>
 <p>No rejection count, no interview rate, no score out of ten. We do not ask what
-happened after you applied, so any number like that would be invented — and a year
+happened after you applied, so any number like that would be invented - and a year
 review is the last place to invent a number about someone's life.</p>
 <p class="small">This page is not linked from anywhere public, is not in the
 sitemap and asks search engines to ignore it. <a href="/activity?profile={quote(profile.id)}">Your
 record →</a></p>"""
     return _page(
-        f"Your {data.year} in the market — Kazi-Kasi",
+        f"Your {data.year} in the market - Kazi-Kasi",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -2662,7 +2734,7 @@ record →</a></p>"""
 
 
 # --------------------------------------------------------------------------
-# Tracker — Mokaru-style Kanban
+# Tracker - Mokaru-style Kanban
 # --------------------------------------------------------------------------
 
 def render_tracker(
@@ -2684,7 +2756,7 @@ def render_tracker(
 
     if not account_id:
         body = '<div class="signin-wrap"><div class="signin-card"><p class="kicker">Tracker</p><h1 class="signin-headline">Sign in to track your applications</h1><p class="signin-sub">The tracker keeps your pipeline in one place.</p><a href="/signin" class="btn btn-primary" style="margin-top:16px;width:100%;justify-content:center">Sign in</a></div></div>'
-        return _page("Tracker — Kazi-Kasi", body, demo=demo)
+        return _page("Tracker - Kazi-Kasi", body, demo=demo)
 
     all_apps = applications.list_by_status(conn, account_id)
     stats = applications.stats(conn, account_id)
@@ -2701,7 +2773,7 @@ def render_tracker(
     
     followup_html = ""
     if due_followups:
-        items = "".join('<li><a href="/job/' + _e(a["job_id"]) + '">' + _e((a.get("job_title") or a["job_id"])[:40]) + '</a> — ' + applications.STAGE_LABELS.get(a["status"], a["status"]) + '</li>' for a in due_followups[:5])
+        items = "".join('<li><a href="/job/' + _e(a["job_id"]) + '">' + _e((a.get("job_title") or a["job_id"])[:40]) + '</a> - ' + applications.STAGE_LABELS.get(a["status"], a["status"]) + '</li>' for a in due_followups[:5])
         followup_html = '<div class="followup-banner"><strong>' + str(len(due_followups)) + ' follow-up(s) due</strong><ul>' + items + '</ul></div>'
     
     kanban_columns = []
@@ -2748,7 +2820,7 @@ def render_tracker(
     body = '<div class="spatial-hero"><div class="hero-3d"><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div></div><div class="wrap"><p class="kicker">Pipeline</p><h1 class="display">Your <em>tracker</em></h1><p class="scopeline">Every application, one board. Move jobs through stages as you hear back.</p></div></div><div class="wrap" style="padding-bottom:60px">' + notice_html + stats_html + followup_html + '<div class="kanban-board">' + "".join(kanban_columns) + '</div></div>'
     
     profile_id = "demo-fresher"
-    return _page("Tracker — Kazi-Kasi", body, demo=demo, nav=_nav_for(_account_for(conn, headers), profile_id))
+    return _page("Tracker - Kazi-Kasi", body, demo=demo, nav=_nav_for(_account_for(conn, headers), profile_id))
 
 
 def _seed_demo_applications(conn, account_id, *, now):
@@ -2811,7 +2883,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
     # Google SVG icon for the button
     google_icon = """<svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>"""
 
-    # Primary HTML — configured provider OR demo mode
+    # Primary HTML - configured provider OR demo mode
     primary_html = ""
     if primary:
         key, provider = primary
@@ -2833,7 +2905,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
             '<button type="submit" class="signin-primary-btn">'
             f'<span class="signin-provider-name" style="display:flex;align-items:center;gap:10px">'
             f'{google_icon}Continue with Google <span style="font-size:10px;background:var(--ember-gold);color:var(--nairobi-dark);padding:2px 8px;border-radius:999px;font-weight:700;margin-left:4px">DEMO</span></span>'
-            '<span class="signin-provider-why">Creates a local demo account — no provider contacted</span>'
+            '<span class="signin-provider-why">Creates a local demo account - no provider contacted</span>'
             "</button></form>"
         )
 
@@ -2864,7 +2936,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
   <div class=\"signin-card\">
     <p class=\"kicker\">Welcome to Kazi-Kasi</p>
     <h1 class=\"signin-headline\">Find real jobs. Track what matters.</h1>
-    <p class=\"signin-sub\">Sign in once, and your shortlist stays with you — whether
+    <p class=\"signin-sub\">Sign in once, and your shortlist stays with you - whether
     you're on your phone at the matatu stage or your laptop at home. We'll even
     fill in application forms from your CV, so you're not typing the same thing twice.</p>
     {notice_html}
@@ -2876,11 +2948,11 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
     </form>
     {setup_note}
     <p class=\"signin-privacy\">We only keep what we need: your name, email, and CV details.
-    No contacts, no connections, no selling your data. Delete your account anytime —
+    No contacts, no connections, no selling your data. Delete your account anytime -
     it's one click, gone forever.</p>
   </div>
 </div>"""
-    return _page("Sign in — Kazi-Kasi", body, demo=demo)
+    return _page("Sign in - Kazi-Kasi", body, demo=demo)
 
 
 def _cv_summary(cv: dict | None) -> str:
@@ -2944,12 +3016,12 @@ def render_account(
     else:
         # Personalized greeting using Google profile data
         greeting = f"Hey {given_name}" if given_name else "Welcome back"
-        identity.append(f'<p><b>{greeting}</b> — ')
+        identity.append(f'<p><b>{greeting}</b> - ')
         if picture:
             identity.append(f'<img src="{_e(picture)}" alt="" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px">')
         identity.append(
             ("guest account" if kind == "guest" else f"signed in via {_e(provider_label or 'a provider')}")
-            + (f" · {_e(user_email)}" if user_email else "")
+            + (f" - {_e(user_email)}" if user_email else "")
             + "</p>"
         )
         if kind == "guest":
@@ -2970,8 +3042,8 @@ def render_account(
             bits.append("entry level " + _e(levels))
         suggestion_html = (
             '<div class="whobar"><b>From your CV, we would suggest:</b> '
-            + " · ".join(bits)
-            + '. <span class="small">Suggestions only — nothing about your scope changed.</span></div>'
+            + " - ".join(bits)
+            + '. <span class="small">Suggestions only - nothing about your scope changed.</span></div>'
         )
 
     delete_form = ""
@@ -3002,14 +3074,14 @@ def render_account(
     nothing else. It is never shown to an employer from our side.</p>
     <form method="post" action="/account/cv" enctype="multipart/form-data" class="subform stack">
       <input type="file" name="cv_file" accept=".txt,.md,.pdf" aria-label="CV file">
-      <textarea name="cv_text" rows="7" placeholder="…or paste your CV text here"
+      <textarea name="cv_text" rows="7" placeholder="...or paste your CV text here"
         class="codebox"></textarea>
       <button type="submit">Read my CV</button>
     </form>
     {_cv_summary(cv)}
     {suggestion_html}
     <p class="small">Missing for forms: {_e(', '.join(gaps))}. A gap here is the
-    document's gap, not yours — the kit will tell you what to type rather than make
+    document's gap, not yours - the kit will tell you what to type rather than make
     something up.</p>
 
     <div class="section mt26"><span>Your data</span></div>
@@ -3031,7 +3103,7 @@ def render_account(
     <div class="rail-card">
       <h3>Your scope</h3>
       <div class="chips">
-        <span class="chip">{_e(profile.name.split(' — ')[0])}</span>
+        <span class="chip">{_e(profile.name.split(' - ')[0])}</span>
         <span class="chip">{_e(profile.home_area or profile.home_county or 'no home area')}</span>
         <span class="chip">{'≤ %g km' % profile.max_commute_km if profile.max_commute_km else 'no limit'}</span>
       </div>
@@ -3039,7 +3111,7 @@ def render_account(
     </div>
   </aside>
 </div>"""
-    return _page("You — Kazi-Kasi", body, demo=demo)
+    return _page("You - Kazi-Kasi", body, demo=demo)
 
 
 def render_activity(
@@ -3131,7 +3203,7 @@ def render_activity(
             f'{_e(row["title"])}</a><div class="small">{_e(row["employer_name"] or "")}</div></td>'
             f"<td>{status(row)}</td>"
             f'<td class="small">{_e(when)}</td>'
-            f'<td class="small">{_e((row.get("deadline") or "—"))}</td>'
+            f'<td class="small">{_e((row.get("deadline") or "-"))}</td>'
             "</tr>"
         )
 
@@ -3143,9 +3215,9 @@ def render_activity(
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Activity · {counts['all']} jobs touched</p>
+  <p class="kicker">Activity - {counts['all']} jobs touched</p>
   <h1 class="display">Where you have been</h1>
-  <p class="scopeline">Saved, applied, visited and dismissed — the same record that
+  <p class="scopeline">Saved, applied, visited and dismissed - the same record that
   powers the ledger on your feed. Nothing here is shared with an employer.</p>
   <div class="filters">{tabs_html}</div>
 </div>
@@ -3177,7 +3249,7 @@ def render_activity(
   </aside>
 </div>"""
     return _page(
-        "Activity — Kazi-Kasi",
+        "Activity - Kazi-Kasi",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -3192,7 +3264,7 @@ def _dossier_block(conn, row, payload: dict) -> str:
         employer_domain=row.get("employer_domain"),
     )
     contacts = "".join(
-        f'<li><b>{_e(contact.kind)}</b> · {_e(contact.value)}'
+        f'<li><b>{_e(contact.kind)}</b> - {_e(contact.value)}'
         f'<div class="small">“{_e(contact.evidence)}”</div></li>'
         for contact in dossier.contacts
     ) or '<li class="small">The advert names nobody and gives no contact.</li>'
@@ -3201,13 +3273,13 @@ def _dossier_block(conn, row, payload: dict) -> str:
     return f"""
 <h1>Who you would be dealing with</h1>
 <p>Apply {_e("by email" if dossier.channel == "email" else "through " + dossier.channel)}. That is what the advert says, not a
-guess — applying the wrong way is a silent rejection.</p>
+guess - applying the wrong way is a silent rejection.</p>
 {f'<div class="evidence">{_e(dossier.instructions)}</div>' if dossier.instructions else ''}
 <ul class="sources">{contacts}</ul>
 {f'<p class="small">What the advert does not tell you:</p><ul class="sources">{missing}</ul>' if missing else ''}
 <p class="small">Connects: we do not have your network and will not scrape one. If you
 know someone at {_e(row.get('employer_name') or 'this employer')}, ask them for the
-name on the advert — a referral beats a cover letter here.
+name on the advert - a referral beats a cover letter here.
 {f'{opens} people opened this page here.' if opens else 'You are the first to open this page.'}</p>
 """
 
@@ -3217,7 +3289,7 @@ def _kit_block(account: dict | None, cv: dict | None, profile, row, payload: dic
     if not account:
         return """
 <h1>Fill this form in five minutes</h1>
-<p class="small">Sign in — or continue as a guest — and add your CV. We will prepare
+<p class="small">Sign in - or continue as a guest - and add your CV. We will prepare
 every field the employer's form asks for, with your own words, ready to paste.</p>
 <p><a class="apply" href="/signin">Set up the application kit</a></p>"""
 
@@ -3232,8 +3304,8 @@ every field the employer's form asks for, with your own words, ready to paste.</
         if not value:
             cells.append(
                 f'<tr><td>{_e(item["label"])}</td>'
-                '<td class="small">type this one — your CV does not state it</td>'
-                '<td class="small">—</td></tr>'
+                '<td class="small">type this one - your CV does not state it</td>'
+                '<td class="small">-</td></tr>'
             )
             continue
         cells.append(
@@ -3251,7 +3323,7 @@ CV from us.</p>
 {f'<p class="small">Still to type: {_e(", ".join(missing))}.</p>' if missing else ''}
 <h2>Cover note, from your own words</h2>
 <div class="msg">{_e(note)}</div>
-<p class="small">Three sentences, built from the advert and your CV. Edit it — it is a
+<p class="small">Three sentences, built from the advert and your CV. Edit it - it is a
 starting point, not a voice we are putting in your mouth.</p>"""
 
 
@@ -3284,22 +3356,22 @@ def render_brief(
   <p>Nothing new cleared the bar. The honest thing is to wait for the next sweep
   rather than lower your standards.</p></div>"""
 
-    families = " · ".join(
+    families = " - ".join(
         f"{_e(name)} <span class='small'>{count}</span>" for name, count in data["families"]
     )
     band_text = brief_module.band_line(data)
-    band_value = f"{data['band_this_week']:,}" if data["band_this_week"] else "—"
-    delta_value = f"{data['delta_pct']:+d}%" if data["delta_pct"] is not None else "—"
+    band_value = f"{data['band_this_week']:,}" if data["band_this_week"] else "-"
+    delta_value = f"{data['delta_pct']:+d}%" if data["delta_pct"] is not None else "-"
     distance = "≤ %g km" % profile.max_commute_km if profile.max_commute_km else "no distance limit"
     pay = f"≥ KES {profile.min_monthly_pay:,.0f}" if profile.min_monthly_pay else "no pay floor"
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Weekly brief · week {data['week'].split('-W')[1]} · {data['days']}-day window</p>
+  <p class="kicker">Weekly brief - week {data['week'].split('-W')[1]} - {data['days']}-day window</p>
   <h1 class="display">What moved</h1>
   <p class="scopeline">{_e(brief_module.headline(data, profile))}</p>
-  <p class="ledger"><b>{data['in_scope']} in scope</b> · {data['new']} new ·
-  {data['closing']} closing · updated {(now + timedelta(hours=3)).strftime('%a %H:%M')} EAT</p>
+  <p class="ledger"><b>{data['in_scope']} in scope</b> - {data['new']} new -
+  {data['closing']} closing - updated {(now + timedelta(hours=3)).strftime('%a %H:%M')} EAT</p>
 </div>
 <div class="strip">
   <div><b>{data['new']}</b><span>new this week</span></div>
@@ -3341,7 +3413,7 @@ def render_brief(
   </aside>
 </div>"""
     return _page(
-        "Weekly brief — Kazi-Kasi",
+        "Weekly brief - Kazi-Kasi",
         body,
         demo=demo,
         palette=palette_index(conn, profile, now=now),
@@ -3365,7 +3437,7 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
         for item in data["counties"]
     )
 
-    employers = " · ".join(
+    employers = " - ".join(
         f"{_e(name)} <span class='small'>{count}</span>" for name, count in data["employers"]
     ) or '<span class="small">none yet</span>'
 
@@ -3375,17 +3447,17 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Market pulse · counted, not estimated</p>
+  <p class="kicker">Market pulse - counted, not estimated</p>
   <h1 class="display">What Nairobi is hiring</h1>
   <p class="scopeline">Every number on this page comes from adverts we have checked
   ourselves. Nothing here is a forecast, a survey or an extrapolation.</p>
-  <p class="ledger"><b>Updated {stamp} EAT</b> · window: last {data['window_days']} days</p>
+  <p class="ledger"><b>Updated {stamp} EAT</b> - window: last {data['window_days']} days</p>
 </div>
 <div class="strip">
   <div><b>{data['live']}</b><span>live adverts</span></div>
   <div><b>{data['new']}</b><span>new this week</span></div>
   <div><b>{data['closing']}</b><span>closing this week</span></div>
-  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "—"}</b><span>median advertised minimum (KES)</span></div>
+  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "-"}</b><span>median advertised minimum (KES)</span></div>
 </div>
 <div class="layout">
   <div class="feedcol">
@@ -3394,7 +3466,7 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
       <tr><th>County</th><th>Live</th><th>Closing</th><th>Middle half (KES/month)</th><th>n</th></tr>
       {rows}
     </table></div>
-    <p class="rail-note">The middle half is the 25th–75th percentile of monthly minimums
+    <p class="rail-note">The middle half is the 25th-75th percentile of monthly minimums
     stated in adverts; <b>n</b> is how many adverts stated one. A band built from four
     adverts is four adverts, and it says so.</p>
 
@@ -3426,7 +3498,7 @@ def render_pulse(conn, *, now: datetime | None = None, demo: bool = False, heade
   </aside>
 </div>"""
     return _page(
-        "Market pulse — Kazi-Kasi",
+        "Market pulse - Kazi-Kasi",
         body,
         demo=demo,
         nav=_public_nav(conn, headers),
@@ -3453,8 +3525,8 @@ def render_salaries(conn, *, now: datetime | None = None, demo: bool = False, he
   <h1 class="display">What the adverts actually say</h1>
   <p class="scopeline">Monthly minimums, as stated in live adverts. Not an estimate,
   not a survey, and never a number we filled in ourselves.</p>
-  <p class="ledger"><b>{data['live']} live adverts</b> · {data['band']['n'] if data['band'] else 0}
-  stated a monthly salary · updated {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
+  <p class="ledger"><b>{data['live']} live adverts</b> - {data['band']['n'] if data['band'] else 0}
+  stated a monthly salary - updated {(now + timedelta(hours=3)).strftime('%d %b, %H:%M')} EAT</p>
 </div>
 <div class="layout">
   <div class="feedcol">
@@ -3463,7 +3535,7 @@ def render_salaries(conn, *, now: datetime | None = None, demo: bool = False, he
       {rows or '<tr><td colspan="5">Not enough adverts have stated a salary yet.</td></tr>'}
     </table></div>
     <p class="rail-note">An advert that does not state pay is not a data point. The gap
-    is the advert's, not yours — and we would rather show four honest numbers than
+    is the advert's, not yours - and we would rather show four honest numbers than
     forty invented ones.</p>
     <h2>Why this page exists</h2>
     <p>Salary information in Kenya is scattered across adverts, rumours and
@@ -3480,7 +3552,7 @@ def render_salaries(conn, *, now: datetime | None = None, demo: bool = False, he
   </aside>
 </div>"""
     return _page(
-        "Advertised pay — Kazi-Kasi",
+        "Advertised pay - Kazi-Kasi",
         body,
         demo=demo,
         nav=_public_nav(conn, headers),
@@ -3505,7 +3577,7 @@ def render_county(
     def pay(row) -> str:
         low, high = row.get("pay_min"), row.get("pay_max")
         if low and high and low != high:
-            return f"KES {low:,.0f}–{high:,.0f}"
+            return f"KES {low:,.0f}-{high:,.0f}"
         if low:
             return f"KES {low:,.0f}"
         return "not stated"
@@ -3514,7 +3586,7 @@ def render_county(
         f"""<tr>
   <td><a href="/job/{_e(row['id'])}">{_e(row['title'])}</a></td>
   <td>{_e(row.get('employer_name') or 'not stated')}</td>
-  <td>{_e(row.get('deadline') or '—')}</td>
+  <td>{_e(row.get('deadline') or '-')}</td>
   <td>{pay(row)}</td>
 </tr>"""
         for row in data["jobs"]
@@ -3524,25 +3596,25 @@ def render_county(
   <p class="kicker">County view</p>
   <h1 class="display">{_e(name)}</h1>
   <p class="scopeline">Live adverts in {_e(name)}, soonest deadline first.</p>
-  <p class="ledger"><b>{data['live']} live</b> · {data['new']} new this week ·
-  {data['closing']} closing this week · updated
+  <p class="ledger"><b>{data['live']} live</b> - {data['new']} new this week -
+  {data['closing']} closing this week - updated
   {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
 </div>
 <div class="strip">
   <div><b>{data['live']}</b><span>live adverts</span></div>
   <div><b>{data['new']}</b><span>new this week</span></div>
   <div><b>{data['closing']}</b><span>closing this week</span></div>
-  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "—"}</b><span>median advertised minimum (KES)</span></div>
+  <div><b>{f"{data['band']['median']:,.0f}" if data['band'] else "-"}</b><span>median advertised minimum (KES)</span></div>
 </div>
 <div class="tablewrap mt26"><table>
   <tr><th>Role</th><th>Employer</th><th>Closes</th><th>Pay</th></tr>
   {rows}
 </table></div>
 <p class="small">Pay is what the advert stated. “Not stated” is the advert's gap,
-not a judgement about the job. <a href="/salaries">Advertised pay by county →</a> ·
+not a judgement about the job. <a href="/salaries">Advertised pay by county →</a> -
 <a href="/search?county={quote(name)}">Search within {_e(name)} →</a></p>"""
     return _page(
-        f"{name} — jobs — Kazi-Kasi",
+        f"{name} - jobs - Kazi-Kasi",
         body,
         demo=demo,
         nav=_public_nav(conn, headers),
@@ -3582,7 +3654,7 @@ def _search_href(
 def _pay_text(row) -> str:
     low, high = row.get("pay_min"), row.get("pay_max")
     if low and high and low != high:
-        return f"KES {low:,.0f}–{high:,.0f}"
+        return f"KES {low:,.0f}-{high:,.0f}"
     if low:
         return f"KES {low:,.0f}"
     return "pay not stated"
@@ -3705,7 +3777,7 @@ def _saved_search_html(
         channel = _e(subscription.channel)
         blocks.append(
             '<div class="whobar"><div><b>Keep this search</b> '
-            f'<span class="small">— we send you a message when something new matches, at most '
+            f'<span class="small">- we send you a message when something new matches, at most '
             f"once a day, and only while your {channel} subscription is on.</span></div>"
             '<form method="post" action="/search/save">'
             f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
@@ -3722,7 +3794,7 @@ def _saved_search_html(
         blocks.append(
             '<div class="whobar"><div><b>Want this search to message you?</b> '
             '<span class="small">Saved searches send messages, so they need a subscription '
-            "first — that is the consent rule, not a paywall.</span></div>"
+            "first - that is the consent rule, not a paywall.</span></div>"
             f'<a class="chip" href="/digest?profile={pid}">Turn on WhatsApp</a></div>'
         )
 
@@ -3736,7 +3808,7 @@ def _saved_search_html(
             )
             items.append(
                 f'<li><a href="/search?profile={pid}{_watch_query(item)}">{_e(item["label"])}</a> '
-                f'<span class="small">— {_e(item["cadence"])}, {_e(when)}</span> '
+                f'<span class="small">- {_e(item["cadence"])}, {_e(when)}</span> '
                 '<form method="post" action="/search/stop" class="inline">'
                 f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
                 f'<input type="hidden" name="id" value="{item["id"]}">'
@@ -3827,7 +3899,7 @@ def render_search(
         active = county.lower() == name.lower() if key == "county" else family == name
         if active:
             chips.append(
-                f'<a class="chip on" href="{_e(keep(**{key: ""}))}">{_e(label)} ×</a>'
+                f'<a class="chip on" href="{_e(keep(**{key: ""}))}">{_e(label)} x</a>'
             )
         else:
             chips.append(
@@ -3835,15 +3907,15 @@ def render_search(
                 f'<span class="num">{count}</span></a>'
             )
     if remote:
-        chips.append(f'<a class="chip on" href="{_e(keep(remote=False))}">remote or hybrid ×</a>')
+        chips.append(f'<a class="chip on" href="{_e(keep(remote=False))}">remote or hybrid x</a>')
     if deadline_days:
         chips.append(
             f'<a class="chip on" href="{_e(keep(deadline_days=None))}">'
-            f"closes within {deadline_days} days ×</a>"
+            f"closes within {deadline_days} days x</a>"
         )
     if pay_floor:
         chips.append(
-            f'<a class="chip on" href="{_e(keep(pay_floor=None))}">≥ KES {pay_floor:,.0f} ×</a>'
+            f'<a class="chip on" href="{_e(keep(pay_floor=None))}">≥ KES {pay_floor:,.0f} x</a>'
         )
     if found.is_filtered:
         chips.append(f'<a class="chip" href="/search?profile={quote(profile.id)}">clear all</a>')
@@ -3882,7 +3954,7 @@ def render_search(
             suggestions.append(f'<a href="{_e(keep(pay_floor=None))}">drop the pay floor</a>')
         cards = f"""<div class="card">
   <h2>No matches right now</h2>
-  <p>That's okay — the market is what it is. Try widening your search: pick a
+  <p>That's okay - the market is what it is. Try widening your search: pick a
   different county, drop a filter, or just browse everything that's live.
   We'd rather show you nothing than pretend there's something there.</p>
   <ul class="whythat">{''.join(f'<li>{item}</li>' for item in suggestions)}</ul>
@@ -3895,7 +3967,7 @@ def render_search(
         )
         blocked_html = f"""
 <div class="section"><span>Outside your constraints</span><em>{len(found.blocked)} roles</em></div>
-<p class="small">These advertised roles fail something in your profile — the years asked
+<p class="small">These advertised roles fail something in your profile - the years asked
 for, the distance, or the pay floor. They are here because seeing the edge of the market
 is useful; they are never mixed into the feed.</p>
 {blocked_cards}"""
@@ -3917,10 +3989,10 @@ is useful; they are never mixed into the feed.</p>
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Search · {_e(profile.name.split(' — ')[0])}</p>
+  <p class="kicker">Search - {_e(profile.name.split(' - ')[0])}</p>
   <h1 class="display">Find the role you meant</h1>
   <p class="scopeline">Every live advert in the graph, narrowed by your words and your
-  filters — ranked by the same scorer as the feed.</p>
+  filters - ranked by the same scorer as the feed.</p>
   <form method="get" action="/search" class="searchform">
     <input type="hidden" name="profile" value="{_e(profile.id)}">
     <label>Words <input type="search" name="q" value="{_e(query)}"
@@ -3939,9 +4011,9 @@ is useful; they are never mixed into the feed.</p>
     <button type="submit">Search</button>
   </form>
   <div class="filters">{''.join(chips)}</div>
-  <p class="ledger"><b>{found.narrowed}</b> of {found.considered} live roles match ·
-    {len(found.matches)} in your scope · {found.blocked_count} outside it
-    · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
+  <p class="ledger"><b>{found.narrowed}</b> of {found.considered} live roles match -
+    {len(found.matches)} in your scope - {found.blocked_count} outside it
+    - checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
 </div>
 {unstated_note}
 {saved_html}
@@ -3954,7 +4026,7 @@ is useful; they are never mixed into the feed.</p>
 {blocked_html}
 {watched_html}"""
     return _page(
-        f"Search — Kazi-Kasi",
+        f"Search - Kazi-Kasi",
         body,
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
@@ -3969,7 +4041,7 @@ def _setup_step_html(step, *, number: int | None = None) -> str:
     """One step. A **done** step never shows instructions.
 
     That distinction is the whole page. An earlier version rendered the "here is
-    how you set this variable" note on completed steps too — so the first card on
+    how you set this variable" note on completed steps too - so the first card on
     the page told you to set something you had already set, and read like step one
     of a to-do list. A checklist that keeps instructing you after you are finished
     is a checklist you stop trusting.
@@ -3983,7 +4055,7 @@ def _setup_step_html(step, *, number: int | None = None) -> str:
         return f"""<article class="card step done">
   <div class="card-top">
     <div><h2>{_e(step.title)}</h2>
-      <div class="small mono">{_e(step.detail or names)} · nothing to do</div></div>
+      <div class="small mono">{_e(step.detail or names)} - nothing to do</div></div>
     <div class="deadline">{badge}</div>
   </div>
 </article>"""
@@ -4041,7 +4113,7 @@ def render_setup(
 
     # Grouped by what to do about it, not by an internal id order. A flat numbered
     # list mixes "already finished" with "do this next" and reads like a to-do list
-    # that never shrinks — which is precisely how the previous version was misread.
+    # that never shrinks - which is precisely how the previous version was misread.
     todo = [step for step in plan.steps if step.state == "missing"]
     optional = [step for step in plan.steps if step.state == "optional"]
     deferred = [step for step in plan.steps if step.state == "deferred"]
@@ -4061,7 +4133,7 @@ def render_setup(
     else:
         todo_html = (
             '<div class="whobar"><div><b>Nothing required is missing.</b> '
-            '<span class="small">Sign-in, sessions and storage are all configured — '
+            '<span class="small">Sign-in, sessions and storage are all configured - '
             "whichever optional steps you take from here are improvements, not repairs.</span></div></div>"
         )
     optional_html = section(
@@ -4075,7 +4147,7 @@ def render_setup(
         "".join(_setup_step_html(step) for step in deferred),
     )
     done_html = section(
-        "Already done — nothing to do here",
+        "Already done - nothing to do here",
         f"{len(done)}",
         "".join(_setup_step_html(step) for step in done),
     )
@@ -4092,7 +4164,7 @@ def render_setup(
         else "Next: "
         + todo[0].title
         + (
-            " — one step."
+            " - one step."
             if len(todo) == 1
             else f", then {len(todo) - 1} more."
         )
@@ -4104,19 +4176,19 @@ def render_setup(
   {_e(instance['base_url'])}.</b>
   <span class="small">Every redirect URI below is wrong for the address you are using. Sign-in will
   bounce back with a state-mismatch error. Fix <code class="key">KAZIKASI_BASE_URL</code> in Vercel and
-  redeploy — or open the site at the address it names.</span></div></div>"""
+  redeploy - or open the site at the address it names.</span></div></div>"""
     )
     required_done = sum(1 for item in plan.required if item.state == "done")
     optional_open = sum(1 for item in plan.steps if item.state in ("optional", "deferred"))
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Go-live · this deployment</p>
+  <p class="kicker">Go-live - this deployment</p>
   <h1 class="display">What is left, and what to paste</h1>
   <p class="scopeline">{_e(next_line)}</p>
-  <p class="ledger"><b>{required_done} of {len(plan.required)}</b> required steps done ·
-    {optional_open} optional · build {_e(instance['build'])} ·
-    schema {instance['schema']} · checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
+  <p class="ledger"><b>{required_done} of {len(plan.required)}</b> required steps done -
+    {optional_open} optional - build {_e(instance['build'])} -
+    schema {instance['schema']} - checked {(now + timedelta(hours=3)).strftime('%H:%M')} EAT</p>
 </div>
 <div class="strip">
   <div><b>{instance['live_jobs']}</b><span>live roles</span></div>
@@ -4126,7 +4198,7 @@ def render_setup(
 </div>
 {host_warning}<div class="whobar">
   <div><b>The scheduled tick, right now:</b>
-    <span class="small">{_e(tick['answer'])}{(' — needs ' + _e(tick['needs'])) if tick['needs'] else ''}</span></div>
+    <span class="small">{_e(tick['answer'])}{(' - needs ' + _e(tick['needs'])) if tick['needs'] else ''}</span></div>
   <div><span class="badge {corpus_tone}">{_e(instance['corpus']['source'])}</span></div>
 </div>
 {cards}
@@ -4134,19 +4206,19 @@ def render_setup(
 <ol class="whythat trial">
   <li><b>Click Continue with Google</b> on <a href="/signin">the sign-in page</a>.
     <span class="small">If the page says the provider is not connected, the variables are not in
-    <em>this</em> build — redeploy first.</span></li>
+    <em>this</em> build - redeploy first.</span></li>
   <li><b>You should land on Google's account chooser.</b>
     <span class="small">That alone proves the client id is valid and the redirect URI is registered.</span></li>
   <li><b>Pick your account, then look at where you land.</b>
     <span class="small">A page showing your name and email means sign-in works end to end. Your
     address appearing at the top right is the same evidence.</span></li>
   <li><b>If Google says <code class="key">redirect_uri_mismatch</code></b>
-    <span class="small">the URI in the Google client differs from the one above by a character —
+    <span class="small">the URI in the Google client differs from the one above by a character -
     usually a trailing slash, http vs https, or www.</span></li>
   <li><b>If Google says <code class="key">invalid_client</code></b>
     <span class="small">the secret is wrong or has a stray newline from the paste. Re-paste it.</span></li>
   <li><b>If you bounce back here with a state error</b>
-    <span class="small">the base URL does not match the domain you are on — see the warning above,
+    <span class="small">the base URL does not match the domain you are on - see the warning above,
     if there is one.</span></li>
 </ol>
 <div class="section mt26"><span>When a console fights you</span><em>the four that cost hours</em></div>
@@ -4154,7 +4226,7 @@ def render_setup(
 <p class="small">Nothing on this page is a secret: it renders booleans and public URLs.
 The values themselves live in Vercel and are never read back out.</p>"""
     return _page(
-        "Go live — Kazi-Kasi",
+        "Go live - Kazi-Kasi",
         body + f"<script>{COPY_JS}</script>",
         demo=demo,
         nav=_public_nav(conn, headers),
@@ -4268,7 +4340,7 @@ def render_job(
         ("Deadline", row["deadline"] or "Not stated"),
         (
             "Pay",
-            f'KES {row["pay_min"]:,.0f}–{row["pay_max"]:,.0f} per {row["pay_period"]}'
+            f'KES {row["pay_min"]:,.0f}-{row["pay_max"]:,.0f} per {row["pay_period"]}'
             if row["pay_min"] and row["pay_max"] and row["pay_min"] != row["pay_max"]
             else (f'KES {row["pay_min"]:,.0f} per {row["pay_period"]}' if row["pay_min"] else "Not stated"),
         ),
@@ -4278,12 +4350,12 @@ def render_job(
 
     source_items = "".join(
         f'<li><a href="{_e(item["source_url"])}" rel="nofollow noopener" target="_blank">'
-        f'{_e(item["source_id"])}</a> · matched by {_e(item["match_reason"])}'
+        f'{_e(item["source_id"])}</a> - matched by {_e(item["match_reason"])}'
         f'<div class="small">checked {_e(item["fetched_at"][:16].replace("T", " "))}</div></li>'
         for item in sources
     )
     event_items = "".join(
-        f'<li>{_e(event["kind"].replace("_", " "))} · {_e(event["at"][:10])}</li>' for event in events
+        f'<li>{_e(event["kind"].replace("_", " "))} - {_e(event["at"][:10])}</li>' for event in events
     )
     structured = _job_posting(row, description)
     account = _account_for(conn, headers)
@@ -4314,7 +4386,7 @@ def render_job(
         '<input type="hidden" name="kind" value="'
         + ("unsaved" if state["saved"] else "saved")
         + f'"><input type="hidden" name="next" value="/job/{_e(job_id)}?profile={quote(profile.id)}">'
-        f'<button type="submit" class="ghost">{"Saved ✓ — remove" if state["saved"] else "Save for later"}</button>'
+        f'<button type="submit" class="ghost">{"Saved ✓ - remove" if state["saved"] else "Save for later"}</button>'
         "</form>",
         '<form method="post" action="/action" class="inline-ml">'
         f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
@@ -4322,7 +4394,7 @@ def render_job(
         f'<input type="hidden" name="kind" value="{"unsaved" if state["applied"] else "applied"}">'
         f'<input type="hidden" name="next" value="/job/{_e(job_id)}?profile={quote(profile.id)}">'
         '<button type="submit" class="ghost">'
-        + ("Applied ✓ — undo" if state["applied"] else "I applied to this")
+        + ("Applied ✓ - undo" if state["applied"] else "I applied to this")
         + "</button></form>",
     ]
     apply_html = ""
@@ -4332,7 +4404,7 @@ def render_job(
             f' rel="nofollow noopener" target="_blank">Apply on {_e(source["source_id"])}</a> '
             + "".join(actions)
             + '</p><p class="small">Applying happens on the employer’s site. '
-            "“I applied” is your note to yourself — it is what the tracker counts, "
+            "“I applied” is your note to yourself - it is what the tracker counts, "
             "and no employer is told.</p>"
         )
 
@@ -4357,7 +4429,7 @@ def render_job(
 Distance is straight-line between approximate area centres, not a route.</p>
 """
     return _page(
-        f"{row['title']} — Kazi-Kasi",
+        f"{row['title']} - Kazi-Kasi",
         body,
         demo=demo,
         head=structured,
@@ -4375,7 +4447,7 @@ def render_slo(conn, *, now: datetime | None = None, demo: bool = False) -> str:
     payload = slo.report(conn, now=now)
     rows = []
     for source in payload["sources"]:
-        age = "—" if source["age_minutes"] is None else f'{source["age_minutes"]:.0f} min'
+        age = "-" if source["age_minutes"] is None else f'{source["age_minutes"]:.0f} min'
         rows.append(
             f"""<tr>
   <td>{_e(source['label'])}</td>
@@ -4402,7 +4474,7 @@ it says so here rather than on a marketing page.</p>
 <tr><th>Source</th><th>State</th><th>Since last fetch</th><th>Target</th><th>Observations</th></tr>
 {''.join(rows)}
 </table>"""
-    return _page("Freshness — Kazi-Kasi", body, demo=demo)
+    return _page("Freshness - Kazi-Kasi", body, demo=demo)
 
 
 def render_digest(
@@ -4441,7 +4513,7 @@ def render_digest(
         consent = (
             f'<p>Subscribed on {_e((subscription.consented_at or "")[:10])} via '
             f'{_e(subscription.consent_source)} to {_e(digest_module.mask_msisdn(subscription.msisdn))}. '
-            f'Daily, {_e(subscription.window_start)}–{_e(subscription.window_end)} EAT, '
+            f'Daily, {_e(subscription.window_start)}-{_e(subscription.window_end)} EAT, '
             f'up to {subscription.max_items} jobs.</p>'
             f'<form class="subform" method="post" action="/digest/unsubscribe">'
             f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
@@ -4450,7 +4522,7 @@ def render_digest(
     elif subscription:
         consent = (
             f'<p>Opted out on {_e((subscription.unsubscribed_at or "")[:10])}. '
-            f'Consent is recorded, not deleted — a re-subscribe re-dates it.</p>'
+            f'Consent is recorded, not deleted - a re-subscribe re-dates it.</p>'
             f'<form class="subform" method="post" action="/digest/subscribe">'
             f'<input type="hidden" name="profile" value="{_e(profile.id)}">'
             f'<input name="msisdn" inputmode="tel" placeholder="07xx xxx xxx" required>'
@@ -4506,7 +4578,7 @@ def render_digest(
 
     switcher = " ".join(
         f'<a class="{"on" if other.id == profile.id else ""}" '
-        f'href="/digest?profile={quote(other.id)}">{_e(other.name.split(" — ")[0])}</a>'
+        f'href="/digest?profile={quote(other.id)}">{_e(other.name.split(" - ")[0])}</a>'
         for other in _profiles(conn)
     )
 
@@ -4524,17 +4596,17 @@ job twice. The body below is produced by the same code that would send it.</p>
 <pre class="msg sms">{_e(sms_preview)}</pre>
 {skipped_block}
 {log_block}"""
-    return _page("WhatsApp digest — Kazi-Kasi", body_html, demo=demo)
+    return _page("WhatsApp digest - Kazi-Kasi", body_html, demo=demo)
 
 
 def render_review(conn: sqlite3.Connection, *, now: datetime | None = None, demo: bool = False) -> str:
     pairs = graph.open_reviews(conn)
     if not pairs:
-        return _page("Review queue — Kazi-Kasi", "<h1>Review queue</h1><p>Nothing to decide.</p>", demo=demo)
+        return _page("Review queue - Kazi-Kasi", "<h1>Review queue</h1><p>Nothing to decide.</p>", demo=demo)
     items = "".join(
         f"""<article class="card">
   <h2>{_e(pair['incoming_title'])} <span class="small">vs</span> {_e(pair['job_title'])}</h2>
-  <div class="employer">{_e(pair['incoming_employer'])} · similarity {pair['score']:.2f} · {_e(pair['reason'])}</div>
+  <div class="employer">{_e(pair['incoming_employer'])} - similarity {pair['score']:.2f} - {_e(pair['reason'])}</div>
   <div class="foot"><span>incoming: {_e(pair['incoming_source'])}</span>
   <span>existing job: <a href="/job/{_e(pair['candidate_job_id'])}">open</a></span></div>
 </article>"""
@@ -4544,7 +4616,7 @@ def render_review(conn: sqlite3.Connection, *, now: datetime | None = None, demo
         "<h1>Review queue</h1><p class='small'>Pairs that were close but not close enough to "
         f"merge automatically.</p>{items}"
     )
-    return _page("Review queue — Kazi-Kasi", body, demo=demo)
+    return _page("Review queue - Kazi-Kasi", body, demo=demo)
 
 
 # --------------------------------------------------------------------------
@@ -4564,7 +4636,7 @@ ACTION_RATE_LIMIT = 120
 class _RateLimiter:
     """A tiny in-process token bucket.
 
-    Not a replacement for a real edge limiter — it exists so a loop cannot
+    Not a replacement for a real edge limiter - it exists so a loop cannot
     enumerate numbers through the subscribe form on a single node. It is
     deliberately forgiving and per-process.
     """
@@ -4605,7 +4677,7 @@ def _seed_demo_history(conn, now: datetime) -> None:
     `/activity` and `/year` are only meaningful with history, and a demo link that
     opens on "nothing here yet" demonstrates nothing. These events are synthetic
     like the rest of the corpus, deterministic (same ids, same days) and only ever
-    written into an in-memory demo database — never into a real one.
+    written into an in-memory demo database - never into a real one.
     """
     rows = conn.execute(
         "SELECT id FROM jobs WHERE status = 'open' ORDER BY id LIMIT 12"
@@ -4661,7 +4733,7 @@ def demo_connection(
 #
 # Everything below the HTTP layer is a pure function of (connection, method,
 # path, query, body). That is what lets the same app run behind the stdlib
-# server here and behind a serverless function on Vercel — and it is why the
+# server here and behind a serverless function on Vercel - and it is why the
 # two cannot drift apart.
 # --------------------------------------------------------------------------
 
@@ -4758,7 +4830,7 @@ def handle(
         return _handle_action(conn, body, header_map)
     if path == "/auth/start":
         # The sign-in page posts here with the provider in the body. This route did
-        # not exist, so every "Continue with ..." button answered 404 — the flow was
+        # not exist, so every "Continue with ..." button answered 404 - the flow was
         # built, tested through GET /auth/<provider>/start, and unreachable from the
         # only place a person actually clicks it. Provenance is the lesson: test the
         # route the markup posts to, not the route the helper is named after.
@@ -4769,7 +4841,7 @@ def handle(
 
 
 def _record_view(conn, profile_id: str, job_id: str, now: datetime) -> None:
-    """One "visited" per job per (Nairobi) day — the tracker, not a hit counter.
+    """One "visited" per job per (Nairobi) day - the tracker, not a hit counter.
 
     The day is stored in ``detail`` and compared there. Comparing the timestamp's
     prefix instead mixes two clocks *and* two timezones: rows are stamped in UTC
@@ -4795,8 +4867,8 @@ def _record_view(conn, profile_id: str, job_id: str, now: datetime) -> None:
 def _transports_from_env() -> dict:
     """The real senders, if this deployment has credentials for them.
 
-    Missing credentials are not an error at import time — the site must render
-    without a WhatsApp account — but they *are* an error for a cron run, which is
+    Missing credentials are not an error at import time - the site must render
+    without a WhatsApp account - but they *are* an error for a cron run, which is
     why the cron handler reports 503 rather than pretending to have sent.
     """
     transports = {}
@@ -4931,7 +5003,12 @@ def _json(status: int, payload: dict) -> Response:
 def _handle_get(
     conn, path: str, query: dict, *, demo: bool, now: datetime, headers: dict | None = None
 ) -> Response:
+
+    if path.startswith("/static/"):
+        return _serve_static(path)
+
     if path == "/healthz":
+
         return Response(200, "ok", "text/plain; charset=utf-8")
 
     if path in ("/api/cron/run", "/api/cron"):
@@ -5193,6 +5270,13 @@ def _handle_get(
             notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good"),
         ))
 
+    if path == "/verse":
+        return Response(200, render_verse_page(demo=demo), "text/html; charset=utf-8")
+
+    if path == "/api/galaxy":
+        return _handle_galaxy_api(conn, query, demo=demo, now=now)
+
+
     if path in ("/", "/index.html"):
         seen = read_seen(headers)
         account = _account_for(conn, headers)
@@ -5210,12 +5294,39 @@ def _handle_get(
     return Response(404, _page("Not found", "<h1>Not found</h1>", demo=demo))
 
 
+
+
+def _serve_static(path: str) -> Response:
+    """Serve static files (JS, CSS, etc.)."""
+    # Security: only allow files in static/ directory
+    filename = path[8:]  # Remove "/static/"
+    if '..' in filename or filename.startswith('/'):
+        return Response(403, "Forbidden", "text/plain")
+    
+    static_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
+    filepath = os.path.join(static_dir, filename)
+    
+    if not os.path.exists(filepath):
+        return Response(404, "Not found", "text/plain")
+    
+    # Determine content type
+    content_type = "application/octet-stream"
+    if filename.endswith('.js'):
+        content_type = "application/javascript; charset=utf-8"
+    elif filename.endswith('.html'):
+        content_type = "text/html; charset=utf-8"
+    elif filename.endswith('.css'):
+        content_type = "text/css; charset=utf-8"
+    
+    with open(filepath, 'r') as f:
+        return Response(200, f.read(), content_type)
+
 def _handle_webhook(conn, path: str, query: dict, raw: bytes, headers: dict, *, strict: bool) -> Response:
     """Inbound replies and receipts. Fails closed on an unverified sender.
 
     The posture is "production", not "synthetic data": a local `serve` without
     --demo, or a deployment with KAZIKASI_DEMO=0, fails closed when no shared
-    secret is configured — otherwise anyone could POST a fake receipt.
+    secret is configured - otherwise anyone could POST a fake receipt.
     """
     if path == "/webhooks/whatsapp":
         secret = os.environ.get("WHATSAPP_APP_SECRET")
@@ -5340,7 +5451,7 @@ def _auth_start(conn, provider, *, demo: bool, now: datetime, return_to: str = "
         # synthetic path so the rest of the flow can still be walked end to end.
         body = f"""
 <div class="masthead">
-  <p class="kicker">Sign-in · not configured</p>
+  <p class="kicker">Sign-in - not configured</p>
   <h1 class="display">{_e(provider.label)} is not connected in this build</h1>
   <p class="scopeline">The flow is built; the credentials are not. A deployment needs
   two environment variables before this button can talk to {_e(provider.label)}.</p>
@@ -5357,7 +5468,7 @@ def _auth_start(conn, provider, *, demo: bool, now: datetime, return_to: str = "
 </div>
 {"<form method='post' action='/auth/demo'><input type='hidden' name='provider' value='" + provider.key + "'><button type='submit' class='ghost'>Continue with a synthetic demo account</button></form><p class='small'>This creates a local member account so the flow can be tested. No provider is contacted.</p>" if demo else ""}
 <p><a href="/signin">← back</a></p>"""
-        return Response(200, _page("Sign in — Kazi-Kasi", body, demo=demo))
+        return Response(200, _page("Sign in - Kazi-Kasi", body, demo=demo))
 
     attempt = accounts.start(conn, provider.key, now=now, return_to=return_to)
     url = accounts.authorize_url(
@@ -5438,12 +5549,12 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
         # Check for PDF parsing errors
         if text.startswith("__PDF_ERROR__"):
             error_detail = text.split(":", 1)[1] if ":" in text else "Unknown error"
-            return _redirect(f"/account?error={quote(f'Could not read that PDF — {error_detail}. Try a different file or paste the text directly.')}")
+            return _redirect(f"/account?error={quote(f'Could not read that PDF - {error_detail}. Try a different file or paste the text directly.')}")
         if text == "__PDF_NO_TEXT__":
             return _redirect(f"/account?error={quote('That PDF has no readable text (it might be a scanned image). Try pasting the text directly or upload a .txt/.md file.')}")
         
         if not text.strip():
-            return _redirect(f"/account?error={quote('No CV text found — paste the text or upload a .txt, .md or .pdf.')}")
+            return _redirect(f"/account?error={quote('No CV text found - paste the text or upload a .txt, .md or .pdf.')}")
         fields = autofill.parse(text)
         accounts.store_cv(conn, account["id"], filename=filename, text=text, fields=fields, now=now)
         accounts.touch(conn, account["id"], now=now)
@@ -5499,7 +5610,7 @@ def _cv_text(body: bytes, content_type: str) -> tuple[str | None, str]:
                         # PDF parsed but no text found (scanned image?)
                         return filename, "__PDF_NO_TEXT__"
                 except Exception as e:
-                    # PdfStreamError, etc. — corrupted or truncated PDF.
+                    # PdfStreamError, etc. - corrupted or truncated PDF.
                     error_msg = str(e)[:100]
                     return filename, f"__PDF_ERROR__:{error_msg}"
             else:
