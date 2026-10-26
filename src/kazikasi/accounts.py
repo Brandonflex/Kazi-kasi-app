@@ -588,7 +588,7 @@ def sign_in(conn, provider_key: str, identity: dict, *, now: datetime | None = N
         )
     conn.execute(
         """UPDATE accounts SET last_seen_at = ?, email = COALESCE(?, email),
-                               email_verified = MAX(email_verified::integer, ?)::smallint, 
+                               email_verified = GREATEST(email_verified, ?::smallint), 
                                name = COALESCE(?, name),
                                given_name = COALESCE(?, given_name),
                                family_name = COALESCE(?, family_name),

@@ -472,18 +472,21 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 .stat-number {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--nairobi-dark);
   line-height: 1;
+  display: block;
+  margin-bottom: 8px;
 }
 .stat-label {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   font-weight: 600;
-  margin-top: 6px;
+  display: block;
+  margin-top: 0;
 }
 .stat-card:nth-child(1) .stat-number { color: var(--ember-gold) }
 .stat-card:nth-child(2) .stat-number { color: var(--safari-green) }
@@ -589,19 +592,30 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 
 /* Company initial badge */
 .company-initial {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--nairobi-dark) 0%, var(--safari-green) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--akala-bone);
   flex: none;
   box-shadow: var(--shadow-sm);
+  margin-top: 4px;
+}
+
+.card h2 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.card .employer {
+  margin-bottom: 10px;
 }
 
 .salary {
@@ -750,23 +764,24 @@ button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--embe
   background: var(--surface-elevated);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px 20px;
+  padding: 20px;
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--duration) var(--ease-out);
+  margin-bottom: 16px;
 }
 .rail-card:hover { box-shadow: var(--shadow) }
 .rail-card h3 {
-  margin: 0 0 10px;
-  font-size: 10px;
-  letter-spacing: .18em;
+  margin: 0 0 14px;
+  font-size: 11px;
+  letter-spacing: .15em;
   text-transform: uppercase;
   color: var(--ember-gold);
   font-family: var(--font-sans);
   font-weight: 700;
 }
-.rail-card .chips { display: flex; gap: 5px; flex-wrap: wrap }
-.rail-note { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.5 }
-.rail-card .more { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--ember-gold); text-decoration: none; transition: color var(--duration-fast) }
+.rail-card .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px }
+.rail-note { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6 }
+.rail-card .more { display: inline-block; margin-top: 12px; margin-right: 12px; font-size: 13px; font-weight: 600; color: var(--ember-gold); text-decoration: none; transition: color var(--duration-fast) }
 .rail-card .more:hover { color: var(--ember-gold) }
 
 /* Momentum dots */
@@ -1157,6 +1172,396 @@ header::before {
 }
 header > * { position: relative; z-index: 1 }
 
+
+
+/* ============================================================
+   DIGEST PAGE UI
+   ============================================================ */
+
+.digest-preview-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  color: var(--ember-gold);
+  border-bottom-color: var(--ember-gold);
+}
+
+.tab-btn:hover {
+  color: var(--ink-2);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.digest-job-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.digest-job-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--nairobi-dark);
+}
+
+.digest-job-card .employer {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+}
+
+.digest-job-card .salary {
+  display: inline-block;
+  background: var(--ember-soft);
+  color: var(--ember-gold);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+
+/* 3D Tilt Effect */
+[data-tilt] {
+  transform-style: preserve-3d;
+  transition: transform 100ms linear;
+}
+[data-tilt] > * {
+  transform: translateZ(0);
+}
+
+
+/* ============================================================
+   VARIED LOADING STATES
+   ============================================================ */
+
+/* Auth loading */
+.loading-auth .loading-spinner-large {
+  width: 72px;
+  height: 72px;
+  border: 4px solid rgba(233, 162, 59, 0.15);
+  border-top-color: #E9A23B;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 28px;
+}
+
+.loading-auth .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  color: #F6F0E6;
+  margin-bottom: 12px;
+}
+
+.loading-auth .loading-message {
+  font-size: 14px;
+  color: rgba(246, 240, 230, 0.7);
+  margin-bottom: 32px;
+}
+
+.loading-auth .loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loading-auth .step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(246, 240, 230, 0.5);
+  transition: color 0.3s;
+}
+
+.loading-auth .step.active {
+  color: #E9A23B;
+  font-weight: 600;
+}
+
+.loading-auth .step::before {
+  content: '○';
+  font-size: 14px;
+}
+
+.loading-auth .step.active::before {
+  content: '●';
+}
+
+/* Galaxy loading */
+.loading-galaxy .galaxy-loader {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin-bottom: 32px;
+}
+
+.loading-galaxy .orbit {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(233, 162, 59, 0.25);
+  border-radius: 50%;
+  animation: orbit-spin 4s linear infinite;
+}
+
+.loading-galaxy .orbit:nth-child(2) {
+  inset: 12px;
+  animation-duration: 3s;
+  animation-direction: reverse;
+}
+
+.loading-galaxy .orbit:nth-child(3) {
+  inset: 24px;
+  animation-duration: 2s;
+}
+
+.loading-galaxy .core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #E9A23B;
+  border-radius: 50%;
+  box-shadow: 0 0 20px #E9A23B;
+  animation: pulse-core 1.5s ease-in-out infinite;
+}
+
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-core {
+  0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+.loading-galaxy .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  color: #E9A23B;
+  margin-bottom: 10px;
+}
+
+.loading-galaxy .loading-tips {
+  margin-top: 24px;
+  max-width: 300px;
+}
+
+.loading-galaxy .tip {
+  font-size: 12.5px;
+  color: rgba(246, 240, 230, 0.6);
+  font-style: italic;
+  padding: 10px 14px;
+  background: rgba(233, 162, 59, 0.08);
+  border-radius: 8px;
+  border-left: 2px solid rgba(233, 162, 59, 0.3);
+}
+
+/* Search loading */
+.loading-search .loading-dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.loading-search .loading-dots span {
+  width: 10px;
+  height: 10px;
+  background: #E9A23B;
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.loading-search .loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-search .loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Upload loading */
+.loading-upload .progress-bar {
+  width: 240px;
+  height: 4px;
+  background: rgba(233, 162, 59, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.loading-upload .progress-fill {
+  height: 100%;
+  background: #E9A23B;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.loading-upload .loading-title {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  color: #F6F0E6;
+  margin-bottom: 10px;
+}
+
+.loading-upload .progress-text {
+  font-size: 13px;
+  color: #E9A23B;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+/* ============================================================
+   SKELETON LOADING STATES
+   ============================================================ */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg) 0%, var(--bone) 50%, var(--bg) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  height: 180px;
+  margin-bottom: 16px;
+}
+
+.skeleton-stat {
+  height: 80px;
+  border-radius: var(--radius);
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short { width: 60%; }
+.skeleton-text.medium { width: 80%; }
+.skeleton-text.long { width: 100%; }
+
+.skeleton-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+/* Loading overlay for page transitions */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(246, 240, 230, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  transition: opacity 0.3s ease-out;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--bone);
+  border-top-color: var(--ember-gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Auth loading state */
+.auth-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 24px;
+}
+
+.auth-loading .loading-spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
+}
+
+.auth-loading p {
+  font-size: 16px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.auth-loading .subtext {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: -16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto }
   .card, button, .btn, a { transition: none !important }
@@ -1276,13 +1681,13 @@ def _handle_galaxy_api(conn, query: dict, *, demo: bool, now: datetime) -> Respo
     prof = _profile_or_default(conn, profile_id)
     
     # Get matches
-    matches, _ = _ranked(conn, prof, now=now, limit=50)
+    matches, _ = _ranked(conn, prof, now=now, limit=200)
     
     # Get profile skills (from CV or default)
     profile_skills = ["python", "javascript", "management", "communication", "data analysis"]
     
     # Prepare galaxy data
-    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=50)
+    galaxy_data = galaxy.prepare_galaxy_data(matches, profile_skills, max_jobs=150)
     
     return Response(
         200,
@@ -1327,7 +1732,7 @@ def _page(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0C3B43">
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
-<title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
+<title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script></head>
 <body>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
@@ -1429,6 +1834,8 @@ window.addEventListener('scroll', () => {{
   }});
 }})();
 </script>
+
+
 </body></html>"""
 
 
@@ -4540,12 +4947,38 @@ def render_digest(
 
     if messages:
         body = messages[0].body
-        shown = f'<pre class="msg">{_e(body)}</pre>'
+        # Build polished card preview
+        items_html = ""
+        for item in (digest.items or []):
+            job = item.job if hasattr(item, 'job') else None
+            if job:
+                title = job.get('title', 'Unknown') if isinstance(job, dict) else str(job)
+                employer = job.get('employer', '') if isinstance(job, dict) else ''
+                salary = job.get('salary_min') if isinstance(job, dict) else None
+                salary_html = f'<div class="salary">KES {salary:,}/month</div>' if salary else ''
+                items_html += f'''<div class="digest-job-card">
+                    <h3>{_e(title)}</h3>
+                    <div class="employer">{_e(employer)}</div>
+                    {salary_html}
+                </div>'''
+        
+        shown = f'''
+        <div class="digest-preview-tabs">
+            <button class="tab-btn active" onclick="showTab('polished')">Preview</button>
+            <button class="tab-btn" onclick="showTab('raw')">Raw Message</button>
+        </div>
+        <div id="tab-polished" class="tab-content active">
+            {items_html if items_html else '<p>No jobs in this digest.</p>'}
+        </div>
+        <div id="tab-raw" class="tab-content">
+            <pre class="msg">{_e(body)}</pre>
+        </div>
+        '''
         if len(messages) > 1:
-            shown += f'<p class="small">Split into {len(messages)} messages at card boundaries (WhatsApp caps a text at {digest_module.WHATSAPP_TEXT_LIMIT} characters).</p>'
+            shown += f'<p class="small">Split into {len(messages)} messages (WhatsApp caps at {digest_module.WHATSAPP_TEXT_LIMIT} chars).</p>'
     else:
         shown = (
-            '<div class="card"><p>Nothing to send today: every job that fits has already been '
+            '<div class="empty-state"><p>Nothing to send today: every job that fits has already been '
             'in a digest, applied to, or dismissed. An empty digest is silence, not a '
             '"no jobs" message.</p></div>'
         )
