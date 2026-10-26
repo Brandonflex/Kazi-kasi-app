@@ -197,6 +197,10 @@ def app(environ, start_response):
         status = f"{response.status} {'OK' if response.status < 400 else 'Error'}"
         payload = response.body.encode("utf-8")
         policy = serve.security_headers()
+        # If the response has its own CSP header, use that instead of the
+        # standard one (e.g. the galaxy page needs different permissions).
+        if "Content-Security-Policy" in response.headers:
+            policy = {k: v for k, v in policy.items() if k != "Content-Security-Policy"}
         # Redirects skip COOP: it's meant for pages with sensitive content, not
         # for 303s that are part of an OAuth flow coming back from Google.
         if response.is_redirect:
