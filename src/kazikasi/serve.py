@@ -1533,7 +1533,7 @@ def _page(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0C3B43">
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
-<title>{_e(title)}</title>{head}<style>{STYLE}</style></head>
+<title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script></head>
 <body>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
