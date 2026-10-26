@@ -1617,8 +1617,148 @@ header > * { position: relative; z-index: 1 }
 
 
 /* Page loading overlay - visible by default, hidden by JS when loaded */
-#page-loading-overlay { display: flex; }
+#page-loading-overlay {
+  display: flex;
+  background: linear-gradient(135deg, #F6F0E6 0%, #FBF8F2 100%);
+}
+
 noscript #page-loading-overlay { display: none; }
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Branded loading spinner */
+.loading-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.loading-spinner::before,
+.loading-spinner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+}
+
+.loading-spinner::before {
+  border-top-color: #E9A23B;
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner::after {
+  border-bottom-color: #166E5C;
+  animation: spin 1.5s linear infinite reverse;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Loading message with typing effect */
+.loading-message {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--nairobi-dark);
+  letter-spacing: -0.01em;
+}
+
+.loading-message::after {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 24px;
+  background: var(--ember-gold);
+  margin-left: 4px;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Loading dots for secondary actions */
+.loading-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--ember-gold);
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Galaxy-specific loading */
+.galaxy-loading {
+  background: #0a0a0a;
+}
+
+.galaxy-loading .loading-spinner::before {
+  border-top-color: #E9A23B;
+  box-shadow: 0 0 20px rgba(233, 162, 59, 0.5);
+}
+
+.galaxy-loading .loading-spinner::after {
+  border-bottom-color: #166E5C;
+  box-shadow: 0 0 20px rgba(22, 110, 92, 0.5);
+}
+
+.galaxy-loading .loading-message {
+  color: #F6F0E6;
+}
+
+/* Progress bar for long operations */
+.loading-progress {
+  width: 200px;
+  height: 3px;
+  background: rgba(233, 162, 59, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #E9A23B 0%, #C85C3E 100%);
+  border-radius: 3px;
+  animation: progress 2s ease-in-out infinite;
+  width: 30%;
+}
+
+@keyframes progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
 
 /* 3D Tilt Effect */
 [data-tilt] {
@@ -2100,7 +2240,15 @@ def _page(
 <meta name="description" content="Kazi-Kasi - Kazi wenye kasi. Kenya's dignified work platform with personalized job matching and application tracking.">
 <title>{_e(title)}</title>{head}<style>{STYLE}</style><script src="/static/ui.js" defer></script><script src="/static/loading-states.js" defer></script></head>
 <body>
-<div id="page-loading-overlay" class="loading-overlay"><div class="loading-spinner"></div><div class="loading-message">Loading...</div></div>
+<div id="page-loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-message">Loading</div>
+  <div class="loading-dots">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
 <noscript><style>.reveal {{ opacity: 1 !important; transform: none !important; }}</style></noscript>
 <header><div class="wrap"><div class="brand">
 <a class="lockup" href="/" aria-label="Kazi-Kasi - jobs you can reach">
