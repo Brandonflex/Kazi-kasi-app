@@ -2765,12 +2765,13 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
         "Content-Security-Policy": "; ".join(
             [
                 "default-src 'none'",
-                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}'",
-                # The palette's index is a JSON data block, not a program; the
-                # only executable inline script is PALETTE_JS.
-                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}'",
+                # Inline styles (from STYLE and ERROR_STYLE hashes) + external stylesheets from self + Google Fonts + inline style attributes
+                f"style-src '{STYLE_HASH}' '{ERROR_STYLE_HASH}' 'self' https://fonts.googleapis.com 'unsafe-inline'",
+                # Inline scripts (PALETTE_JS, COPY_JS hashes) + external scripts from self
+                f"script-src '{SCRIPT_HASH}' '{COPY_HASH}' 'self'",
                 "img-src 'self' data:",
-                "font-src 'self'",
+                # Fonts from self + Google Fonts CDN
+                "font-src 'self' https://fonts.gstatic.com",
                 "connect-src 'self'",
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
