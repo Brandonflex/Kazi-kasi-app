@@ -1,11 +1,8 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index?__path=/$1" }
-  ],
-  "crons": [
-    { "path": "/api/cron/run", "schedule": "0 15 * * *" }
-  ],
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "framework": "nextjs",
   "headers": [
     {
       "source": "/(.*)",

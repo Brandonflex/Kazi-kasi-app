@@ -48,18 +48,16 @@ const mockApplications: Application[] = [
   },
   {
     id: '4',
-<<<<<<< HEAD
     title: 'DevOps Engineer',
     company: 'Microsoft ADC',
     location: 'Nairobi, Kenya',
     status: 'wishlist',
+    appliedDate: '2024-01-22',
     salary: 'KES 300K - 450K',
     url: 'https://careers.microsoft.com'
   },
   {
     id: '5',
-=======
->>>>>>> f8b0e13 (Fix build errors: tsconfig path alias, tracker page syntax)
     title: 'Platform Engineer',
     company: 'Twiga Foods',
     location: 'Nairobi, Kenya',

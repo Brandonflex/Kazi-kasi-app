@@ -1,8 +1,16 @@
-# Nothing here is needed to serve the read-only demo.
+# Old Python backend - not deployed to Vercel
+src/
+backend/
 tests/
 data/
 docs/
+*.py
+*.pyc
+__pycache__/
 .git/
 .pytest_cache/
-__pycache__/
-*.pyc
+.venv/
+kazi.db
+
+# Node
+frontend/node_modules/
