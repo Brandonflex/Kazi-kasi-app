@@ -111,14 +111,20 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex gap-2">
-            <a
-              href={job.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 text-center px-5 py-2.5 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors"
-            >
-              Apply on Company Site
-            </a>
+            {job.source_url ? (
+              <a
+                href={job.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-center px-5 py-2.5 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors"
+              >
+                Apply on Company Site
+              </a>
+            ) : (
+              <span className="flex-1 text-center px-5 py-2.5 bg-[#1a1a1a] text-[#737373] font-medium rounded-md">
+                Application link unavailable
+              </span>
+            )}
             <button className="px-5 py-2.5 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-all text-[#a3a3a3] hover:text-white">
               Save
             </button>

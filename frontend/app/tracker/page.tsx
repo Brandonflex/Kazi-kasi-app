@@ -125,7 +125,8 @@ export default function TrackerPage() {
         <div className="max-w-[1800px] mx-auto px-6 py-8">
           <div className="mb-6">
             <h2 className="text-2xl font-semibold mb-2 text-white">Application Tracker</h2>
-            <p className="text-sm text-[#737373]">Track your job applications across all stages</p>
+            <p className="text-sm text-[#737373]">A sample board to preview how an application pipeline can work.</p>
+            <span className="inline-flex mt-3 px-2 py-1 rounded border border-[#1f1f1f] text-xs text-[#737373]">Sample data</span>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">

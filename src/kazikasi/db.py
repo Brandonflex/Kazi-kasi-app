@@ -23,7 +23,7 @@ import sqlite3
 import os
 from pathlib import Path
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -879,6 +879,13 @@ def migrate(conn) -> None:
     _add_column(conn, "accounts", "family_name", "TEXT")
     _add_column(conn, "accounts", "picture", "TEXT")
     _add_column(conn, "accounts", "locale", "TEXT")
+    # Password auth is an optional provider on the shared accounts table.
+    _add_column(conn, "accounts", "password_hash", "TEXT")
+    conn.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_password_email
+           ON accounts (lower(email))
+           WHERE provider = 'password' AND deleted_at IS NULL AND email IS NOT NULL"""
+    )
 
     # Applications tracker (Mokaru-style pipeline)
     conn.execute("""CREATE TABLE IF NOT EXISTS applications (

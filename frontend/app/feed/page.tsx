@@ -8,12 +8,13 @@ export default function FeedPage() {
   const router = useRouter()
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [sortBy, setSortBy] = useState('match')
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     if (!isAuthenticated()) {
-      router.push('/auth')
+      router.replace('/auth')
       return
     }
     loadJobs()
@@ -22,10 +23,11 @@ export default function FeedPage() {
   async function loadJobs() {
     try {
       setLoading(true)
+      setLoadError('')
       const data = await fetchJobs(50)
       setJobs(data.jobs)
     } catch (error) {
-      console.error('Failed to load jobs:', error)
+      setLoadError(error instanceof Error ? error.message : 'Could not load jobs.')
     } finally {
       setLoading(false)
     }
@@ -45,6 +47,12 @@ export default function FeedPage() {
 
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     if (sortBy === 'match') return b.match_score - a.match_score
+    if (sortBy === 'recent') return Date.parse(b.posted || '') - Date.parse(a.posted || '')
+    if (sortBy === 'closing') {
+      const left = a.deadline ? Date.parse(a.deadline) : Number.POSITIVE_INFINITY
+      const right = b.deadline ? Date.parse(b.deadline) : Number.POSITIVE_INFINITY
+      return left - right
+    }
     return 0
   })
 
@@ -114,8 +122,14 @@ export default function FeedPage() {
       {/* Job List */}
       <section className="max-w-5xl mx-auto px-6 py-8">
         {loading ? (
-          <div className="text-center py-20">
+          <div className="text-center py-20" role="status" aria-live="polite">
             <p className="text-[#737373]">Loading jobs...</p>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-16 rounded-md border border-[#1f1f1f] bg-[#0a0a0a]">
+            <p className="text-white font-medium">Jobs could not be loaded</p>
+            <p className="text-sm text-[#737373] mt-2">{loadError}</p>
+            <button onClick={loadJobs} className="mt-5 px-4 py-2 border border-[#2f2f2f] rounded-md text-sm text-white hover:bg-[#111]">Try again</button>
           </div>
         ) : (
           <div className="space-y-2">
