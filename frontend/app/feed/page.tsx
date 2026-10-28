@@ -94,6 +94,7 @@ export default function FeedPage() {
                 <option value="recent">Recent</option>
                 <option value="closing">Closing Soon</option>
               </select>
+<<<<<<< HEAD
               
               <button
                 onClick={() => setFilterRemote(!filterRemote)}
@@ -105,6 +106,8 @@ export default function FeedPage() {
               >
                 Remote
               </button>
+=======
+>>>>>>> f8b0e13 (Fix build errors: tsconfig path alias, tracker page syntax)
             </div>
           </div>
           

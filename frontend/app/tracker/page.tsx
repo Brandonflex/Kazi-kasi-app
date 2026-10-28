@@ -48,6 +48,7 @@ const mockApplications: Application[] = [
   },
   {
     id: '4',
+<<<<<<< HEAD
     title: 'DevOps Engineer',
     company: 'Microsoft ADC',
     location: 'Nairobi, Kenya',
@@ -57,6 +58,8 @@ const mockApplications: Application[] = [
   },
   {
     id: '5',
+=======
+>>>>>>> f8b0e13 (Fix build errors: tsconfig path alias, tracker page syntax)
     title: 'Platform Engineer',
     company: 'Twiga Foods',
     location: 'Nairobi, Kenya',
