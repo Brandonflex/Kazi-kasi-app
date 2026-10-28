@@ -49,9 +49,12 @@ export default function AuthPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm text-[#a3a3a3] mb-2">Name</label>
+                <label htmlFor="name" className="block text-sm text-[#a3a3a3] mb-2">Name</label>
                 <input
+                  id="name"
                   type="text"
+                  autoComplete="name"
+                  maxLength={100}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required={!isLogin}
@@ -62,9 +65,12 @@ export default function AuthPage() {
             )}
 
             <div>
-              <label className="block text-sm text-[#a3a3a3] mb-2">Email</label>
+              <label htmlFor="email" className="block text-sm text-[#a3a3a3] mb-2">Email</label>
               <input
+                id="email"
                 type="email"
+                autoComplete="email"
+                maxLength={254}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -74,13 +80,16 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-[#a3a3a3] mb-2">Password</label>
+              <label htmlFor="password" className="block text-sm text-[#a3a3a3] mb-2">Password</label>
               <input
+                id="password"
                 type="password"
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                maxLength={256}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={isLogin ? 1 : 10}
                 className="w-full px-4 py-2.5 bg-[#000000] border border-[#1f1f1f] rounded-md text-sm focus:border-[#2f2f2f] focus:outline-none transition-all text-white"
                 placeholder="••••••••"
               />

@@ -10,12 +10,12 @@ export default function Home() {
           <div className="flex items-center gap-6">
             <a href="/feed" className="text-[#a3a3a3] hover:text-white transition-colors text-sm">Jobs</a>
             <a href="/tracker" className="text-[#a3a3a3] hover:text-white transition-colors text-sm">Tracker</a>
-            <button className="px-4 py-2 text-sm text-[#a3a3a3] hover:text-white transition-colors">
+            <a href="/auth" className="px-4 py-2 text-sm text-[#a3a3a3] hover:text-white transition-colors">
               Sign In
-            </button>
-            <button className="px-4 py-2 bg-white text-black text-sm font-medium rounded-md hover:bg-[#ededed] transition-colors">
+            </a>
+            <a href="/auth" className="px-4 py-2 bg-white text-black text-sm font-medium rounded-md hover:bg-[#ededed] transition-colors">
               Get Started
-            </button>
+            </a>
           </div>
         </div>
       </header>
@@ -35,9 +35,9 @@ export default function Home() {
             <a href="/feed" className="px-6 py-3 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors text-center">
               Browse Jobs
             </a>
-            <button className="px-6 py-3 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-colors text-[#a3a3a3] hover:text-white">
-              Upload CV
-            </button>
+            <a href="/profile" className="px-6 py-3 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-colors text-[#a3a3a3] hover:text-white text-center">
+              Prepare your profile
+            </a>
           </div>
         </div>
       </section>
@@ -45,22 +45,22 @@ export default function Home() {
       {/* Stats Bar */}
       <section className="border-t border-b border-[#1f1f1f]">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
             <div>
-              <div className="text-3xl font-semibold text-white mb-2">284</div>
-              <div className="text-sm text-[#737373] uppercase tracking-wide">Live Jobs</div>
+              <div className="text-lg font-semibold text-white mb-2">Relevant roles</div>
+              <div className="text-sm text-[#737373]">Ranked around what you actually want.</div>
             </div>
             <div>
-              <div className="text-3xl font-semibold text-white mb-2">47</div>
-              <div className="text-sm text-[#737373] uppercase tracking-wide">Closing Soon</div>
+              <div className="text-lg font-semibold text-white mb-2">Your constraints</div>
+              <div className="text-sm text-[#737373]">Commute and salary shape your matches.</div>
             </div>
             <div>
-              <div className="text-3xl font-semibold text-white mb-2">15</div>
-              <div className="text-sm text-[#737373] uppercase tracking-wide">Sources</div>
+              <div className="text-lg font-semibold text-white mb-2">Clear reasons</div>
+              <div className="text-sm text-[#737373]">See why each job appears in your feed.</div>
             </div>
             <div>
-              <div className="text-3xl font-semibold text-white mb-2">92%</div>
-              <div className="text-sm text-[#737373] uppercase tracking-wide">Match Rate</div>
+              <div className="text-lg font-semibold text-white mb-2">Kenya-focused</div>
+              <div className="text-sm text-[#737373]">Built around local roles and locations.</div>
             </div>
           </div>
         </div>
@@ -73,16 +73,16 @@ export default function Home() {
             How it works
           </h2>
           <p className="text-lg text-[#a3a3a3] max-w-2xl">
-            Three steps to find jobs that actually match your profile.
+            Set your priorities, understand your matches, and keep your search organized.
           </p>
         </div>
         
         <div className="grid md:grid-cols-3 gap-12">
           <div>
             <div className="text-sm text-[#737373] font-medium mb-3">01</div>
-            <h3 className="text-xl font-semibold mb-3 text-white">Upload your CV</h3>
+            <h3 className="text-xl font-semibold mb-3 text-white">Set your priorities</h3>
             <p className="text-[#a3a3a3] leading-relaxed">
-              We extract your skills, experience, and qualifications automatically. Takes 30 seconds.
+              Choose the roles, locations, commute, and salary that work for you.
             </p>
           </div>
 
@@ -132,23 +132,23 @@ export default function Home() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-white">WhatsApp Alerts</h3>
+              <h3 className="text-lg font-semibold mb-2 text-white">Clear match reasons</h3>
               <p className="text-[#a3a3a3] leading-relaxed">
-                Daily job digests delivered to your WhatsApp. Never miss a closing deadline.
+                Understand which parts of your profile shaped each recommendation.
               </p>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-white">CV Auto-Extract</h3>
+              <h3 className="text-lg font-semibold mb-2 text-white">Your profile, your call</h3>
               <p className="text-[#a3a3a3] leading-relaxed">
-                Upload a PDF and we pull out skills, experience, and qualifications. No manual entry.
+                Review and adjust the preferences behind your personalized feed.
               </p>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-white">Cover Letters</h3>
+              <h3 className="text-lg font-semibold mb-2 text-white">Focused search</h3>
               <p className="text-[#a3a3a3] leading-relaxed">
-                Generate tailored cover letters based on your profile and the job requirements.
+                Search by title, employer, and the fit reasons that matter to you.
               </p>
             </div>
 
@@ -169,15 +169,15 @@ export default function Home() {
             Ready to find your next role?
           </h2>
           <p className="text-lg text-[#a3a3a3] mb-10">
-            Join thousands of Kenyan professionals using smart matching to find jobs that fit.
+            Create your profile to start exploring opportunities matched to your priorities.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="/feed" className="px-6 py-3 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors">
               Start Matching Jobs
             </a>
-            <button className="px-6 py-3 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-colors text-[#a3a3a3] hover:text-white">
-              Upload CV
-            </button>
+            <a href="/profile" className="px-6 py-3 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-colors text-[#a3a3a3] hover:text-white text-center">
+              Prepare your profile
+            </a>
           </div>
         </div>
       </section>

@@ -34,6 +34,7 @@ client_secret*.json
 # Node
 node_modules/
 .next/
+*.tsbuildinfo
 frontend/node_modules/
 frontend/.next/
 
