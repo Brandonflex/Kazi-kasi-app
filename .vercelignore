@@ -1,6 +1,7 @@
 # Old Python backend - not deployed to Vercel
 src/
 backend/
+api/
 tests/
 data/
 docs/
