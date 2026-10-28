@@ -14,11 +14,7 @@
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{"name": "next"}],
-<<<<<<< HEAD
-    "paths": {"@/*": ["./src/*"]}
-=======
     "paths": {"@/*": ["./*"]}
->>>>>>> f8b0e13 (Fix build errors: tsconfig path alias, tracker page syntax)
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
