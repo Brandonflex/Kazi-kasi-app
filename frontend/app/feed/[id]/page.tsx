@@ -1,15 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { fetchJob, type JobDetail } from '@/lib/api'
+import { useRouter } from 'next/navigation'
+import { fetchJob, type JobDetail, isAuthenticated } from '@/lib/api'
 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
   const [job, setJob] = useState<JobDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/auth')
+      return
+    }
     loadJob()
-  }, [params.id])
+  }, [params.id, router])
 
   async function loadJob() {
     try {

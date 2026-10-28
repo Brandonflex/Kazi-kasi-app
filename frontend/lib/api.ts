@@ -42,13 +42,19 @@ export interface AuthResponse {
 }
 
 export async function fetchJobs(limit = 20, offset = 0): Promise<JobsResponse> {
-  const res = await fetch(`${API_BASE}/api/jobs?limit=${limit}&offset=${offset}`);
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api/jobs?limit=${limit}&offset=${offset}`, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  });
   if (!res.ok) throw new Error('Failed to fetch jobs');
   return res.json();
 }
 
 export async function fetchJob(jobId: string): Promise<JobDetail> {
-  const res = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  });
   if (!res.ok) throw new Error('Failed to fetch job');
   return res.json();
 }

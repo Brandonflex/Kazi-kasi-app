@@ -1,17 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchJobs, type Job } from '@/lib/api'
+import { useRouter } from 'next/navigation'
+import { fetchJobs, type Job, isAuthenticated } from '@/lib/api'
 
 export default function FeedPage() {
+  const router = useRouter()
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState('match')
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/auth')
+      return
+    }
     loadJobs()
-  }, [])
+  }, [router])
 
   async function loadJobs() {
     try {
@@ -83,7 +89,7 @@ export default function FeedPage() {
               />
             </div>
             
-            {/* Sort & Filter Controls */}
+            {/* Sort Controls */}
             <div className="flex gap-2">
               <select 
                 value={sortBy}
@@ -94,20 +100,6 @@ export default function FeedPage() {
                 <option value="recent">Recent</option>
                 <option value="closing">Closing Soon</option>
               </select>
-<<<<<<< HEAD
-              
-              <button
-                onClick={() => setFilterRemote(!filterRemote)}
-                className={`px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
-                  filterRemote 
-                    ? 'bg-white text-black' 
-                    : 'bg-[#000000] border border-[#1f1f1f] text-[#a3a3a3] hover:border-[#2f2f2f]'
-                }`}
-              >
-                Remote
-              </button>
-=======
->>>>>>> f8b0e13 (Fix build errors: tsconfig path alias, tracker page syntax)
             </div>
           </div>
           
