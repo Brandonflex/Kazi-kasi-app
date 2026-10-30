@@ -38,7 +38,27 @@ from kazikasi.models import EMPLOYMENT_TYPES, ENTRY_FIT, WORK_MODES  # noqa: E40
 
 logger = logging.getLogger("kazikasi.api")
 
-APP_ENV = os.getenv("APP_ENV", "development").lower()
+def _is_managed_runtime(environ: dict[str, str] | None = None) -> bool:
+    """Detect common serverless/container platforms when APP_ENV was omitted."""
+    env = environ if environ is not None else os.environ
+    markers = (
+        "VERCEL", "AWS_LAMBDA_FUNCTION_NAME", "K_SERVICE", "RENDER_SERVICE_ID",
+        "RAILWAY_ENVIRONMENT", "FLY_APP_NAME", "DYNO",
+    )
+    return any(env.get(marker) for marker in markers)
+
+
+def _runtime_app_env(environ: dict[str, str] | None = None) -> str:
+    env = environ if environ is not None else os.environ
+    # Never let an explicit development setting silently weaken persistence or
+    # signing-key requirements on a managed deployment.
+    if _is_managed_runtime(env):
+        return "production"
+    return (env.get("APP_ENV") or "development").lower()
+
+
+MANAGED_RUNTIME = _is_managed_runtime()
+APP_ENV = _runtime_app_env()
 DB_PATH = os.getenv("KAZIKASI_DB_PATH", str(ROOT / "kazi.db"))
 TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 if not 5 <= TOKEN_TTL_MINUTES <= 1440:

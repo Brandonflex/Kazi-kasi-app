@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { login, register } from '@/lib/api'
 import { LoaderCircle } from 'lucide-react'
@@ -13,6 +13,11 @@ export default function AuthPage() {
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
+
+  useEffect(() => {
+    setSessionExpired(new URLSearchParams(window.location.search).get('reason') === 'session-expired')
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -27,7 +32,10 @@ export default function AuthPage() {
       }
       router.push('/feed')
     } catch (err: any) {
-      setError(err.message || 'Authentication failed')
+      const message = err.message || 'Authentication failed'
+      setError(isLogin && message === 'Invalid email or password'
+        ? "We couldn't find an account with those credentials. If you just created this account and this keeps happening, the account service may not be saving registrations. Please don't create a duplicate account."
+        : message)
     } finally {
       setLoading(false)
     }
@@ -46,6 +54,8 @@ export default function AuthPage() {
           <h1 className="text-2xl font-semibold mb-6 text-white">
             {isLogin ? 'Sign in' : 'Create account'}
           </h1>
+
+          {sessionExpired && <div className="mb-5 rounded-md border border-[#333] bg-[#111] p-3 text-sm leading-5 text-[#bbb]" role="status">Your previous session could not be verified. Sign in with your existing account; you do not need to create another one.</div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (

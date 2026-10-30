@@ -8,6 +8,14 @@ from fastapi.testclient import TestClient
 from backend.api import main
 
 
+def test_managed_runtime_is_detected_without_explicit_app_env():
+    assert main._is_managed_runtime({}) is False
+    assert main._is_managed_runtime({"VERCEL": "1"}) is True
+    assert main._is_managed_runtime({"K_SERVICE": "kazi-api"}) is True
+    assert main._runtime_app_env({"APP_ENV": "development", "VERCEL": "1"}) == "production"
+    assert main._runtime_app_env({"APP_ENV": "test"}) == "test"
+
+
 def test_register_login_and_profile_round_trip(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB_PATH", str(tmp_path / "api.sqlite"))
     with TestClient(main.app) as client:
@@ -93,6 +101,27 @@ def test_register_login_and_profile_round_trip(tmp_path, monkeypatch):
         assert client.post("/api/auth/login", json={
             "email": "test@example.com", "password": "wrong-password",
         }).status_code == 401
+
+
+def test_account_and_password_survive_a_new_api_client(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "DB_PATH", str(tmp_path / "restart.sqlite"))
+    with TestClient(main.app) as first_instance:
+        created = first_instance.post("/api/auth/register", json={
+            "email": "restart@example.com", "name": "Restart Test",
+            "password": "safe-long-password-123",
+        })
+    assert created.status_code == 201
+
+    # A fresh client models another worker/request after the first one is gone.
+    with TestClient(main.app) as next_instance:
+        signed_in = next_instance.post("/api/auth/login", json={
+            "email": "restart@example.com", "password": "safe-long-password-123",
+        })
+        assert signed_in.status_code == 200
+        assert next_instance.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {signed_in.json()['access_token']}"},
+        ).status_code == 200
 
 
 def test_cv_upload_extracts_profile_evidence_and_never_stores_pdf_bytes(tmp_path, monkeypatch):

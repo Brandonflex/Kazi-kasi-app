@@ -95,7 +95,7 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
     const message = typeof payload?.detail === 'string' ? payload.detail : `Request failed (${response.status})`
     if (response.status === 401 && authenticated && typeof window !== 'undefined') {
       logout()
-      window.location.replace('/auth')
+      window.location.replace('/auth?reason=session-expired')
     }
     throw new Error(message)
   }
