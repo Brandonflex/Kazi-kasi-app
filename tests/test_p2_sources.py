@@ -43,6 +43,11 @@ class TestRegistry:
         for key, cls in P2.items():
             assert cls.manifest.status == "unverified", key
 
+    def test_additional_sources_are_registered_but_still_gated(self):
+        for key in ("jobwebkenya", "kenyajobs", "unjobs_kenya", "devex_kenya"):
+            assert key in REGISTRY
+            assert REGISTRY[key].manifest.status == "unverified"
+
     def test_an_unverified_manifest_says_why_in_prose(self):
         for key, cls in P2.items():
             notes = cls.manifest.notes.lower()
@@ -60,6 +65,26 @@ class TestRegistry:
         rows = {row["id"]: row for row in json.loads(capsys.readouterr().out)}
         assert rows["careerpoint"]["status"] == "unverified"
         assert rows["brightermonday"]["status"] == "active"
+
+
+class TestAdditionalAdapters:
+    @pytest.mark.parametrize("source_id", ["jobwebkenya", "kenyajobs", "unjobs_kenya", "devex_kenya"])
+    def test_preserved_source_parser_emits_current_candidate_schema(self, source_id):
+        adapter = REGISTRY[source_id]()
+        html = """<html><body>
+          <h1 class="job-title">Junior Analyst</h1>
+          <div class="company-name">Example Foundation</div>
+          <div class="company">Example Foundation</div>
+          <div class="organization">Example Foundation</div>
+          <div class="location">Mombasa, Kenya</div>
+          <div class="job-description">Join the team as a junior analyst. Apply with your CV.</div>
+        </body></html>"""
+        candidate = adapter.parse_detail(html, "https://jobs.example.test/jobs/test-role")
+        assert candidate.source_id == source_id
+        assert candidate.source_job_id == "test-role"
+        assert candidate.source_url.endswith("/test-role")
+        assert candidate.title == "Junior Analyst"
+        assert candidate.description_md
 
 
 class TestStructuredListing:

@@ -85,6 +85,7 @@ class HttpFetcher:
             response = self._client.post(url, json=json_body)
         else:
             response = self._client.get(url)
+        response.raise_for_status()
         content_type = response.headers.get("content-type", "text/html").split(";")[0]
         # Bytes, not text: a PDF decoded as a string is unrecoverable.
         return Payload(url=url, raw=response.content, content_type=content_type)

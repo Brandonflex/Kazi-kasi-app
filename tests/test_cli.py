@@ -13,7 +13,8 @@ def test_sources_lists_every_registered_source(capsys):
     ids = {row["id"] for row in rows}
     assert {
         "brightermonday", "fuzu", "myjobmag", "reliefweb", "psc", "nairobi_county",
-        "careerpoint", "tsc", "ajira",
+        "careerpoint", "tsc", "ajira", "jobwebkenya", "kenyajobs",
+        "unjobs_kenya", "devex_kenya",
     } == ids
 
 

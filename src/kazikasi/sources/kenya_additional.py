@@ -32,6 +32,29 @@ from ..models import JobCandidate
 from .base import Adapter, Manifest
 
 
+def _source_job_id(url: str) -> str:
+    """Stable per-source key derived from the posting URL path."""
+    from urllib.parse import unquote, urlsplit
+
+    return unquote(urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]) or url
+
+
+def _location_parts(value: str | None) -> tuple[str | None, str | None, str]:
+    """Expose the current county/sub-county/raw tuple used by the extractor."""
+    return parse_location(value)
+
+
+def _date_value(value):
+    """Normalize JSON-LD date strings while leaving parsed date objects alone."""
+    return parse_date(value) if isinstance(value, str) and value else value
+
+
+def _work_mode(text: str, location: str | None) -> tuple[str, str]:
+    """Do not infer on-site work from a country-wide location like “Kenya”."""
+    broad_location = (location or "").strip().lower() in {"kenya", "kenya, kenya"}
+    return detect_work_mode(text, None if broad_location else location)
+
+
 class JobWebKenya(Adapter):
     """JobWeb Kenya - major Kenyan job board.
     
@@ -44,15 +67,12 @@ class JobWebKenya(Adapter):
     listing = "https://jobwebkenya.com/job-listings/"
     detail_pattern = "/job/"
     
-    @property
-    def manifest(self) -> Manifest:
-        return Manifest(
-            source=self.source,
-            listing_url=self.listing,
-            detail_pattern=self.detail_pattern,
-            cadence_days=1,
-            priority=3,
-        )
+    manifest = Manifest(
+        id="jobwebkenya", label="JobWeb Kenya", access="public_html", tier="cold",
+        cadence_minutes=1440, rate_limit_per_minute=6,
+        listing_urls=("https://jobwebkenya.com/job-listings/",), supports=('jsonld_detail', 'full_description'),
+        notes="Live selectors and terms have not been verified.", status="unverified",
+    )
     
     def parse_listing(self, html: str, base_url: str) -> list[str]:
         soup = parse_html(html)
@@ -103,28 +123,30 @@ class JobWebKenya(Adapter):
         pay_text = find_pay_text(description)
         deadline = deadline or find_deadline(description)
         emails = find_emails(description)
-        reference = find_reference(title, employer, url)
+        reference = find_reference(" ".join((title, employer, url)))
         
         return JobCandidate(
-            source=self.source,
-            url=url,
+            source_id=self.source,
+            source_job_id=_source_job_id(url),
+            source_url=url,
             title=title or "",
-            employer=employer,
-            county=parse_location(location).get("county"),
-            town=parse_location(location).get("town"),
-            description=description,
-            pay_text=pay_text,
+            employer_name=employer,
+            county=_location_parts(location)[0],
+            sub_county=_location_parts(location)[1],
+            location_raw=_location_parts(location)[2],
+            description_md=description,
             pay=parse_pay(pay_text) if pay_text else None,
-            deadline=deadline,
-            posted=posted or None,
-            emails=emails,
+            deadline=_date_value(deadline),
+            date_posted_claimed=_date_value(posted),
+            apply_emails=emails,
             reference=reference,
             employment_type=detect_employment_type(description),
-            work_mode=detect_work_mode(description),
+            work_mode=_work_mode(description, location)[0],
+            work_mode_source=_work_mode(description, location)[1],
             seniority=detect_seniority(title, description),
-            entry_fit=entry_fit(title, description),
+            entry_fit=entry_fit(f"{title}\n{description}")[0],
             scam_flags=detect_scam_flags(description),
-            parser_note=", ".join(notes) if notes else None,
+            parser_notes=notes,
         )
 
 
@@ -140,15 +162,12 @@ class KenyaJobs(Adapter):
     listing = "https://kenyajobs.com/jobs/"
     detail_pattern = "/jobs/"
     
-    @property
-    def manifest(self) -> Manifest:
-        return Manifest(
-            source=self.source,
-            listing_url=self.listing,
-            detail_pattern=self.detail_pattern,
-            cadence_days=1,
-            priority=3,
-        )
+    manifest = Manifest(
+        id="kenyajobs", label="KenyaJobs", access="public_html", tier="cold",
+        cadence_minutes=1440, rate_limit_per_minute=6,
+        listing_urls=("https://kenyajobs.com/jobs/",), supports=('jsonld_detail', 'full_description'),
+        notes="Live selectors and terms have not been verified.", status="unverified",
+    )
     
     def parse_listing(self, html: str, base_url: str) -> list[str]:
         soup = parse_html(html)
@@ -198,28 +217,30 @@ class KenyaJobs(Adapter):
         pay_text = find_pay_text(description)
         deadline = deadline or find_deadline(description)
         emails = find_emails(description)
-        reference = find_reference(title, employer, url)
+        reference = find_reference(" ".join((title, employer, url)))
         
         return JobCandidate(
-            source=self.source,
-            url=url,
+            source_id=self.source,
+            source_job_id=_source_job_id(url),
+            source_url=url,
             title=title or "",
-            employer=employer,
-            county=parse_location(location).get("county"),
-            town=parse_location(location).get("town"),
-            description=description,
-            pay_text=pay_text,
+            employer_name=employer,
+            county=_location_parts(location)[0],
+            sub_county=_location_parts(location)[1],
+            location_raw=_location_parts(location)[2],
+            description_md=description,
             pay=parse_pay(pay_text) if pay_text else None,
-            deadline=deadline,
-            posted=posted or None,
-            emails=emails,
+            deadline=_date_value(deadline),
+            date_posted_claimed=_date_value(posted),
+            apply_emails=emails,
             reference=reference,
             employment_type=detect_employment_type(description),
-            work_mode=detect_work_mode(description),
+            work_mode=_work_mode(description, location)[0],
+            work_mode_source=_work_mode(description, location)[1],
             seniority=detect_seniority(title, description),
-            entry_fit=entry_fit(title, description),
+            entry_fit=entry_fit(f"{title}\n{description}")[0],
             scam_flags=detect_scam_flags(description),
-            parser_note=", ".join(notes) if notes else None,
+            parser_notes=notes,
         )
 
 
@@ -242,15 +263,12 @@ class UNJobsKenya(Adapter):
     listing = "https://careers.un.org/lbw/home.aspx?viewtype=VJ&lc=KE"
     detail_pattern = "/lbp/"
     
-    @property
-    def manifest(self) -> Manifest:
-        return Manifest(
-            source=self.source,
-            listing_url=self.listing,
-            detail_pattern=self.detail_pattern,
-            cadence_days=3,
-            priority=4,
-        )
+    manifest = Manifest(
+        id="unjobs_kenya", label="UN Careers - Kenya", access="public_html", tier="cold",
+        cadence_minutes=1440, rate_limit_per_minute=4,
+        listing_urls=("https://careers.un.org/lbw/home.aspx?viewtype=VJ&lc=KE",), supports=('jsonld_detail', 'full_description', 'deadline'),
+        notes="The legacy listing path and page structure need live verification; terms have not been reviewed.", status="unverified",
+    )
     
     def parse_listing(self, html: str, base_url: str) -> list[str]:
         soup = parse_html(html)
@@ -281,26 +299,28 @@ class UNJobsKenya(Adapter):
         pay_text = find_pay_text(description)
         deadline = find_deadline(description)
         emails = find_emails(description)
-        reference = find_reference(title, employer, url)
+        reference = find_reference(" ".join((title, employer, url)))
         
         return JobCandidate(
-            source=self.source,
-            url=url,
+            source_id=self.source,
+            source_job_id=_source_job_id(url),
+            source_url=url,
             title=title,
-            employer=employer,
-            county="Nairobi",
-            description=description,
-            pay_text=pay_text,
+            employer_name=employer,
+            county=_location_parts(location)[0],
+            location_raw=_location_parts(location)[2],
+            description_md=description,
             pay=parse_pay(pay_text) if pay_text else None,
-            deadline=deadline,
-            emails=emails,
+            deadline=_date_value(deadline),
+            apply_emails=emails,
             reference=reference,
             employment_type=detect_employment_type(description),
-            work_mode=detect_work_mode(description),
+            work_mode=_work_mode(description, location)[0],
+            work_mode_source=_work_mode(description, location)[1],
             seniority=detect_seniority(title, description),
-            entry_fit=entry_fit(title, description),
+            entry_fit=entry_fit(f"{title}\n{description}")[0],
             scam_flags=detect_scam_flags(description),
-            parser_note=", ".join(notes) if notes else None,
+            parser_notes=notes,
         )
 
 
@@ -316,15 +336,12 @@ class DevexKenya(Adapter):
     listing = "https://devex.com/jobs?location=Kenya"
     detail_pattern = "/jobs/"
     
-    @property
-    def manifest(self) -> Manifest:
-        return Manifest(
-            source=self.source,
-            listing_url=self.listing,
-            detail_pattern=self.detail_pattern,
-            cadence_days=2,
-            priority=4,
-        )
+    manifest = Manifest(
+        id="devex_kenya", label="Devex — Kenya development jobs", access="public_html", tier="cold",
+        cadence_minutes=1440, rate_limit_per_minute=4,
+        listing_urls=("https://www.devex.com/jobs?location=Kenya",), supports=('jsonld_detail', 'full_description', 'deadline'),
+        notes="May require a Devex account and/or subscription. Access and terms have not been reviewed; do not ingest until verified.", status="unverified",
+    )
     
     def parse_listing(self, html: str, base_url: str) -> list[str]:
         soup = parse_html(html)
@@ -359,26 +376,28 @@ class DevexKenya(Adapter):
         pay_text = find_pay_text(description)
         deadline = find_deadline(description)
         emails = find_emails(description)
-        reference = find_reference(title, employer, url)
+        reference = find_reference(" ".join((title, employer, url)))
         
         return JobCandidate(
-            source=self.source,
-            url=url,
+            source_id=self.source,
+            source_job_id=_source_job_id(url),
+            source_url=url,
             title=title,
-            employer=employer,
-            county="Nairobi",
-            description=description,
-            pay_text=pay_text,
+            employer_name=employer,
+            county=_location_parts(location)[0],
+            location_raw=_location_parts(location)[2],
+            description_md=description,
             pay=parse_pay(pay_text) if pay_text else None,
-            deadline=deadline,
-            emails=emails,
+            deadline=_date_value(deadline),
+            apply_emails=emails,
             reference=reference,
             employment_type=detect_employment_type(description),
-            work_mode=detect_work_mode(description),
+            work_mode=_work_mode(description, location)[0],
+            work_mode_source=_work_mode(description, location)[1],
             seniority=detect_seniority(title, description),
-            entry_fit=entry_fit(title, description),
+            entry_fit=entry_fit(f"{title}\n{description}")[0],
             scam_flags=detect_scam_flags(description),
-            parser_note=", ".join(notes) if notes else None,
+            parser_notes=notes,
         )
 
 

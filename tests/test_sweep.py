@@ -92,3 +92,13 @@ class TestRunSweep:
         for src in report["sources"]:
             assert "source_id" in src
             assert "errors" in src
+
+    def test_unverified_sources_are_skipped_even_when_forced(self, conn):
+        report = sweep.run_sweep(conn, force=True, source_ids=["careerpoint"])
+        assert report["totals"]["ran"] == 0
+        assert report["totals"]["skipped"] == 1
+        assert report["sources"][0]["skipped"] == "source status is unverified"
+
+    def test_unknown_source_ids_fail_before_network_io(self, conn):
+        with pytest.raises(ValueError, match="unknown source ids"):
+            sweep.run_sweep(conn, source_ids=["not-a-real-source"])

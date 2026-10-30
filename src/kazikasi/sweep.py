@@ -26,7 +26,6 @@ scraped is still live.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -266,33 +265,27 @@ def record_source_health(conn, source_id: str, *, status: str, last_error: str |
     conn.commit()
 
 
-def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None, timeout: float = 3.0, allow_unverified: bool = False) -> dict[str, Any]:
-    """Fetch one source end-to-end and write its jobs.
+def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int = 1, limit: int | None = None, timeout: float = 20.0, allow_unverified: bool = False) -> dict[str, Any]:
+    """Fetch one HTML/PDF source, normalize candidates, and update the graph.
 
-    Returns a report dict: ``{source_id, fetched, parsed, stored, errors}``.
-    
-    ``timeout`` is the maximum seconds to spend on this source. If the source
-    does not respond within the timeout, it is marked "warn" and the sweep
-    moves on. This keeps the total sweep under Vercel's 10-second serverless
-    limit even when some sources are slow.
-
-    ``allow_unverified`` bypasses the manifest status gate. The canary proves
-    a source parses; this flag tells the sweep to trust that proof. Without
-    it, sources with ``status: unverified`` in the registry raise
-    ``UnverifiedSource`` even if the canary returned ``ok: true``.
+    ``timeout`` bounds an individual HTTP request. ``limit`` bounds detail
+    pages, keeping scheduled sweeps polite and predictable.
     """
     now = now or datetime.now(timezone.utc)
-    report = {
+    report: dict[str, Any] = {
         "source_id": adapter.manifest.id,
         "fetched": 0,
         "parsed": 0,
         "stored": 0,
+        "verified": 0,
         "errors": [],
     }
-    
-    def _do_ingest():
-        fetcher = pipeline.HttpFetcher(timeout=timeout, min_interval=0.2)
-        return pipeline.ingest(
+    fetcher = pipeline.HttpFetcher(
+        timeout=timeout,
+        min_interval=max(0.2, 60.0 / max(1, adapter.manifest.rate_limit_per_minute)),
+    )
+    try:
+        ingest_report = pipeline.ingest(
             adapter,
             fetcher,
             _InMemoryRawStore(),
@@ -301,86 +294,135 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
             verify_records=True,
             allow_unverified=allow_unverified,
         )
-    
-    try:
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(_do_ingest)
-            ingest_report = future.result(timeout=timeout + 1.0)
-    except FuturesTimeoutError:
-        log.warning("source %s timed out after %.1fs", adapter.manifest.id, timeout)
-        record_source_health(
-            conn, adapter.manifest.id,
-            status="warn",
-            last_error=f"timed out after {timeout:.1f}s",
-            now=now,
-            cadence_minutes=adapter.manifest.cadence_minutes,
-        )
-        report["errors"].append({"stage": "ingest", "error": f"timeout after {timeout:.1f}s"})
-        return report
-    except Exception as exc:
+    except Exception as exc:  # a source failure must not abort the whole sweep
         log.exception("ingest failed for %s", adapter.manifest.id)
-        record_source_health(conn, adapter.manifest.id, status="dead", last_error=repr(exc), now=now, cadence_minutes=adapter.manifest.cadence_minutes)
-        report["errors"].append({"stage": "ingest", "error": repr(exc)})
+        record_source_health(
+            conn, adapter.manifest.id, status="dead", last_error=repr(exc)[:500],
+            now=now, cadence_minutes=adapter.manifest.cadence_minutes,
+        )
+        report["errors"].append({"stage": "ingest", "error": repr(exc)[:500]})
+        conn.commit()
         return report
+    finally:
+        fetcher.close()
 
-    report["fetched"] = ingest_report.payloads
+    report["fetched"] = ingest_report.payloads + ingest_report.listing_pages
     report["errors"] = ingest_report.errors
-
-    # Write each candidate into the jobs table. This is the missing link between
-    # "we fetched the source" and "the digest has fresh vacancies". Without this
-    # the sweep was recording source_health but never populating jobs.
-    written = 0
     for candidate in ingest_report.candidates:
         try:
             write_job(candidate, conn, now=now)
-            written += 1
-        except Exception as exc:
+            report["stored"] += 1
+        except Exception as exc:  # one malformed record must not lose its siblings
+            log.exception("could not store candidate from %s", adapter.manifest.id)
             report["errors"].append({
                 "stage": "write_job",
                 "candidate": f"{candidate.source_id}:{candidate.source_job_id}",
-                "error": repr(exc),
+                "error": repr(exc)[:500],
             })
-    report["stored"] = written
     report["parsed"] = len(ingest_report.candidates)
+    report["verified"] = sum(candidate.status == "open" for candidate in ingest_report.candidates)
 
-    record_source_health(conn, adapter.manifest.id, status="ok", now=now, cadence_minutes=adapter.manifest.cadence_minutes)
+    no_verified_jobs = report["verified"] == 0
+    health_status = "warn" if report["errors"] or no_verified_jobs else "ok"
+    error_summary = None
+    if report["errors"]:
+        error_summary = "; ".join(str(item.get("error", "source error")) for item in report["errors"][:2])[:500]
+    elif no_verified_jobs:
+        error_summary = "no parsed candidates passed verification for the live feed"
+    record_source_health(
+        conn, adapter.manifest.id, status=health_status, last_error=error_summary,
+        now=now, cadence_minutes=adapter.manifest.cadence_minutes,
+    )
     conn.commit()
     return report
 
 
-def run_sweep(conn, *, now: datetime | None = None, force: bool = False, timeout: float = 3.0, limit: int | None = None, allow_unverified: bool = False) -> dict[str, Any]:
-    """Run the sweep across every source that is due.
+def refresh_reliefweb(adapter, conn, *, now: datetime | None = None, limit: int = 100, timeout: float = 20.0) -> dict[str, Any]:
+    """Ingest ReliefWeb's official JSON API, which does not use HTML detail pages."""
+    if not adapter.appname:
+        return {
+            "source_id": adapter.manifest.id, "fetched": 0, "parsed": 0,
+            "stored": 0, "verified": 0, "errors": [], "skipped": "RELIEFWEB_APPNAME is not configured",
+        }
+    now = now or datetime.now(timezone.utc)
+    report = {"source_id": adapter.manifest.id, "fetched": 0, "parsed": 0, "stored": 0, "verified": 0, "errors": []}
+    fetcher = pipeline.HttpFetcher(timeout=timeout, min_interval=6.0)
+    try:
+        payload = fetcher.get(adapter.manifest.listing_urls[0], json_body=adapter.request_body())
+        items = adapter.parse_listing(payload.text)[:limit]
+        candidates = [pipeline.verify(adapter.item_to_candidate(item)) for item in items]
+        report["fetched"] = 1
+        report["parsed"] = len(candidates)
+        report["verified"] = sum(candidate.status == "open" for candidate in candidates)
+        for candidate in candidates:
+            write_job(candidate, conn, now)
+            report["stored"] += 1
+        status = "ok" if report["verified"] else "warn"
+        error = None if report["verified"] else "no API candidates passed verification for the live feed"
+    except Exception as exc:
+        log.exception("ReliefWeb ingest failed")
+        report["errors"].append({"stage": "api", "error": repr(exc)[:500]})
+        status, error = "warn", repr(exc)[:500]
+    finally:
+        fetcher.close()
+    record_source_health(conn, adapter.manifest.id, status=status, last_error=error,
+                         now=now, cadence_minutes=adapter.manifest.cadence_minutes)
+    conn.commit()
+    return report
 
-    Returns a top-level report: ``{sources: [...], totals: {fetched, parsed, stored, errors}}``.
 
-    ``timeout`` is the per-source wall-clock budget. Vercel's serverless
-    function runs at a 10-second total limit, so the cron path passes 3.0. The
-    CLI defaults to 60.0 because a real sweep from a developer machine has no
-    such constraint.
+def run_sweep(
+    conn, *, now: datetime | None = None, force: bool = False,
+    timeout: float = 20.0, limit: int | None = 15,
+    allow_unverified: bool = False, source_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Refresh due, verified sources and return a per-source report.
 
-    ``limit`` caps the number of detail pages parsed per source. The CLI
-    defaults to 1 (like the canary) to keep the first sweep fast; pass
-    ``--limit 999`` to fetch everything.
-
-    ``allow_unverified`` bypasses the manifest status gate. When True, sources
-    with ``status: unverified`` in the registry will be fetched anyway. The
-    CLI ``--force`` flag implies this.
+    Unverified sources are reported as skipped instead of being marked dead.
+    ``source_ids`` can restrict a run to an explicit allow-list. Each detail
+    crawl is bounded by ``limit`` and each HTTP request by ``timeout``.
     """
     now = now or datetime.now(timezone.utc)
     add_source_health_schema(conn)
-    totals = {"fetched": 0, "parsed": 0, "stored": 0, "errors": 0, "ran": 0, "skipped": 0}
-    reports = []
-    for adapter_class in REGISTRY.values():
-        adapter = adapter_class()
+    requested = set(REGISTRY.keys() if source_ids is None else source_ids)
+    unknown = requested - set(REGISTRY)
+    if unknown:
+        raise ValueError(f"unknown source ids: {', '.join(sorted(unknown))}")
+    totals = {"fetched": 0, "parsed": 0, "stored": 0, "verified": 0, "errors": 0, "ran": 0, "skipped": 0}
+    reports: list[dict[str, Any]] = []
+    for source_id in sorted(requested):
+        adapter = REGISTRY[source_id]()
+        if adapter.manifest.status != "active" and not allow_unverified:
+            totals["skipped"] += 1
+            reports.append({
+                "source_id": source_id, "fetched": 0, "parsed": 0, "stored": 0, "verified": 0,
+                "errors": [], "skipped": f"source status is {adapter.manifest.status}",
+            })
+            continue
         if not force and not should_run(adapter, now, conn):
             totals["skipped"] += 1
+            reports.append({
+                "source_id": source_id, "fetched": 0, "parsed": 0, "stored": 0, "verified": 0,
+                "errors": [], "skipped": "within source refresh cadence",
+            })
             continue
         totals["ran"] += 1
-        report = refresh(adapter, conn, now=now, timeout=timeout, limit=limit, allow_unverified=allow_unverified)
+        from .sources.reliefweb import ReliefWeb
+        if isinstance(adapter, ReliefWeb):
+            report = refresh_reliefweb(adapter, conn, now=now, limit=limit or 100, timeout=timeout)
+        else:
+            report = refresh(
+                adapter, conn, now=now, timeout=timeout, limit=limit,
+                allow_unverified=allow_unverified,
+            )
+        if report.get("skipped"):
+            totals["ran"] -= 1
+            totals["skipped"] += 1
         reports.append(report)
         totals["fetched"] += report["fetched"]
         totals["parsed"] += report["parsed"]
         totals["stored"] += report["stored"]
+        totals["verified"] += report.get("verified", 0)
         totals["errors"] += len(report["errors"])
     return {"sources": reports, "totals": totals}
 
