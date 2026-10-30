@@ -6,14 +6,18 @@ production; development gets a local database and an ephemeral signing key.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import json
+import logging
 import os
 import re
 import secrets
 import sqlite3
 import sys
 import warnings
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Generator
@@ -29,7 +33,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from kazikasi import db, graph, profile, ranking  # noqa: E402
+from kazikasi import db, graph, profile, ranking, sweep  # noqa: E402
+
+logger = logging.getLogger("kazikasi.api")
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DB_PATH = os.getenv("KAZIKASI_DB_PATH", str(ROOT / "kazi.db"))
@@ -68,7 +74,47 @@ def safe_source_url(value: str | None) -> str:
     return value.strip()
 
 
-app = FastAPI(title="Kazi-Kasi API", version="2.1.0")
+def _sync_sources_once() -> None:
+    """Run a bounded, idempotent source refresh against the configured database."""
+    database_url = os.getenv("DATABASE_URL")
+    conn = db.connect(url=database_url) if database_url else db.connect(DB_PATH)
+    try:
+        report = sweep.run_sweep(conn, timeout=20.0, limit=10)
+        logger.info("source sweep completed: %s", report["totals"])
+    finally:
+        conn.close()
+
+
+async def _source_refresh_loop() -> None:
+    try:
+        interval = max(3600, int(os.getenv("KAZIKASI_SOURCE_SYNC_INTERVAL_SECONDS", "21600")))
+    except ValueError:
+        logger.warning("invalid KAZIKASI_SOURCE_SYNC_INTERVAL_SECONDS; using six hours")
+        interval = 21600
+    while True:
+        try:
+            await asyncio.to_thread(_sync_sources_once)
+        except Exception:
+            logger.exception("background source refresh failed")
+        await asyncio.sleep(interval)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    enabled = APP_ENV == "production" and os.getenv("KAZIKASI_AUTO_SYNC", "true").lower() not in {"0", "false", "no"}
+    task = asyncio.create_task(_source_refresh_loop()) if enabled else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
+app = FastAPI(title="Kazi-Kasi API", version="2.2.0", lifespan=lifespan)
 cors_config = os.getenv("KAZIKASI_CORS_ORIGINS", "")
 if APP_ENV == "production" and not cors_config.strip():
     raise RuntimeError("KAZIKASI_CORS_ORIGINS must be configured in production")
@@ -205,6 +251,43 @@ def health(db_conn=Depends(get_db)):
     return {"status": "ok", "version": app.version, "backend": "real"}
 
 
+@app.get("/api/sources")
+def get_sources(db_conn=Depends(get_db)):
+    """Public source catalog and ingestion freshness, with no internal errors exposed."""
+    sweep.add_source_health_schema(db_conn)
+    health_rows = db_conn.execute(
+        "SELECT source_id, last_seen_at, status FROM source_health"
+    ).fetchall()
+    health = {row["source_id"]: dict(row) for row in health_rows}
+    job_rows = db_conn.execute(
+        """SELECT o.source_id, COUNT(DISTINCT m.job_id) AS jobs
+           FROM observations o LEFT JOIN job_members m ON m.observation_id = o.id
+           GROUP BY o.source_id"""
+    ).fetchall()
+    job_counts = {row["source_id"]: row["jobs"] for row in job_rows}
+
+    from kazikasi.sources import REGISTRY
+
+    sources = []
+    for source_id, adapter_class in sorted(REGISTRY.items()):
+        manifest = adapter_class.manifest
+        state = health.get(source_id, {})
+        configured = not (source_id == "reliefweb" and not os.getenv("RELIEFWEB_APPNAME"))
+        sources.append({
+            "id": manifest.id,
+            "label": manifest.label,
+            "listing_url": manifest.listing_urls[0] if manifest.listing_urls else None,
+            "access": manifest.access,
+            "tier": manifest.tier,
+            "cadence_minutes": manifest.cadence_minutes,
+            "status": manifest.status if configured else "needs_configuration",
+            "last_sync_at": state.get("last_seen_at"),
+            "health": state.get("status", "not_synced"),
+            "jobs_seen": job_counts.get(source_id, 0),
+        })
+    return {"sources": sources, "active": sum(s["status"] == "active" for s in sources)}
+
+
 @app.post("/api/auth/register", status_code=201)
 def register(user: UserCreate, db_conn=Depends(get_db)):
     existing = db_conn.execute(
@@ -291,6 +374,24 @@ def update_profile(update: ProfileUpdate, user_id: str = Depends(get_current_use
     return prof.to_dict()
 
 
+def _job_evidence(db_conn, job_id: str) -> dict:
+    placeholder = "%s" if type(db_conn).__name__ == "Connection" and hasattr(db_conn, "info") else "?"
+    row = db_conn.execute(
+        f"""SELECT o.source_url, o.payload
+            FROM job_members m JOIN observations o ON o.id = m.observation_id
+            WHERE m.job_id = {placeholder} ORDER BY o.fetched_at DESC LIMIT 1""",
+        (job_id,),
+    ).fetchone()
+    if not row:
+        return {}
+    try:
+        payload = json.loads(row["payload"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        payload = {}
+    payload.setdefault("source_url", row["source_url"])
+    return payload
+
+
 @app.get("/api/jobs")
 def get_jobs(
     limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=100_000),
@@ -311,14 +412,20 @@ def get_jobs(
         if not row:
             continue
         item = dict(row)
+        evidence = _job_evidence(db_conn, match.job_id)
+        county = item.get("county")
+        location = f"{county}, Kenya" if county and county.lower() != "kenya" else "Kenya"
+        source_url = safe_source_url(evidence.get("source_url"))
+        apply_url = safe_source_url(evidence.get("apply_url") or evidence.get("source_url"))
         jobs.append({
             "id": match.job_id, "title": match.title, "employer": match.employer,
-            "location": f"{item.get('county') or 'Kenya'}, Kenya",
+            "location": location,
             "salary_min": item.get("pay_min"), "salary_max": item.get("pay_max"),
             "match_score": match.score, "match_reasons": match.reasons[:3],
-            "deadline": item.get("deadline"), "posted": item.get("last_seen_at"),
-            "url": safe_source_url(item.get("source_url")), "source_url": safe_source_url(item.get("source_url")),
-            "description": item.get("description") or "",
+            "deadline": item.get("deadline"),
+            "posted": evidence.get("date_posted_claimed") or item.get("last_seen_at"),
+            "url": apply_url, "source_url": source_url,
+            "description": evidence.get("description_md") or "",
         })
     return {"jobs": jobs, "total": total, "limit": limit, "offset": offset}
 
@@ -332,15 +439,20 @@ def get_job(job_id: str, user_id: str = Depends(get_current_user), db_conn=Depen
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
     item = dict(row)
+    evidence = _job_evidence(db_conn, job_id)
     match = ranking.score_job(item, prof)
+    county = item.get("county")
+    location = f"{county}, Kenya" if county and county.lower() != "kenya" else "Kenya"
+    source_url = safe_source_url(evidence.get("source_url"))
     return {
         "id": job_id, "title": match.title, "employer": match.employer,
-        "location": f"{item.get('county') or 'Kenya'}, Kenya",
-        "description": item.get("description") or "", "salary_min": item.get("pay_min"),
+        "location": location,
+        "description": evidence.get("description_md") or "", "salary_min": item.get("pay_min"),
         "salary_max": item.get("pay_max"), "match_score": match.score,
         "match_reasons": match.reasons, "deadline": item.get("deadline"),
-        "posted": item.get("last_seen_at"), "url": safe_source_url(item.get("source_url")),
-        "source_url": safe_source_url(item.get("source_url")), "requirements": [], "benefits": [],
+        "posted": evidence.get("date_posted_claimed") or item.get("last_seen_at"),
+        "url": safe_source_url(evidence.get("apply_url") or evidence.get("source_url")),
+        "source_url": source_url, "requirements": [], "benefits": [],
     }
 
 

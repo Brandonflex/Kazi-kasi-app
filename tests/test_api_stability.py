@@ -30,12 +30,34 @@ def test_register_login_and_profile_round_trip(tmp_path, monkeypatch):
         updated = client.put("/api/profile", headers=headers, json={
             "role_families": ["it", "finance", "it"],
             "home_county": " Mombasa ",
-            "max_commute_km": 40,
+            "max_commute_km": None,
             "min_monthly_pay": 50000,
         })
         assert updated.status_code == 200
         assert updated.json()["role_families"] == ["it", "finance"]
         assert updated.json()["home_county"] == "Mombasa"
+
+        # The public API reads job text and provenance from the observation, not
+        # from fabricated demo rows or fields absent from the jobs table.
+        from datetime import date, datetime, timezone
+        from kazikasi.models import JobCandidate, JobPay
+        import_source_conn = main.db.connect(main.DB_PATH)
+        candidate = JobCandidate(
+            source_id="brightermonday", source_job_id="fixture-software-1",
+            source_url="https://jobs.example.com/roles/123", apply_url="https://jobs.example.com/apply/123",
+            title="Junior Software Engineer", employer_name="Example Tech",
+            description_md="Build useful software with the product team.", county="Mombasa",
+            entry_fit="open_to_freshers", pay=JobPay(min_amount=60000, max_amount=85000, period="month"),
+            deadline=date.today(), status="open",
+        )
+        main.sweep.write_job(candidate, import_source_conn, datetime.now(timezone.utc))
+        import_source_conn.commit()
+        import_source_conn.close()
+        jobs = client.get("/api/jobs", headers=headers)
+        assert jobs.status_code == 200
+        assert jobs.json()["jobs"][0]["description"] == "Build useful software with the product team."
+        assert jobs.json()["jobs"][0]["source_url"] == "https://jobs.example.com/roles/123"
+        assert jobs.json()["jobs"][0]["url"] == "https://jobs.example.com/apply/123"
 
         login = client.post("/api/auth/login", json={
             "email": "test@example.com", "password": "a-correct-long-password",
@@ -69,6 +91,18 @@ def test_register_login_and_profile_round_trip(tmp_path, monkeypatch):
         assert client.post("/api/auth/login", json={
             "email": "test@example.com", "password": "wrong-password",
         }).status_code == 401
+
+
+def test_source_catalog_reports_verified_state_without_leaking_errors(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "DB_PATH", str(tmp_path / "sources.sqlite"))
+    with TestClient(main.app) as client:
+        response = client.get("/api/sources")
+        assert response.status_code == 200
+        rows = {source["id"]: source for source in response.json()["sources"]}
+        assert rows["brightermonday"]["status"] == "active"
+        assert rows["careerpoint"]["status"] == "unverified"
+        assert rows["brightermonday"]["health"] == "not_synced"
+        assert "last_error" not in rows["brightermonday"]
 
 
 def test_auth_input_and_bearer_validation(tmp_path, monkeypatch):

@@ -19,6 +19,7 @@ A geo-anchored hiring radar for Kenya: complete, verified, reachable job discove
 - [Refinement session](./docs/research/03-refinement-session.md) — decisions taken, decisions open, prompt pack
 - [Expansion path](./docs/research/04-expansion-path.md) — Kenya → East Africa → Africa
 - [Evidence log](./docs/research/05-evidence-log.md) — every claim and its source
+- [Production source sync](./docs/source-sync.md) — FastAPI ingestion, safety gates, and deployment checks
 - [Brand and IP check](./docs/research/06-brand-ip-check.md) — the name, the crowding, and the KIPI path
 - [Phase 1 build](./docs/phase-1-build.md) — what the ingestion spine does, and how to run it
 - [Phase 2 build](./docs/phase-2-build.md) — the job graph: identity rules, liveness, metrics, and the internal feed
