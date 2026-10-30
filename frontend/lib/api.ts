@@ -47,9 +47,10 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
     if (!token) throw new Error('Your session has expired. Please sign in again.')
     headers.set('Authorization', `Bearer ${token}`)
   }
+  const targetUrl = apiUrl(path)
   let response: Response
   try {
-    response = await fetch(apiUrl(path), { ...init, headers, cache: 'no-store' })
+    response = await fetch(targetUrl, { ...init, headers, cache: 'no-store' })
   } catch {
     throw new Error('Could not reach Kazi-Kasi. Check your connection and try again.')
   }
