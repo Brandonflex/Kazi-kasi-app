@@ -26,7 +26,7 @@ Deploy the API as a separate ASGI service (Vercel is configured for the Next.js 
 - `KAZIKASI_CORS_ORIGINS`: comma-separated exact frontend origins, including the production URL and any preview URLs that need API access.
 - `NEXT_PUBLIC_API_URL`: set on the Vercel frontend to the deployed API origin.
 
-The app refuses to start in production without a signing key. Tokens use a 60-minute expiry by default. Passwords use PBKDF2-SHA256; legacy salted SHA-256 hashes are upgraded on the user's next successful login. Keep secrets in the hosting provider's environment-variable manager, not in Git.
+The app refuses to start in production without a signing key and persistent `DATABASE_URL`. Common managed runtimes are treated as production if `APP_ENV` was accidentally omitted, so an ephemeral SQLite deployment cannot silently accept accounts that disappear between requests. Tokens use a 60-minute expiry by default. Passwords use PBKDF2-SHA256; legacy salted SHA-256 hashes are upgraded on the user's next successful login. Keep secrets in the hosting provider's environment-variable manager, not in Git.
 
 ## Profile and CV APIs
 
