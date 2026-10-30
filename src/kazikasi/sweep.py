@@ -30,7 +30,6 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from . import pipeline
 from .models import JobCandidate
 from .sources import REGISTRY, Adapter
 
@@ -271,6 +270,8 @@ def refresh(adapter: Adapter, conn, *, now: datetime | None = None, pages: int =
     ``timeout`` bounds an individual HTTP request. ``limit`` bounds detail
     pages, keeping scheduled sweeps polite and predictable.
     """
+    from . import pipeline
+
     now = now or datetime.now(timezone.utc)
     report: dict[str, Any] = {
         "source_id": adapter.manifest.id,
@@ -344,6 +345,8 @@ def refresh_reliefweb(adapter, conn, *, now: datetime | None = None, limit: int 
             "source_id": adapter.manifest.id, "fetched": 0, "parsed": 0,
             "stored": 0, "verified": 0, "errors": [], "skipped": "RELIEFWEB_APPNAME is not configured",
         }
+    from . import pipeline
+
     now = now or datetime.now(timezone.utc)
     report = {"source_id": adapter.manifest.id, "fetched": 0, "parsed": 0, "stored": 0, "verified": 0, "errors": []}
     fetcher = pipeline.HttpFetcher(timeout=timeout, min_interval=6.0)

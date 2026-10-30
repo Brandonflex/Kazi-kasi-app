@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { login, register } from '@/lib/api'
+import { LoaderCircle } from 'lucide-react'
 
 export default function AuthPage() {
   const router = useRouter()
@@ -106,7 +107,7 @@ export default function AuthPage() {
               disabled={loading}
               className="w-full px-5 py-2.5 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Create account'}
+              {loading ? <span className="inline-flex items-center gap-2"><LoaderCircle size={16} className="animate-soft-spin" />{isLogin ? 'Signing in' : 'Creating account'}</span> : isLogin ? 'Sign in' : 'Create account'}
             </button>
           </form>
 

@@ -93,6 +93,7 @@ class TestEveryFormPostsSomewhereReal:
         "/search/stop",
         "/account/cv",
         "/account/forget",
+        "/tracker/move",
     )
 
     def forms(self) -> list[tuple[str, str]]:

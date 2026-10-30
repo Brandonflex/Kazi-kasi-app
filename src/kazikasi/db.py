@@ -23,7 +23,7 @@ import sqlite3
 import os
 from pathlib import Path
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     home_area         TEXT,
     max_commute_km    REAL,
     role_families     TEXT NOT NULL DEFAULT '[]',
+    skills            TEXT NOT NULL DEFAULT '[]',
     entry_fits        TEXT NOT NULL DEFAULT '["open_to_freshers","some_experience"]',
     employment_types  TEXT NOT NULL DEFAULT '[]',
     work_modes        TEXT NOT NULL DEFAULT '[]',
@@ -493,6 +494,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     home_area         TEXT,
     max_commute_km    REAL,
     role_families     TEXT NOT NULL DEFAULT '[]',
+    skills            TEXT NOT NULL DEFAULT '[]',
     entry_fits        TEXT NOT NULL DEFAULT '["open_to_freshers","some_experience"]',
     employment_types  TEXT NOT NULL DEFAULT '[]',
     work_modes        TEXT NOT NULL DEFAULT '[]',
@@ -881,6 +883,7 @@ def migrate(conn) -> None:
     _add_column(conn, "accounts", "locale", "TEXT")
     # Password auth is an optional provider on the shared accounts table.
     _add_column(conn, "accounts", "password_hash", "TEXT")
+    _add_column(conn, "profiles", "skills", "TEXT NOT NULL DEFAULT '[]'")
     conn.execute(
         """CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_password_email
            ON accounts (lower(email))

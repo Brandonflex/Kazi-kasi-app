@@ -102,6 +102,7 @@ class Profile:
     home_area: str | None = None
     max_commute_km: float | None = 25.0
     role_families: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
     entry_fits: list[str] = field(default_factory=lambda: ["open_to_freshers", "some_experience"])
     employment_types: list[str] = field(default_factory=list)  # empty = any
     work_modes: list[str] = field(default_factory=list)  # empty = any
@@ -210,16 +211,17 @@ def save_profile(conn, profile: Profile) -> None:
     now = _now_iso()
     conn.execute(
         """INSERT INTO profiles
-           (id, name, home_county, home_area, max_commute_km, role_families, entry_fits,
+           (id, name, home_county, home_area, max_commute_km, role_families, skills, entry_fits,
             employment_types, work_modes, min_monthly_pay, deadline_within_days,
             include_remote, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              name = excluded.name,
              home_county = excluded.home_county,
              home_area = excluded.home_area,
              max_commute_km = excluded.max_commute_km,
              role_families = excluded.role_families,
+             skills = excluded.skills,
              entry_fits = excluded.entry_fits,
              employment_types = excluded.employment_types,
              work_modes = excluded.work_modes,
@@ -234,6 +236,7 @@ def save_profile(conn, profile: Profile) -> None:
             profile.home_area,
             profile.max_commute_km,
             json.dumps(profile.role_families),
+            json.dumps(profile.skills),
             json.dumps(profile.entry_fits),
             json.dumps(profile.employment_types),
             json.dumps(profile.work_modes),
@@ -253,6 +256,7 @@ def load_profile(conn, profile_id: str) -> Profile | None:
         return None
     data = dict(row)
     data["role_families"] = json.loads(data["role_families"])
+    data["skills"] = json.loads(data.get("skills") or "[]")
     data["entry_fits"] = json.loads(data["entry_fits"])
     data["employment_types"] = json.loads(data["employment_types"])
     data["work_modes"] = json.loads(data["work_modes"])

@@ -153,8 +153,8 @@ def watch(
             _iso(moment),
         ),
     )
-    conn.commit()
     row = cursor.fetchone()
+    conn.commit()
     return {"state": "saved", "saved": True, "id": row[0] if row else None, "label": label}
 
 

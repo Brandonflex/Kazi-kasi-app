@@ -87,7 +87,7 @@ class TestFunnel:
         assert payload["click_through_rate"] is None
 
     def test_old_events_fall_out_of_the_window(self, conn):
-        tracking.record(conn, "demo-fresher", job_id(conn), "clicked_through")
+        tracking.record(conn, "demo-fresher", job_id(conn), "clicked_through", now=NOW)
         payload = tracking.funnel(conn, days=1, now=NOW + timedelta(days=3))
         assert payload["events"] == {}
 

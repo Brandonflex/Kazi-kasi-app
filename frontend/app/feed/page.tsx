@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { fetchJobs, type Job, isAuthenticated } from '@/lib/api'
+import { PageLoading } from '@/components/page-loading'
 
 export default function FeedPage() {
   const router = useRouter()
@@ -55,6 +56,8 @@ export default function FeedPage() {
     }
     return 0
   })
+
+  if (loading) return <PageLoading variant="feed" />
 
   return (
     <main className="min-h-screen bg-[#000000]">

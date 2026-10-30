@@ -502,16 +502,16 @@ def exchange(
     subject = str(merged.get("sub") or "")
     if not subject:
         raise ValueError("the provider did not return an identity")
-    return {
+    identity = {
         "subject": subject,
         "email": merged.get("email"),
         "email_verified": bool(merged.get("email_verified")),
         "name": merged.get("name") or merged.get("given_name"),
-        "given_name": merged.get("given_name"),
-        "family_name": merged.get("family_name"),
-        "picture": merged.get("picture"),
-        "locale": merged.get("locale"),
     }
+    for key in ("given_name", "family_name", "picture", "locale"):
+        if merged.get(key):
+            identity[key] = merged[key]
+    return identity
 
 
 # --------------------------------------------------------------------------
@@ -586,16 +586,16 @@ def sign_in(conn, provider_key: str, identity: dict, *, now: datetime | None = N
             locale=identity.get("locale"),
             now=moment,
         )
+    verified = max(int(row["email_verified"] or 0), int(bool(identity.get("email_verified"))))
     conn.execute(
         """UPDATE accounts SET last_seen_at = ?, email = COALESCE(?, email),
-                               email_verified = GREATEST(email_verified, ?::smallint), 
-                               name = COALESCE(?, name),
+                               email_verified = ?, name = COALESCE(?, name),
                                given_name = COALESCE(?, given_name),
                                family_name = COALESCE(?, family_name),
                                picture = COALESCE(?, picture),
                                locale = COALESCE(?, locale)
             WHERE id = ?""",
-        (moment.isoformat(), identity.get("email"), int(bool(identity.get("email_verified"))),
+        (moment.isoformat(), identity.get("email"), verified,
          identity.get("name"), identity.get("given_name"), identity.get("family_name"),
          identity.get("picture"), identity.get("locale"), row["id"]),
     )

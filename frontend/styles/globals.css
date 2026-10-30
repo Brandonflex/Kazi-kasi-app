@@ -48,6 +48,28 @@ body {
   background: var(--color-border-hover);
 }
 
+@keyframes skeleton-shimmer {
+  100% { background-position: -200% 0; }
+}
+
+@keyframes soft-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.skeleton {
+  background: linear-gradient(100deg, #151515 20%, #242424 40%, #151515 60%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-soft-spin { animation: soft-spin 0.9s linear infinite; }
+.animate-rise-in { animation: rise-in 0.35s ease-out both; }
+
 /* Selection */
 ::selection {
   background: var(--color-accent);
@@ -65,4 +87,13 @@ body {
 
 .bg-accent {
   background: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

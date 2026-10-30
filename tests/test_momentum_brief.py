@@ -66,7 +66,7 @@ class TestMomentum:
 
     def test_a_save_counts_too(self, conn):
         job_id = conn.execute("SELECT id FROM jobs WHERE status = 'open' LIMIT 1").fetchone()["id"]
-        tracking.record(conn, "demo-fresher", job_id, "saved")
+        tracking.record(conn, "demo-fresher", job_id, "saved", now=NOW)
         assert momentum.status(conn, "demo-fresher", now=NOW)["run"] >= 1
 
     def test_applying_is_not_required(self, conn):

@@ -127,40 +127,35 @@ SLO_LABEL = {
 }
 
 STYLE = """
-/* ============================================================
-   KAZI-KASI - Mercury 3 Design System v3
-   Nairobi Dark - Safari Green - Ember Gold - Akala Bone
-   Kanga weave textures - 3D spatial layout - Fraunces + Inter
-   ============================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@300;400;500;600;700;800&display=swap');
+:root{--ink:#f4f4f5;--paper:#080808;--card:#000000;--ink-2:#e0e0e0;--muted:#bdbdbd;--forest:#767676;--forest-soft:#040404;--amber:#dedede;--amber-soft:#080808;--risk:#d0d0d0;--risk-soft:#080808;--line:#303030;--sunken:#101010;--focus:#ffffff;--font-sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--font-mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* Kazi-Kasi legacy surface, kept aligned with the monochrome product system. */
 
 :root {
   /* Mercury 3 - Kazi-Kasi Brand Palette */
-  --nairobi-dark: #0C3B43;
-  --nairobi-deep: #082a30;
-  --safari-green: #166E5C;
-  --safari-light: #1e8a73;
-  --ember-gold: #E9A23B;
-  --ember-soft: rgba(233,162,59,.12);
-  --ember-border: rgba(233,162,59,.35);
-  --rift-clay: #C85C3E;
-  --rift-soft: rgba(200,92,62,.12);
-  --akala-bone: #F6F0E6;
-  --akala-warm: #EDE5D5;
-  --akala-dim: #E4DBCB;
-  --nyeu-ink: #242424;
+  --nairobi-dark: #080808;
+  --nairobi-deep: #050505;
+  --safari-green: #B0B0B0;
+  --safari-light: #C0C0C0;
+  --ember-gold: #BDBDBD;
+  --ember-soft: rgba(208,208,208,.12);
+  --ember-border: rgba(208,208,208,.35);
+  --rift-clay: #C0C0C0;
+  --rift-soft: rgba(208,208,208,.12);
+  --akala-bone: #F4F4F5;
+  --akala-warm: #171717;
+  --akala-dim: #171717;
+  --nyeu-ink: #E0E0E0;
   --nyeu-soft: rgba(36,36,36,.65);
   --nyeu-muted: rgba(36,36,36,.42);
 
   /* Semantic mapping */
   --bg: var(--akala-bone);
   --bg-deep: var(--nairobi-dark);
-  --surface: #FBF8F2;
+  --surface: #101010;
   --surface-elevated: #FFFFFF;
   --sunken: var(--akala-warm);
-  --line: rgba(12,59,67,.10);
-  --line-strong: rgba(12,59,67,.20);
+  --line: rgba(255,255,255,.10);
+  --line-strong: rgba(255,255,255,.20);
   --ink: var(--nyeu-ink);
   --ink-2: var(--nyeu-soft);
   --muted: var(--nyeu-muted);
@@ -170,7 +165,7 @@ STYLE = """
   --primary: var(--nairobi-dark);
   --primary-hover: var(--nairobi-deep);
   --success: var(--safari-green);
-  --success-soft: rgba(22,110,92,.12);
+  --success-soft: rgba(208,208,208,.12);
   --warn: var(--ember-gold);
   --warn-soft: var(--ember-soft);
   --danger: var(--rift-clay);
@@ -184,19 +179,19 @@ STYLE = """
   --radius-pill: 999px;
   --radius-lg: 28px;
 
-  /* Shadow - warm depth, 3D feel */
-  --shadow-xs: 0 1px 3px rgba(12,59,67,.06);
-  --shadow-sm: 0 2px 6px rgba(12,59,67,.08);
-  --shadow: 0 4px 14px rgba(12,59,67,.10);
-  --shadow-lg: 0 12px 32px rgba(12,59,67,.14);
-  --shadow-xl: 0 20px 50px rgba(12,59,67,.20);
-  --shadow-glow: 0 0 0 1px rgba(233,162,59,.15), 0 8px 24px rgba(12,59,67,.12);
+  /* Quiet monochrome shadows */
+  --shadow-xs: 0 1px 3px rgba(255,255,255,.06);
+  --shadow-sm: 0 2px 6px rgba(255,255,255,.08);
+  --shadow: 0 4px 14px rgba(255,255,255,.10);
+  --shadow-lg: 0 12px 32px rgba(255,255,255,.14);
+  --shadow-xl: 0 20px 50px rgba(255,255,255,.20);
+  --shadow-glow: 0 0 0 1px rgba(208,208,208,.15), 0 8px 24px rgba(255,255,255,.12);
 
   /* Focus */
   --focus: 0 0 0 2px var(--akala-bone), 0 0 0 4px var(--ember-gold);
 
   /* Typography */
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-display: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -215,7 +210,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 15.5px/1.65 var(--font-sans);
+  font: 16px/1.65 var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -256,7 +251,7 @@ button:not(:disabled):hover, .btn:hover { transform: translateY(-1px); box-shado
 button[disabled] { opacity: .45; cursor: not-allowed; transform: none }
 
 .btn-primary { background: var(--ember-gold); color: var(--nairobi-dark); border-color: var(--ember-gold) }
-.btn-primary:hover { background: #d6922f }
+.btn-primary:hover { background: #BDBDBD }
 .btn-secondary { background: var(--nairobi-dark); color: var(--akala-bone); border-color: var(--nairobi-dark) }
 .btn-secondary:hover { background: var(--nairobi-deep) }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line) }
@@ -272,10 +267,10 @@ header {
   position: sticky;
   top: 0;
   z-index: 60;
-  background: rgba(12,59,67,.96);
+  background: rgba(255,255,255,.96);
   backdrop-filter: saturate(160%) blur(16px);
   -webkit-backdrop-filter: saturate(160%) blur(16px);
-  border-bottom: 1px solid rgba(233,162,59,.15);
+  border-bottom: 1px solid rgba(208,208,208,.15);
   transition: box-shadow var(--duration) var(--ease-out);
 }
 header.scrolled { box-shadow: var(--shadow-lg) }
@@ -299,7 +294,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   letter-spacing: .16em;
   text-transform: uppercase;
   font-weight: 600;
-  color: rgba(246,240,230,.55);
+  color: rgba(235,235,235,.55);
   margin-top: 2px;
 }
 
@@ -307,14 +302,14 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .brand nav { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-left: auto }
 .brand nav a {
   font-size: 13px;
-  color: rgba(246,240,230,.72);
+  color: rgba(235,235,235,.72);
   text-decoration: none;
   padding: 8px 14px;
   border-radius: var(--radius-pill);
   transition: color var(--duration-fast), background var(--duration-fast);
   font-weight: 500;
 }
-.brand nav a:hover { color: var(--akala-bone); background: rgba(246,240,230,.08); text-decoration: none }
+.brand nav a:hover { color: var(--akala-bone); background: rgba(235,235,235,.08); text-decoration: none }
 
 .nav-signin {
   background: var(--ember-gold) !important;
@@ -322,16 +317,16 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   font-weight: 700 !important;
   padding: 8px 18px !important;
 }
-.nav-signin:hover { background: #d6922f !important; color: var(--nairobi-dark) !important }
+.nav-signin:hover { background: #BDBDBD !important; color: var(--nairobi-dark) !important }
 
 /* Jump/Command */
 .cmdk {
   font: inherit;
   font-size: 12px;
   font-weight: 500;
-  color: rgba(246,240,230,.6);
-  background: rgba(246,240,230,.06);
-  border: 1px solid rgba(246,240,230,.12);
+  color: rgba(235,235,235,.6);
+  background: rgba(235,235,235,.06);
+  border: 1px solid rgba(235,235,235,.12);
   border-radius: var(--radius-pill);
   padding: 6px 12px;
   cursor: pointer;
@@ -341,7 +336,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   transition: all var(--duration-fast) var(--ease-out);
 }
 .cmdk:hover { border-color: var(--ember-gold); color: var(--ember-gold) }
-.cmdk kbd { font-size: 10px; color: rgba(246,240,230,.4); border: 1px solid rgba(246,240,230,.15); border-radius: 4px; padding: 1px 5px; font-family: var(--font-sans) }
+.cmdk kbd { font-size: 10px; color: rgba(235,235,235,.4); border: 1px solid rgba(235,235,235,.15); border-radius: 4px; padding: 1px 5px; font-family: var(--font-sans) }
 
 /* Banner */
 .banner {
@@ -354,7 +349,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 
 /* ---- Palette overlay ---- */
-.palette { position: fixed; inset: 0; z-index: 70; background: rgba(12,59,67,.5); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; backdrop-filter: blur(4px) }
+.palette { position: fixed; inset: 0; z-index: 70; background: rgba(255,255,255,.5); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; backdrop-filter: blur(4px) }
 .palette[hidden] { display: none }
 .palette-box { width: min(560px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); overflow: hidden }
 .palette input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: 15px/1.4 var(--font-sans); background: var(--surface); color: var(--ink); outline: none }
@@ -367,7 +362,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .palette .hint { border-top: 1px solid var(--line); padding: 9px 16px; font-size: 11.5px; color: var(--muted) }
 
 /* ============================================================
-   SPATIAL FEED LAYOUT - 3D Depth + Perspective
+   Feed layout - calm, flat surfaces
    ============================================================ */
 
 /* Spatial hero with gradient depth */
@@ -381,8 +376,8 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   position: absolute;
   inset: 0;
   background: 
-    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(233,162,59,.12) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(22,110,92,.10) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(208,208,208,.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(208,208,208,.10) 0%, transparent 50%),
     linear-gradient(180deg, var(--bg) 0%, var(--akala-warm) 100%);
   z-index: 0;
 }
@@ -446,7 +441,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .feed-sidebar { display: flex; flex-direction: column; gap: 16px }
 @media (min-width: 1080px) { .feed-sidebar { position: sticky; top: 80px; align-self: start } }
 
-/* Stats - floating glass cards with 3D tilt */
+/* Stats - simple cards */
 .stats-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -462,11 +457,9 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   padding: 18px 16px;
   box-shadow: var(--shadow-sm);
   transition: transform var(--duration) var(--ease-out), box-shadow var(--duration) var(--ease-out);
-  transform-style: preserve-3d;
-  perspective: 600px;
 }
 .stat-card:hover {
-  transform: translateY(-2px) rotateX(2deg);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
 }
 .stat-number {
@@ -492,8 +485,8 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .stat-card:nth-child(3) .stat-number { color: var(--rift-clay) }
 .stat-card:nth-child(4) .stat-number { color: var(--nairobi-dark) }
 .stat-card-link {
-  background: linear-gradient(135deg, var(--ember-soft), rgba(233,162,59,0.15));
-  border-color: rgba(233,162,59,0.3);
+  background: linear-gradient(135deg, var(--ember-soft), rgba(208,208,208,0.15));
+  border-color: rgba(208,208,208,0.3);
   text-decoration: none;
   display: flex;
   flex-direction: column;
@@ -504,7 +497,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 }
 .stat-card-link:hover {
   border-color: var(--ember-gold);
-  background: linear-gradient(135deg, var(--ember-soft), rgba(233,162,59,0.25));
+  background: linear-gradient(135deg, var(--ember-soft), rgba(208,208,208,0.25));
 }
 .stat-card-link .stat-number {
   color: var(--ember-gold);
@@ -523,17 +516,13 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 .search-box { display: flex; gap: 8px; margin-bottom: 12px }
 .search-input {
   flex: 1;
-  padding: 11px 16px 11px 42px;
+  padding: 11px 16px;
   border: 1.5px solid var(--line);
   border-radius: var(--radius-pill);
   font: 14.5px/1.5 var(--font-sans);
   color: var(--ink);
   background: var(--bg);
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%230C3B43' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 14px center;
-  background-size: 18px;
 }
 .search-input:focus { outline: none; border-color: var(--ember-gold); box-shadow: 0 0 0 3px var(--ember-soft) }
 .search-input::placeholder { color: var(--muted) }
@@ -573,7 +562,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
 /* Job List */
 .job-list { display: flex; flex-direction: column; gap: 14px }
 
-/* Job Cards - 3D depth, spatial hover */
+/* Job cards - flat surfaces */
 .card {
   background: var(--surface-elevated);
   border: 1px solid var(--line);
@@ -581,8 +570,6 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   padding: 22px 24px;
   box-shadow: var(--shadow-sm);
   transition: transform var(--duration) var(--ease-out), box-shadow var(--duration) var(--ease-out), border-color var(--duration) var(--ease-out);
-  transform-style: preserve-3d;
-  perspective: 1000px;
   position: relative;
 }
 .card::before {
@@ -590,7 +577,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   position: absolute;
   inset: 0;
   border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(233,162,59,.04), transparent 50%);
+  background: linear-gradient(135deg, rgba(208,208,208,.04), transparent 50%);
   opacity: 0;
   transition: opacity var(--duration) var(--ease-out);
   pointer-events: none;
@@ -641,7 +628,7 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   align-items: center;
   gap: 5px;
   background: var(--ember-soft);
-  color: #b07820;
+  color: #BDBDBD;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   font-size: 12.5px;
@@ -665,10 +652,10 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   color: var(--ink-2);
   border: 1px solid var(--line);
 }
-.badge.good { background: var(--success-soft); color: var(--safari-green); border-color: rgba(22,110,92,.25) }
-.badge.warn { background: var(--warn-soft); color: #9a6b15; border-color: var(--ember-border) }
+.badge.good { background: var(--success-soft); color: var(--safari-green); border-color: rgba(208,208,208,.25) }
+.badge.warn { background: var(--warn-soft); color: #BDBDBD; border-color: var(--ember-border) }
 .badge.muted { background: var(--bg); color: var(--muted) }
-.badge.danger { background: var(--danger-soft); color: var(--rift-clay); border-color: rgba(200,92,62,.25) }
+.badge.danger { background: var(--danger-soft); color: var(--rift-clay); border-color: rgba(208,208,208,.25) }
 
 /* Why-that list */
 .whythat { list-style: none; padding: 0; margin: 10px 0; font-size: 13px; color: var(--ink-2) }
@@ -706,21 +693,21 @@ header.scrolled { box-shadow: var(--shadow-lg) }
   transition: all var(--duration-fast) var(--ease-out);
   margin-left: auto;
 }
-.apply:hover { background: #d6922f; text-decoration: none; transform: translateY(-1px); box-shadow: var(--shadow-sm) }
+.apply:hover { background: #BDBDBD; text-decoration: none; transform: translateY(-1px); box-shadow: var(--shadow-sm) }
 
 /* Match breakdown */
 .match-breakdown { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap }
 .match-metric { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-pill) }
 .match-yes { background: var(--success-soft); color: var(--safari-green) }
-.match-no { background: var(--warn-soft); color: #9a6b15 }
+.match-no { background: var(--warn-soft); color: #BDBDBD }
 
 /* Application stage */
 .app-stage { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap }
 .stage-watchlist { background: var(--bg); color: var(--muted) }
-.stage-saved { background: var(--ember-soft); color: #9a6b15 }
+.stage-saved { background: var(--ember-soft); color: #BDBDBD }
 .stage-applied { background: var(--success-soft); color: var(--safari-green) }
 .stage-screening { background: var(--ember-soft); color: var(--ember-gold) }
-.stage-interview { background: rgba(12,59,67,.08); color: var(--nairobi-dark) }
+.stage-interview { background: rgba(255,255,255,.08); color: var(--nairobi-dark) }
 .stage-offer { background: var(--danger-soft); color: var(--rift-clay) }
 .stage-rejected { background: var(--danger-soft); color: var(--rift-clay) }
 .stage-withdrawn { background: var(--bg); color: var(--muted) }
@@ -774,7 +761,7 @@ button[type="submit"] {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
 }
-button[type="submit"].on { background: var(--success-soft); color: var(--safari-green); border-color: rgba(22,110,92,.3) }
+button[type="submit"].on { background: var(--success-soft); color: var(--safari-green); border-color: rgba(208,208,208,.3) }
 button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--ember-gold) }
 
 /* ---- Sidebar rail cards ---- */
@@ -832,7 +819,7 @@ button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--embe
 .empty h2 { font-size: 20px; color: var(--nairobi-dark); margin-bottom: 8px }
 
 /* ---- Sign in ---- */
-.signin-wrap { display: flex; justify-content: center; align-items: center; min-height: calc(100vh - 200px); padding: 40px 20px; background: linear-gradient(135deg, var(--nairobi-dark) 0%, #0a2e36 100%) }
+.signin-wrap { display: flex; justify-content: center; align-items: center; min-height: calc(100vh - 200px); padding: 40px 20px; background: linear-gradient(135deg, var(--nairobi-dark) 0%, #050505 100%) }
 .signin-card {
   width: min(480px, 100%);
   padding: 48px 40px;
@@ -862,7 +849,7 @@ button[type="submit"]:hover { border-color: var(--ember-gold); color: var(--embe
   margin-bottom: 12px;
   text-align: left;
 }
-.signin-primary-btn:hover { border-color: var(--ember-gold); box-shadow: 0 4px 20px rgba(233,162,59,0.2); transform: translateY(-1px) }
+.signin-primary-btn:hover { border-color: var(--ember-gold); box-shadow: 0 4px 20px rgba(208,208,208,0.2); transform: translateY(-1px) }
 .signin-provider-name { display: flex; align-items: center; gap: 10px; font-size: 16px }
 .signin-provider-why { font-size: 12px; color: var(--muted); font-weight: 400; text-align: left }
 .signin-guest-btn {
@@ -889,9 +876,9 @@ table th { text-align: left; font-size: 10.5px; letter-spacing: .08em; text-tran
 table td { padding: 10px; border-bottom: 1px solid var(--line); color: var(--ink-2) }
 table tr:hover td { background: var(--ember-soft) }
 
-/* ---- 3D Card Tilt (data-tilt) ---- */
-[data-tilt] { transform-style: preserve-3d; transition: transform 100ms linear }
-[data-tilt] > * { transform: translateZ(0) }
+/* ---- Card hover states ---- */
+[data-tilt] { transition: transform 100ms linear }
+[data-tilt] > * { transform:none }
 
 /* ---- Footer ---- */
 footer.wrap { padding: 24px 0; border-top: 1px solid var(--line); margin-top: 40px }
@@ -1108,92 +1095,7 @@ footer.wrap p { color: var(--muted); font-size: 13px; margin: 0 }
   letter-spacing: .05em;
 }
 
-/* ============================================================
-   3D HERO ANIMATION
-   ============================================================ */
-
-.hero-3d {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 1;
-}
-.hero-shape {
-  position: absolute;
-  border-radius: 50%;
-  opacity: .08;
-  animation: hero-float 20s ease-in-out infinite;
-}
-.hero-shape:nth-child(1) {
-  width: 200px; height: 200px;
-  background: var(--ember-gold);
-  top: -60px; right: 10%;
-  animation-delay: 0s;
-  animation-duration: 25s;
-}
-.hero-shape:nth-child(2) {
-  width: 120px; height: 120px;
-  background: var(--safari-green);
-  bottom: 20px; left: 15%;
-  animation-delay: -5s;
-  animation-duration: 20s;
-}
-.hero-shape:nth-child(3) {
-  width: 80px; height: 80px;
-  background: var(--rift-clay);
-  top: 40%; right: 5%;
-  animation-delay: -10s;
-  animation-duration: 22s;
-}
-.hero-shape:nth-child(4) {
-  width: 160px; height: 160px;
-  background: var(--ember-gold);
-  bottom: -40px; right: 30%;
-  animation-delay: -7s;
-  animation-duration: 28s;
-}
-.hero-shape:nth-child(5) {
-  width: 60px; height: 60px;
-  background: var(--safari-green);
-  top: 20%; left: 5%;
-  animation-delay: -3s;
-  animation-duration: 18s;
-}
-
-@keyframes hero-float {
-  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
-  25% { transform: translate(20px, -30px) rotate(90deg) scale(1.1); }
-  50% { transform: translate(-10px, -50px) rotate(180deg) scale(.95); }
-  75% { transform: translate(30px, -20px) rotate(270deg) scale(1.05); }
-}
-
-/* Kanga weave pattern overlay on header */
-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: 
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 3px,
-      rgba(233,162,59,.03) 3px,
-      rgba(233,162,59,.03) 4px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 3px,
-      rgba(233,162,59,.02) 3px,
-      rgba(233,162,59,.02) 4px
-    );
-  pointer-events: none;
-  z-index: 0;
-}
 header > * { position: relative; z-index: 1 }
-
-
 
 /* ============================================================
    DIGEST PAGE UI
@@ -1242,7 +1144,7 @@ header > * { position: relative; z-index: 1 }
   text-decoration: none;
   margin-left: 8px;
   padding: 3px 8px;
-  border: 1px solid rgba(233,162,59,0.3);
+  border: 1px solid rgba(208,208,208,0.3);
   border-radius: var(--radius-sm);
   transition: all 0.2s;
 }
@@ -1333,7 +1235,7 @@ header > * { position: relative; z-index: 1 }
 }
 
 .phone-header {
-  background: #075E54;
+  background: #767676;
   color: #fff;
   padding: 14px 16px;
   font-size: 15px;
@@ -1341,7 +1243,7 @@ header > * { position: relative; z-index: 1 }
 }
 
 .phone-body {
-  background: #ECE5DD;
+  background: #E0E0E0;
   padding: 20px 14px;
   min-height: 100px;
 }
@@ -1398,7 +1300,7 @@ header > * { position: relative; z-index: 1 }
 .orb-1 {
   width: 600px;
   height: 600px;
-  background: linear-gradient(135deg, #E9A23B 0%, rgba(233,162,59,0.3) 100%);
+  background: linear-gradient(135deg, #BDBDBD 0%, rgba(208,208,208,0.3) 100%);
   top: -200px;
   left: -200px;
   animation-delay: 0s;
@@ -1407,7 +1309,7 @@ header > * { position: relative; z-index: 1 }
 .orb-2 {
   width: 500px;
   height: 500px;
-  background: linear-gradient(135deg, #166E5C 0%, rgba(22,110,92,0.3) 100%);
+  background: linear-gradient(135deg, #B0B0B0 0%, rgba(208,208,208,0.3) 100%);
   bottom: -150px;
   right: -150px;
   animation-delay: -7s;
@@ -1416,7 +1318,7 @@ header > * { position: relative; z-index: 1 }
 .orb-3 {
   width: 400px;
   height: 400px;
-  background: linear-gradient(135deg, #C85C3E 0%, rgba(200,92,62,0.3) 100%);
+  background: linear-gradient(135deg, #C0C0C0 0%, rgba(208,208,208,0.3) 100%);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -1445,7 +1347,7 @@ header > * { position: relative; z-index: 1 }
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  color: #E9A23B;
+  color: #BDBDBD;
   margin-bottom: 24px;
   backdrop-filter: blur(10px);
 }
@@ -1461,7 +1363,7 @@ header > * { position: relative; z-index: 1 }
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #E9A23B 0%, #C85C3E 100%);
+  background: linear-gradient(135deg, #BDBDBD 0%, #C0C0C0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1618,7 +1520,7 @@ header > * { position: relative; z-index: 1 }
 /* Page loading overlay - visible by default, hidden by JS when loaded */
 #page-loading-overlay {
   display: flex;
-  background: linear-gradient(135deg, #F6F0E6 0%, #FBF8F2 100%);
+  background: linear-gradient(135deg, #F4F4F5 0%, #101010 100%);
 }
 
 noscript #page-loading-overlay { display: none; }
@@ -1657,12 +1559,12 @@ noscript #page-loading-overlay { display: none; }
 }
 
 .loading-spinner::before {
-  border-top-color: #E9A23B;
+  border-top-color: #BDBDBD;
   animation: spin 1s linear infinite;
 }
 
 .loading-spinner::after {
-  border-bottom-color: #166E5C;
+  border-bottom-color: #B0B0B0;
   animation: spin 1.5s linear infinite reverse;
 }
 
@@ -1719,21 +1621,21 @@ noscript #page-loading-overlay { display: none; }
 
 /* Galaxy-specific loading */
 .galaxy-loading {
-  background: #0a0a0a;
+  background: #090909;
 }
 
 .galaxy-loading .loading-spinner::before {
-  border-top-color: #E9A23B;
+  border-top-color: #BDBDBD;
   box-shadow: 0 0 20px rgba(233, 162, 59, 0.5);
 }
 
 .galaxy-loading .loading-spinner::after {
-  border-bottom-color: #166E5C;
+  border-bottom-color: #B0B0B0;
   box-shadow: 0 0 20px rgba(22, 110, 92, 0.5);
 }
 
 .galaxy-loading .loading-message {
-  color: #F6F0E6;
+  color: #F4F4F5;
 }
 
 /* Progress bar for long operations */
@@ -1748,7 +1650,7 @@ noscript #page-loading-overlay { display: none; }
 
 .loading-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #E9A23B 0%, #C85C3E 100%);
+  background: linear-gradient(90deg, #BDBDBD 0%, #C0C0C0 100%);
   border-radius: 3px;
   animation: progress 2s ease-in-out infinite;
   width: 30%;
@@ -1759,13 +1661,11 @@ noscript #page-loading-overlay { display: none; }
   100% { transform: translateX(400%); }
 }
 
-/* 3D Tilt Effect */
+/* Flat hover affordance */
 [data-tilt] {
-  transform-style: preserve-3d;
   transition: transform 100ms linear;
 }
 [data-tilt] > * {
-  transform: translateZ(0);
 }
 
 
@@ -1778,16 +1678,16 @@ noscript #page-loading-overlay { display: none; }
   width: 72px;
   height: 72px;
   border: 4px solid rgba(233, 162, 59, 0.15);
-  border-top-color: #E9A23B;
+  border-top-color: #BDBDBD;
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
   margin-bottom: 28px;
 }
 
 .loading-auth .loading-title {
-  font-family: 'Fraunces', serif;
+  font-family: Inter, sans-serif;
   font-size: 22px;
-  color: #F6F0E6;
+  color: #F4F4F5;
   margin-bottom: 12px;
 }
 
@@ -1813,7 +1713,7 @@ noscript #page-loading-overlay { display: none; }
 }
 
 .loading-auth .step.active {
-  color: #E9A23B;
+  color: #BDBDBD;
   font-weight: 600;
 }
 
@@ -1860,9 +1760,9 @@ noscript #page-loading-overlay { display: none; }
   transform: translate(-50%, -50%);
   width: 14px;
   height: 14px;
-  background: #E9A23B;
+  background: #BDBDBD;
   border-radius: 50%;
-  box-shadow: 0 0 20px #E9A23B;
+  box-shadow: 0 0 20px #BDBDBD;
   animation: pulse-core 1.5s ease-in-out infinite;
 }
 
@@ -1877,9 +1777,9 @@ noscript #page-loading-overlay { display: none; }
 }
 
 .loading-galaxy .loading-title {
-  font-family: 'Fraunces', serif;
+  font-family: Inter, sans-serif;
   font-size: 26px;
-  color: #E9A23B;
+  color: #BDBDBD;
   margin-bottom: 10px;
 }
 
@@ -1908,7 +1808,7 @@ noscript #page-loading-overlay { display: none; }
 .loading-search .loading-dots span {
   width: 10px;
   height: 10px;
-  background: #E9A23B;
+  background: #BDBDBD;
   border-radius: 50%;
   animation: dot-bounce 1.4s ease-in-out infinite;
 }
@@ -1938,21 +1838,21 @@ noscript #page-loading-overlay { display: none; }
 
 .loading-upload .progress-fill {
   height: 100%;
-  background: #E9A23B;
+  background: #BDBDBD;
   border-radius: 2px;
   transition: width 0.3s;
 }
 
 .loading-upload .loading-title {
-  font-family: 'Fraunces', serif;
+  font-family: Inter, sans-serif;
   font-size: 20px;
-  color: #F6F0E6;
+  color: #F4F4F5;
   margin-bottom: 10px;
 }
 
 .loading-upload .progress-text {
   font-size: 13px;
-  color: #E9A23B;
+  color: #BDBDBD;
   font-weight: 600;
   margin-top: 14px;
 }
@@ -2090,6 +1990,42 @@ noscript #page-loading-overlay { display: none; }
   .chip { white-space: nowrap; flex-shrink: 0 }
   .signin-card { padding: 28px 24px }
 }
+
+/* Accessible monochrome compatibility layer for the preserved server-rendered surface. */
+:root {
+  --nairobi-dark:#080808; --nairobi-deep:#050505;
+  --safari-green:#767676; --safari-light:#909090;
+  --ember-gold:#d0d0d0; --ember-soft:rgba(208,208,208,.12); --ember-border:rgba(208,208,208,.3);
+  --rift-clay:#d8d8d8; --rift-soft:rgba(216,216,216,.12);
+  --akala-bone:#080808; --akala-warm:#101010; --akala-dim:#171717;
+  --nyeu-ink:#f4f4f5; --nyeu-soft:#dedede; --nyeu-muted:#bdbdbd;
+  --bg:#080808; --bg-deep:#050505; --surface:#101010; --surface-elevated:#141414;
+  --sunken:#090909; --line:rgba(255,255,255,.14); --line-strong:rgba(255,255,255,.24);
+  --ink:#f4f4f5; --ink-2:#dedede; --muted:#bdbdbd;
+  --accent:#d0d0d0; --accent-soft:rgba(208,208,208,.12); --accent-border:rgba(208,208,208,.3);
+  --primary:#767676; --primary-hover:#686868; --success:#bdbdbd; --success-soft:rgba(255,255,255,.1);
+  --warn:#d0d0d0; --warn-soft:rgba(255,255,255,.1); --danger:#d8d8d8; --danger-soft:rgba(255,255,255,.1); --live:#bdbdbd;
+  --focus:0 0 0 2px #080808,0 0 0 4px #f4f4f5;
+  --font-display:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --shadow-xs:none; --shadow-sm:none; --shadow:none; --shadow-lg:none; --shadow-xl:none; --shadow-glow:none;
+}
+body{font:16px/1.65 var(--font-sans);background:#080808;color:#f4f4f5}
+.btn-primary{background:var(--forest);color:#fff}
+.subform button{min-height:44px}
+.foot .apply{min-height:40px}
+.msg{border:1px solid var(--line);border-radius:14px;background:#101010;padding:16px}.sms{white-space:pre-wrap}
+.provider,.provider-button,.provider-state,.signin-primary,.signin-secondary,.signin-secondary-btn{display:block}
+.provider-button,.signin-primary-btn,.signin-secondary-btn{min-height:44px;border:1px solid var(--line-strong);border-radius:10px;background:#111;color:var(--ink);padding:10px 14px}
+.spatial-hero{background:#080808;box-shadow:none!important}
+.stat-card,.card{transform:none!important}
+.galaxy-loading .orbit,.loading-galaxy .orbit,.loading-galaxy .core{display:none!important}
+.galaxy-loading,.loading-galaxy{background:#080808!important;background-image:none!important}
+.display,h1,h2,h3,h4{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.masthead,.layout,.feedcol,.fig,.flush,.ghost,.inline,.inline-ml,.key,.mini,.mono,.num,.rail,.section,.stack,.stepnum,.tablewrap,.trial,.trouble,.two,.when,.whobar,.check,.codebox,.copy,.evidence,.feedcol,.fig,.flush,.ghost,.inline,.inline-ml,.key,.layout,.masthead,.mini,.mono,.mt10,.mt18,.mt28,.mt32,.num,.paste,.rail,.searchform,.section,.signin-primary,.signin-secondary,.signin-secondary-btn,.sources,.stack,.stepnum,.tablewrap,.trial,.trouble,.two,.when,.whobar{box-sizing:border-box}
+@media (max-width:520px){.feed-layout,.layout{grid-template-columns:repeat(2,1fr);gap:12px}.feed-main,.feedcol{grid-column:1/-1}.feed-sidebar,.rail{grid-column:1/-1}}
 """
 
 
@@ -2158,16 +2094,8 @@ def _as_dt(value) -> datetime | None:
 
 
 SCOPE_MARK = """<svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <defs>
-    <pattern id="kanga" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <rect width="6" height="6" fill="none"/>
-      <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(233,162,59,.18)" stroke-width="1"/>
-      <line x1="0" y1="3" x2="6" y2="3" stroke="rgba(233,162,59,.12)" stroke-width=".6"/>
-    </pattern>
-  </defs>
-  <rect width="40" height="40" rx="10" fill="#0C3B43"/>
-  <rect width="40" height="40" rx="10" fill="url(#kanga)"/>
-  <path d="M14 12v16M14 20l10-8M18 16l4 4" stroke="#F6F0E6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="1" y="1" width="38" height="38" rx="10" stroke="currentColor" stroke-width="2"/>
+  <path d="M13 12v16M13 20l14-8M18 16l4 4" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"""
 
 
@@ -2185,9 +2113,10 @@ def _page(
     nav: str = "",
     head: str = "",
     palette: list | None = None,
+    now: datetime | None = None,
 ) -> str:
     build = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "dev"
-    notice = bundle_module.notice()
+    notice = bundle_module.notice(now=now) if now is not None else bundle_module.notice()
     if demo:
         banner = (
             '<div class="banner">Synthetic demo data - no real vacancies are shown on this page.</div>'
@@ -2198,6 +2127,8 @@ def _page(
         banner = ""
     demo_line = f'<div class="small mt6">demo build {_e(build)}</div>' if demo else ""
     palette_html = _palette_markup(palette or [])
+    # Keep inline style attributes out of the document so the CSP can use hashes.
+    body = re.sub(r'\sstyle="[^"]*"', "", body)
     links = nav or (
         '<a href="/">Feed</a>'
         '<a href="/shortlist">Shortlist</a><a href="/brief">Brief</a>'
@@ -2237,41 +2168,7 @@ Eligibility labels quote the advert. Applications happen on the employer's site,
 <a href="/salaries">advertised pay</a> - <a href="/setup">go-live</a></p>
 {demo_line}</footer>
 
-<script>
-(function() {{
-  var overlay = document.getElementById('page-loading-overlay');
-  if (!overlay) return;
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {{
-    hideOverlay();
-  }} else {{
-    document.addEventListener('DOMContentLoaded', hideOverlay);
-  }}
-  function hideOverlay() {{
-    setTimeout(function() {{
-      overlay.style.opacity = '0';
-      setTimeout(function() {{ overlay.style.display = 'none'; }}, 300);
-    }}, 150);
-  }}
-  document.addEventListener('click', function(e) {{
-    var link = e.target.closest('a');
-    if (!link || !link.href) return;
-    if (link.target) return;
-    if (link.href.indexOf('#') !== -1) return;
-    if (link.classList.contains('no-loading')) return;
-    var origin = window.location.origin;
-    if (link.href.indexOf(origin) !== 0 && link.href.indexOf('/') !== 0) return;
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '1';
-  }});
-  document.addEventListener('submit', function(e) {{
-    var form = e.target.closest('form');
-    if (!form) return;
-    if (form.method && form.method.toLowerCase() === 'get') return;
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '1';
-  }});
-}})();
-</script>
+<script>{PAGE_JS}</script>
 
 </body></html>"""
 
@@ -2624,6 +2521,9 @@ def render_feed(
             "<p>Loosen a constraint, or check back after the next sweep. We will not "
             "fill the space with jobs that do not fit.</p></div>"
         )
+    exception_card = _wildcard_html(conn, profile, now=now)
+    if exception_card:
+        cards.append(exception_card)
 
     soon = []
     for match in matches:
@@ -2647,7 +2547,8 @@ def render_feed(
     # Build filter chips (horizontal, like Indeed/LinkedIn 2026)
     filter_chips = f'''
     <div class="filter-bar">
-      <form action="/search?profile={quote(profile.id)}" method="get" style="margin:0">
+      <form action="/search" method="get" style="margin:0">
+        <input type="hidden" name="profile" value="{_e(profile.id)}">
         <div class="search-box">
           <input type="search" name="q" placeholder="Search jobs, companies, keywords..." class="search-input">
           <button class="search-btn" type="submit" aria-label="Search jobs">
@@ -2667,25 +2568,18 @@ def render_feed(
     </div>
     '''
 
-    # Build stats bar with 3D tilt cards
+    # Build flat, readable stats cards
     stats_bar = f'''
     <div class="stats-bar">
-      <div class="stat-card" data-tilt><span class="stat-number">{len(matches)}</span><span class="stat-label">Jobs matching</span></div>
-      <div class="stat-card" data-tilt><span class="stat-number">{summary['live_jobs']}</span><span class="stat-label">Live jobs</span></div>
-      <div class="stat-card" data-tilt><span class="stat-number">{summary['closing_within_7_days']}</span><span class="stat-label">Closing soon</span></div>
-      <div class="stat-card" data-tilt><span class="stat-number">{len(acted)}</span><span class="stat-label">Applied</span></div>
+      <div class="stat-card"><span class="stat-number">{len(matches)}</span><span class="stat-label">Jobs that match this profile</span></div>
+      <div class="stat-card"><span class="stat-number">{summary['live_jobs']}</span><span class="stat-label">Live jobs</span></div>
+      <div class="stat-card"><span class="stat-number">{summary['closing_within_7_days']}</span><span class="stat-label">Closing soon</span></div>
+      <div class="stat-card"><span class="stat-number">{len(acted)}</span><span class="stat-label">Applied</span></div>
     </div>
     '''
 
     body = f"""
 <div class="spatial-hero">
-  <div class="hero-3d">
-    <div class="hero-shape"></div>
-    <div class="hero-shape"></div>
-    <div class="hero-shape"></div>
-    <div class="hero-shape"></div>
-    <div class="hero-shape"></div>
-  </div>
   <div class="feed-layout">
     <div class="feed-main">
       <div class="masthead">
@@ -2693,6 +2587,7 @@ def render_feed(
         <h1 class="display">Jobs <em>for you</em></h1>
         <p class="scopeline">{_e(subtitle)}</p>
       </div>
+      {ledger}
       {stats_bar}
       {filter_chips}
       <div class="job-list">
@@ -2730,6 +2625,7 @@ def render_feed(
         demo=demo,
         nav=_nav_for(_account_for(conn, headers), profile.id),
         palette=palette_index(conn, profile, now=now),
+        now=now,
     )
 
 
@@ -3013,6 +2909,40 @@ COPY_JS = """(function(){
   });
 })();"""
 
+PAGE_JS = """(function() {
+  var overlay = document.getElementById('page-loading-overlay');
+  if (!overlay) return;
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    hideOverlay();
+  } else {
+    document.addEventListener('DOMContentLoaded', hideOverlay);
+  }
+  function hideOverlay() {
+    setTimeout(function() {
+      overlay.style.opacity = '0';
+      setTimeout(function() { overlay.style.display = 'none'; }, 300);
+    }, 150);
+  }
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a');
+    if (!link || !link.href) return;
+    if (link.target) return;
+    if (link.href.indexOf('#') !== -1) return;
+    if (link.classList.contains('no-loading')) return;
+    var origin = window.location.origin;
+    if (link.href.indexOf(origin) !== 0 && link.href.indexOf('/') !== 0) return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  });
+  document.addEventListener('submit', function(e) {
+    var form = e.target.closest('form');
+    if (!form) return;
+    if (form.method && form.method.toLowerCase() === 'get') return;
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '1';
+  });
+})();"""
+
 # --------------------------------------------------------------------------
 # Response policy
 # --------------------------------------------------------------------------
@@ -3030,14 +2960,15 @@ def _inline_hash(source: str) -> str:
 
 
 ERROR_STYLE = """body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-background:#FBF8F2;color:#12161C;margin:0;padding:32px}
+background:#080808;color:#f4f4f5;margin:0;padding:32px}
 h1{font-size:24px;margin:0 0 8px}
 .mut{color:#5C6675;margin:0 0 16px}
-pre{background:#fff;border:1px solid #E3DCCF;border-radius:14px;padding:16px;
+pre{background:#101010;border:1px solid #303030;border-radius:14px;padding:16px;
 white-space:pre-wrap;font:13px/1.6 ui-monospace,Menlo,monospace}"""
 
 STYLE_HASH = _inline_hash(STYLE)
 SCRIPT_HASH = _inline_hash(PALETTE_JS)
+PAGE_SCRIPT_HASH = _inline_hash(PAGE_JS)
 COPY_HASH = _inline_hash(COPY_JS)
 ERROR_STYLE_HASH = _inline_hash(ERROR_STYLE)
 NOSCRIPT_STYLE_HASH = _inline_hash(".reveal { opacity: 1 !important; transform: none !important; }")
@@ -3056,15 +2987,12 @@ def security_headers(*, https: bool | None = None) -> dict[str, str]:
         "Content-Security-Policy": "; ".join(
             [
                 "default-src 'none'",
-                # Inline styles allowed (no hashes - Chrome ignores unsafe-inline when hashes present)
-                "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-                # Inline scripts allowed + external scripts from self + Vercel feedback
-                "script-src 'self' https://vercel.live 'unsafe-inline'",
-                # Images from self + data URIs + Google profile pictures + favicons
+                f"style-src 'self' '{STYLE_HASH}' '{NOSCRIPT_STYLE_HASH}' '{ERROR_STYLE_HASH}'",
+                f"script-src 'self' '{SCRIPT_HASH}' '{PAGE_SCRIPT_HASH}' '{COPY_HASH}'",
                 "img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com",
-                # Fonts from self + Google Fonts CDN
-                "font-src 'self' https://fonts.gstatic.com",
-                "connect-src 'self'",
+                "font-src 'self'",
+                f"connect-src 'self' {base_url}",
+                "form-action 'self'",
                 "base-uri 'none'",
                 "frame-ancestors 'none'",
                 "object-src 'none'",
@@ -3263,6 +3191,8 @@ def _nav_for(account: dict | None, profile_id: str) -> str:
         + '<a href="/?profile=' + quote(profile_id) + '">' + _ICON_FEED + ' Feed</a>'
         + '<a href="/tracker">' + _ICON_TRACKER + ' Tracker</a>'
         + '<a href="/shortlist?profile=' + quote(profile_id) + '">' + _ICON_SHORTLIST + ' Shortlist</a>'
+        + '<a href="/brief?profile=' + quote(profile_id) + '">Brief</a>'
+        + '<a href="/pulse">Pulse</a>'
         + '<button type="button" class="cmdk" data-cmdk aria-haspopup="dialog">'
         + "Jump <kbd>⌘K</kbd></button>"
     )
@@ -3664,7 +3594,7 @@ def render_tracker(
     
     kanban_columns.append('<div class="kanban-col kanban-col-closed"><div class="kanban-col-head"><h3>Closed</h3><span class="kanban-count">' + str(len(closed)) + '</span></div><div class="kanban-col-body">' + (closed_html if closed_html else '<p class="kanban-empty">No closed applications</p>') + '</div></div>')
     
-    body = '<div class="spatial-hero"><div class="hero-3d"><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div><div class="hero-shape"></div></div><div class="wrap"><p class="kicker">Pipeline</p><h1 class="display">Your <em>tracker</em></h1><p class="scopeline">Every application, one board. Move jobs through stages as you hear back.</p></div></div><div class="wrap" style="padding-bottom:60px">' + notice_html + stats_html + followup_html + '<div class="kanban-board">' + "".join(kanban_columns) + '</div></div>'
+    body = '<div class="spatial-hero"><div class="wrap"><p class="kicker">Pipeline</p><h1 class="display">Your <em>tracker</em></h1><p class="scopeline">Every application, one board. Move jobs through stages as you hear back.</p></div></div><div class="wrap" style="padding-bottom:60px">' + notice_html + stats_html + followup_html + '<div class="kanban-board">' + "".join(kanban_columns) + '</div></div>'
     
     profile_id = "demo-fresher"
     return _page("Tracker - Kazi-Kasi", body, demo=demo, nav=_nav_for(_account_for(conn, headers), profile_id))
@@ -3877,7 +3807,7 @@ def render_signin(conn, *, demo: bool = False, notice: str = "", tone: str = "wa
 
     # Setup notice for production without providers
     setup_note = ""
-    if not any_configured and not demo:
+    if not any_configured:
         setup_note = (
             '<p class="signin-notice">No sign-in provider is configured on this '
             'deployment. <a href="/setup">The go-live page</a> names each '
@@ -4168,7 +4098,7 @@ def render_activity(
 
     body = f"""
 <div class="masthead">
-  <p class="kicker">Activity - {counts['all']} jobs touched</p>
+  <p class="kicker">Activity · {counts['all']} jobs touched</p>
   <h1 class="display">Where you have been</h1>
   <p class="scopeline">Saved, applied, visited and dismissed - the same record that
   powers the ledger on your feed. Nothing here is shared with an employer.</p>
@@ -5499,7 +5429,7 @@ def render_digest(
         for item in (digest.items or []):
             job_id = item.job_id if hasattr(item, 'job_id') else None
             if job_id:
-                row = conn.execute("SELECT title, employer_name, salary_min, salary_max, deadline, source_url FROM jobs WHERE id = ?", (job_id,)).fetchone()
+                row = conn.execute("SELECT title, employer_name, pay_min AS salary_min, pay_max AS salary_max, deadline FROM jobs WHERE id = ?", (job_id,)).fetchone()
                 if row:
                     digest_jobs.append(dict(row))
         
@@ -5591,6 +5521,8 @@ job twice. This is exactly what you would receive.</p>
 {f'<div class="banner" role="alert">{_e(error)}</div>' if error else ""}
 {consent}
 {shown}
+<h2>SMS fallback</h2><p>If WhatsApp fails, this shorter message can still reach you.</p>
+<pre class="msg sms">{_e(sms_preview)}</pre>
 {skipped_block}
 {log_block}"""
     return _page("WhatsApp digest - Kazi-Kasi", body_html, demo=demo)
@@ -6269,15 +6201,9 @@ def _handle_get(
 
 
     if path in ("/", "/index.html"):
-        # Check if user is authenticated
+        # The public feed is browseable without an account; authentication is
+        # only needed for personal actions such as saving, applying, or tracking.
         account = _account_for(conn, headers)
-        if account is None:
-            # Unauthenticated: show landing page
-            return Response(200, render_landing_page(demo=demo,
-                notice=_query_one(query, "notice"), tone=_query_one(query, "tone", "good")),
-                "text/html; charset=utf-8")
-        
-        # Authenticated: show the feed
         seen = read_seen(headers)
         page = render_feed(
             conn,
@@ -6571,7 +6497,7 @@ def _handle_account_post(conn, path: str, body: bytes, header_map: dict, *, demo
         fields = autofill.parse(text)
         accounts.store_cv(conn, account["id"], filename=filename, text=text, fields=fields, now=now)
         accounts.touch(conn, account["id"], now=now)
-        return _redirect("/?saved=1")
+        return _redirect("/account?saved=1")
 
     return Response(404, "not found", "text/plain; charset=utf-8")
 
@@ -6683,11 +6609,10 @@ class _Handler(BaseHTTPRequestHandler):
         body = self._read_body() if method == "POST" else b""
         headers = {key: value for key, value in self.headers.items()}
 
-        # Use demo connection when demo mode is enabled
-        if self.demo:
-            conn = demo_connection(thread_safe=True)
-        else:
-            conn = db.connect(self.db_path)
+        # Demo mode changes presentation and external integrations, not storage.
+        # Reopen the configured database per request so POST state survives the
+        # redirect while each handler still owns and closes its connection.
+        conn = db.connect(self.db_path)
         try:
             response = handle(
                 conn,

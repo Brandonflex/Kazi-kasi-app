@@ -252,7 +252,7 @@ class TestRendering:
     def test_digest_opens_with_the_count_and_closes_with_stop(self):
         digest = pick([Match("j1"), Match("j2")])
         body = dg.render_digest(digest, link_base="https://kazi.example")
-        assert body.splitlines()[0] == "*Kazi-Kasi* — 2 jobs for you today"
+        assert body.splitlines()[0] == "*Kazi-Kasi* - 2 jobs for you today"
         assert body.endswith("Reply STOP to stop these. Reply HELP for the web feed.")
         assert body.count("https://kazi.example/job/") == 2
 

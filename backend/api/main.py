@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Generator
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field, field_validator
@@ -33,7 +33,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from kazikasi import db, graph, profile, ranking, sweep  # noqa: E402
+from kazikasi import accounts, autofill, db, documents, graph, profile, ranking, sweep  # noqa: E402
+from kazikasi.models import EMPLOYMENT_TYPES, ENTRY_FIT, WORK_MODES  # noqa: E402
 
 logger = logging.getLogger("kazikasi.api")
 
@@ -125,7 +126,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -166,25 +167,90 @@ class LoginRequest(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    role_families: list[str] = Field(default_factory=list, max_length=20)
-    home_county: str = Field(default="Nairobi", min_length=1, max_length=80)
-    max_commute_km: float | None = Field(default=25.0, ge=0, le=500)
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    role_families: list[str] | None = Field(default=None, max_length=20)
+    skills: list[str] | None = Field(default=None, max_length=40)
+    home_county: str | None = Field(default=None, max_length=80)
+    home_area: str | None = Field(default=None, max_length=120)
+    max_commute_km: float | None = Field(default=None, ge=0, le=500)
     min_monthly_pay: float | None = Field(default=None, ge=0, le=100_000_000)
+    entry_fits: list[str] | None = Field(default=None, max_length=4)
+    employment_types: list[str] | None = Field(default=None, max_length=8)
+    work_modes: list[str] | None = Field(default=None, max_length=4)
+    deadline_within_days: int | None = Field(default=None, ge=1, le=365)
+    include_remote: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Name cannot be empty")
+        return cleaned
+
+    @field_validator("home_county", "home_area")
+    @classmethod
+    def trim_optional_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
     @field_validator("role_families")
     @classmethod
-    def clean_families(cls, values: list[str]) -> list[str]:
+    def clean_families(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
         cleaned = list(dict.fromkeys(v.strip().lower() for v in values if v.strip()))
-        allowed = set(profile.ROLE_FAMILIES)
-        invalid = set(cleaned) - allowed
+        invalid = set(cleaned) - set(profile.ROLE_FAMILIES)
         if invalid:
             raise ValueError(f"Unsupported role families: {', '.join(sorted(invalid))}")
         return cleaned
 
+    @field_validator("skills")
+    @classmethod
+    def clean_skills(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        cleaned = list(dict.fromkeys(" ".join(v.split()) for v in values if v.strip()))
+        if any(len(skill) > 50 for skill in cleaned):
+            raise ValueError("Each skill must be 50 characters or fewer")
+        return cleaned
+
+    @field_validator("entry_fits")
+    @classmethod
+    def clean_entry_fits(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        invalid = set(values) - ENTRY_FIT
+        if invalid:
+            raise ValueError(f"Unsupported experience levels: {', '.join(sorted(invalid))}")
+        return list(dict.fromkeys(values))
+
+    @field_validator("employment_types")
+    @classmethod
+    def clean_employment_types(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        invalid = set(values) - EMPLOYMENT_TYPES
+        if invalid:
+            raise ValueError(f"Unsupported employment types: {', '.join(sorted(invalid))}")
+        return list(dict.fromkeys(values))
+
+    @field_validator("work_modes")
+    @classmethod
+    def clean_work_modes(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        invalid = set(values) - WORK_MODES
+        if invalid:
+            raise ValueError(f"Unsupported work modes: {', '.join(sorted(invalid))}")
+        return list(dict.fromkeys(values))
+
+
 
 def get_db() -> Generator:
     database_url = os.getenv("DATABASE_URL")
-    conn = db.connect(url=database_url) if database_url else db.connect(DB_PATH)
+    conn = db.connect(url=database_url, check_same_thread=False) if database_url else db.connect(DB_PATH, check_same_thread=False)
     try:
         yield conn
     finally:
@@ -365,13 +431,88 @@ def update_profile(update: ProfileUpdate, user_id: str = Depends(get_current_use
     prof = profile.load_profile(db_conn, user_id)
     if not prof:
         raise HTTPException(status_code=404, detail="Profile not found")
-    prof.role_families = update.role_families
-    prof.home_county = update.home_county.strip()
-    prof.max_commute_km = update.max_commute_km
-    prof.min_monthly_pay = update.min_monthly_pay
+    for field_name in update.model_fields_set:
+        value = getattr(update, field_name)
+        if value is not None or field_name in {"home_county", "home_area", "max_commute_km", "min_monthly_pay", "deadline_within_days"}:
+            if field_name == "name":
+                prof.name = value
+            elif field_name in profile.Profile.__dataclass_fields__:
+                setattr(prof, field_name, value)
     profile.save_profile(db_conn, prof)
-    db_conn.commit()
+    if "name" in update.model_fields_set and update.name:
+        db_conn.execute("UPDATE accounts SET name = ? WHERE id = ?", (update.name, user_id))
+        db_conn.commit()
     return prof.to_dict()
+
+
+MAX_CV_BYTES = 5 * 1024 * 1024
+
+
+def _cv_public_data(cv: dict | None) -> dict | None:
+    if not cv:
+        return None
+    return {
+        "id": cv["id"],
+        "filename": cv.get("filename"),
+        "chars": cv.get("chars", 0),
+        "created_at": cv.get("created_at"),
+        "fields": cv.get("fields", {}),
+    }
+
+
+@app.get("/api/profile/cv")
+def get_profile_cv(user_id: str = Depends(get_current_user), db_conn=Depends(get_db)):
+    return {"cv": _cv_public_data(accounts.latest_cv(db_conn, user_id))}
+
+
+@app.post("/api/profile/cv")
+async def upload_profile_cv(file: UploadFile = File(...), user_id: str = Depends(get_current_user), db_conn=Depends(get_db)):
+    filename = (file.filename or "resume.pdf").replace("\\", "/").rsplit("/", 1)[-1][:200]
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=415, detail="Upload a PDF file")
+    raw = await file.read(MAX_CV_BYTES + 1)
+    if len(raw) > MAX_CV_BYTES:
+        raise HTTPException(status_code=413, detail="The PDF must be 5 MB or smaller")
+    if not raw.startswith(b"%PDF-"):
+        raise HTTPException(status_code=415, detail="This file is not a readable PDF")
+    try:
+        text = documents.bytes_to_text(raw, "application/pdf")
+    except documents.DocumentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    fields = autofill.parse(text)
+    cv_id = accounts.store_cv(db_conn, user_id, filename=filename, text=text, fields=fields)
+    prof = profile.load_profile(db_conn, user_id)
+    if prof:
+        extracted_skills = ((fields.get("skills") or {}).get("value") or [])
+        if extracted_skills:
+            prof.skills = list(dict.fromkeys(extracted_skills))[:40]
+            profile.save_profile(db_conn, prof)
+    stored = accounts.latest_cv(db_conn, user_id)
+    return {
+        "cv": _cv_public_data(stored),
+        "suggestions": autofill.profile_suggestions(fields),
+        "profile": prof.to_dict() if prof else None,
+        "message": "CV processed. Check the extracted details and adjust your profile before relying on the matches.",
+    }
+
+
+@app.delete("/api/profile/cv")
+def delete_profile_cv(user_id: str = Depends(get_current_user), db_conn=Depends(get_db)):
+    cv = accounts.latest_cv(db_conn, user_id)
+    if cv:
+        db_conn.execute("DELETE FROM cvs WHERE id = ? AND account_id = ?", (cv["id"], user_id))
+        db_conn.commit()
+    return {"cv": _cv_public_data(accounts.latest_cv(db_conn, user_id)), "deleted": bool(cv)}
+
+
+
+def _decode_evidence(row) -> dict:
+    try:
+        payload = row["payload"] if isinstance(row["payload"], dict) else json.loads(row["payload"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        payload = {}
+    payload.setdefault("source_url", row["source_url"])
+    return payload
 
 
 def _job_evidence(db_conn, job_id: str) -> dict:
@@ -382,14 +523,25 @@ def _job_evidence(db_conn, job_id: str) -> dict:
             WHERE m.job_id = {placeholder} ORDER BY o.fetched_at DESC LIMIT 1""",
         (job_id,),
     ).fetchone()
-    if not row:
-        return {}
-    try:
-        payload = json.loads(row["payload"] or "{}")
-    except (TypeError, json.JSONDecodeError):
-        payload = {}
-    payload.setdefault("source_url", row["source_url"])
-    return payload
+    return _decode_evidence(row) if row else {}
+
+
+def _job_evidence_map(db_conn, job_ids: list[str]) -> dict[str, dict]:
+    """Load latest source payloads in bounded batches for skill-aware ranking."""
+    evidence: dict[str, dict] = {}
+    placeholder = "%s" if type(db_conn).__name__ == "Connection" and hasattr(db_conn, "info") else "?"
+    for start in range(0, len(job_ids), 400):
+        batch = job_ids[start:start + 400]
+        marks = ",".join([placeholder] * len(batch))
+        rows = db_conn.execute(
+            f"""SELECT m.job_id, o.source_url, o.payload, o.fetched_at
+                FROM job_members m JOIN observations o ON o.id = m.observation_id
+                WHERE m.job_id IN ({marks}) ORDER BY o.fetched_at DESC""",
+            tuple(batch),
+        ).fetchall()
+        for row in rows:
+            evidence.setdefault(row["job_id"], _decode_evidence(row))
+    return evidence
 
 
 @app.get("/api/jobs")
@@ -404,6 +556,9 @@ def get_jobs(
         "SELECT COUNT(*) AS count FROM jobs WHERE status = 'open' AND scam_flags = '[]'"
     ).fetchone()["count"]
     candidates = graph.feed(db_conn, limit=min(total, 5000))
+    evidence_by_id = _job_evidence_map(db_conn, [candidate["id"] for candidate in candidates])
+    for candidate in candidates:
+        candidate["description"] = evidence_by_id.get(candidate["id"], {}).get("description_md", "")
     matches = ranking.rank(candidates, prof, limit=total)
     page = matches[offset:offset + limit]
     jobs = []
@@ -412,7 +567,7 @@ def get_jobs(
         if not row:
             continue
         item = dict(row)
-        evidence = _job_evidence(db_conn, match.job_id)
+        evidence = evidence_by_id.get(match.job_id, {})
         county = item.get("county")
         location = f"{county}, Kenya" if county and county.lower() != "kenya" else "Kenya"
         source_url = safe_source_url(evidence.get("source_url"))
@@ -440,6 +595,7 @@ def get_job(job_id: str, user_id: str = Depends(get_current_user), db_conn=Depen
         raise HTTPException(status_code=404, detail="Job not found")
     item = dict(row)
     evidence = _job_evidence(db_conn, job_id)
+    item["description"] = evidence.get("description_md", "")
     match = ranking.score_job(item, prof)
     county = item.get("county")
     location = f"{county}, Kenya" if county and county.lower() != "kenya" else "Kenya"
