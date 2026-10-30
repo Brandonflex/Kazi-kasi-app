@@ -45,6 +45,21 @@ def test_migrate_is_idempotent(tmp_path):
     assert rows == 1
 
 
+def test_existing_profile_schema_gains_skills_without_data_loss():
+    conn = db.connect(":memory:")
+    try:
+        conn.execute("INSERT INTO profiles (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                     ("legacy", "Legacy Profile", "2026-01-01", "2026-01-01"))
+        conn.execute("ALTER TABLE profiles DROP COLUMN skills")
+        conn.commit()
+        db.migrate(conn)
+        row = conn.execute("SELECT name, skills FROM profiles WHERE id = ?", ("legacy",)).fetchone()
+        assert row["name"] == "Legacy Profile"
+        assert row["skills"] == "[]"
+    finally:
+        conn.close()
+
+
 def test_an_older_database_upgrades_in_place(tmp_path):
     import sqlite3
 

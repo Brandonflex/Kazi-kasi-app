@@ -115,6 +115,25 @@ class TestGates:
 
 
 class TestScores:
+    def test_cv_skills_contribute_to_match_relevance_and_reasons(self):
+        skilled = ranking.score_job(
+            row(description="Build with Python and PostgreSQL every day."),
+            profile(skills=["Python", "PostgreSQL"]), NOW,
+        )
+        unrelated = ranking.score_job(
+            row(description="Coordinate customer service and office records."),
+            profile(skills=["Python", "PostgreSQL"]), NOW,
+        )
+        assert skilled.relevance > unrelated.relevance
+        assert any("skills: Python, PostgreSQL" in reason for reason in skilled.reasons)
+
+    def test_skill_match_respects_word_boundaries(self):
+        match = ranking.score_job(
+            row(description="The Pythonista community is growing."),
+            profile(skills=["Python"]), NOW,
+        )
+        assert not any(reason.startswith("skills:") for reason in match.reasons)
+
     def test_relevance_prefers_the_matching_family(self):
         match_it = ranking.score_job(row(), profile(role_families=["it"]), NOW)
         match_hr = ranking.score_job(row(), profile(role_families=["hr"]), NOW)

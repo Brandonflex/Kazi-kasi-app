@@ -2,8 +2,9 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
 
 function apiUrl(path: string): string {
   if (API_BASE) return `${API_BASE}${path}`
-  if (process.env.NODE_ENV !== 'production') return `http://localhost:8001${path}`
-  throw new Error('The Kazi-Kasi API is not configured. Set NEXT_PUBLIC_API_URL for this deployment.')
+  // Keep browser requests same-origin. Next's rewrite proxies /api to the
+  // separately running FastAPI service in local and preview environments.
+  return path
 }
 
 export interface Job {
@@ -39,9 +40,44 @@ export interface AuthResponse {
   token_type: string
 }
 
+export interface Profile {
+  id: string
+  name: string
+  home_county: string | null
+  home_area: string | null
+  max_commute_km: number | null
+  role_families: string[]
+  skills: string[]
+  entry_fits: string[]
+  employment_types: string[]
+  work_modes: string[]
+  min_monthly_pay: number | null
+  deadline_within_days: number | null
+  include_remote: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CvField {
+  value: string | string[]
+  evidence: string
+  confidence: number
+}
+
+export interface ProfileCv {
+  id: number
+  filename: string
+  chars: number
+  created_at: string
+  fields: Record<string, CvField>
+}
+
 async function request<T>(path: string, init: RequestInit = {}, authenticated = false): Promise<T> {
   const headers = new Headers(init.headers)
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
+  if (init.body && !isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
   if (authenticated) {
     const token = getToken()
     if (!token) throw new Error('Your session has expired. Please sign in again.')
@@ -73,6 +109,33 @@ export function fetchJobs(limit = 20, offset = 0): Promise<JobsResponse> {
 
 export function fetchJob(jobId: string): Promise<JobDetail> {
   return request(`/api/jobs/${encodeURIComponent(jobId)}`, {}, true)
+}
+
+
+export function fetchProfile(): Promise<Profile> {
+  return request('/api/profile', {}, true)
+}
+
+export function updateProfile(profile: Partial<Profile>): Promise<Profile> {
+  return request('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }, true)
+}
+
+export function fetchProfileCv(): Promise<{ cv: ProfileCv | null }> {
+  return request('/api/profile/cv', {}, true)
+}
+
+export function uploadProfileCv(file: File): Promise<{ cv: ProfileCv; profile: Profile | null; suggestions: Record<string, unknown>; message: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  return request('/api/profile/cv', { method: 'POST', body: form }, true)
+}
+
+export function deleteProfileCv(): Promise<{ cv: ProfileCv | null; deleted: boolean }> {
+  return request('/api/profile/cv', { method: 'DELETE' }, true)
+}
+
+export function fetchCurrentUser(): Promise<{ id: string; email: string; name: string }> {
+  return request('/api/auth/me', {}, true)
 }
 
 export async function checkHealth(): Promise<boolean> {

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+import re
 
 from . import geo
 from .profile import Profile, families_for, title_relevance
@@ -146,7 +147,19 @@ def relevance_score(row: dict, profile: Profile, families: list[str]) -> tuple[f
     family = profile.overlapping_role_score(families)
     title = title_relevance(profile, row.get("title") or "")
 
-    score = 0.7 * family + 0.3 * title
+    matched_skills: list[str] = []
+    if profile.skills:
+        job_text = f"{row.get('title') or ''} {row.get('description') or row.get('description_md') or ''}".lower()
+        matched_skills = [
+            skill for skill in profile.skills
+            if skill.strip() and re.search(rf"(?<!\w){re.escape(skill.strip().lower())}(?!\w)", job_text)
+        ]
+        skill_fit = len(matched_skills) / max(1, len(profile.skills))
+        score = 0.55 * family + 0.20 * title + 0.25 * skill_fit
+        if matched_skills:
+            reasons.append("skills: " + ", ".join(matched_skills[:4]))
+    else:
+        score = 0.7 * family + 0.3 * title
 
     matched = sorted(set(profile.role_families) & set(families))
     if matched:

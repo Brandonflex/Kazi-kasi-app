@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { fetchJob, type JobDetail, isAuthenticated } from '@/lib/api'
+import { LoaderCircle } from 'lucide-react'
 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -32,8 +33,9 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
   if (loading) {
     return (
       <main className="min-h-screen bg-[#000000]">
-        <div className="text-center py-20">
-          <p className="text-[#737373]">Loading job details...</p>
+        <div className="flex flex-col items-center justify-center py-24 text-center" role="status" aria-live="polite">
+          <LoaderCircle size={22} className="mb-4 animate-soft-spin text-[#aaa]" />
+          <p className="text-sm text-[#888]">Loading job details</p>
         </div>
       </main>
     )
@@ -111,9 +113,9 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex gap-2">
-            {job.source_url ? (
+            {job.url ? (
               <a
-                href={job.source_url}
+                href={job.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 text-center px-5 py-2.5 bg-white text-black font-medium rounded-md hover:bg-[#ededed] transition-colors"
@@ -124,6 +126,11 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
               <span className="flex-1 text-center px-5 py-2.5 bg-[#1a1a1a] text-[#737373] font-medium rounded-md">
                 Application link unavailable
               </span>
+            )}
+            {job.source_url && job.source_url !== job.url && (
+              <a href={job.source_url} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md text-sm text-[#a3a3a3] transition-colors hover:text-white">
+                Source listing
+              </a>
             )}
             <button className="px-5 py-2.5 border border-[#1f1f1f] hover:border-[#2f2f2f] rounded-md transition-all text-[#a3a3a3] hover:text-white">
               Save

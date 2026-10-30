@@ -14,7 +14,7 @@ pip install -r backend/requirements.txt
 uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-Set `NEXT_PUBLIC_API_URL=http://localhost:8001` in the frontend environment when developing locally. The API defaults to an ignored SQLite file at the repository root. Existing fixture or production data must be seeded intentionally; the API does not silently create demo job listings.
+For local development, set `KAZIKASI_API_SERVER_URL=http://127.0.0.1:8001` in the Next.js environment. The browser calls same-origin `/api` paths and Next proxies them to FastAPI, avoiding browser `localhost` calls and local CORS surprises. The API defaults to an ignored SQLite file at the repository root. Existing fixture or production data must be seeded intentionally; the API does not silently create demo job listings.
 
 ## Production configuration
 
@@ -27,6 +27,16 @@ Deploy the API as a separate ASGI service (Vercel is configured for the Next.js 
 - `NEXT_PUBLIC_API_URL`: set on the Vercel frontend to the deployed API origin.
 
 The app refuses to start in production without a signing key. Tokens use a 60-minute expiry by default. Passwords use PBKDF2-SHA256; legacy salted SHA-256 hashes are upgraded on the user's next successful login. Keep secrets in the hosting provider's environment-variable manager, not in Git.
+
+## Profile and CV APIs
+
+- `GET /api/profile` reads the signed-in user's saved profile; `PUT /api/profile` updates skills, role families, experience fit, county/area, commute, salary, work mode, employment type, and deadline preferences.
+- `GET /api/profile/cv` returns the most recently extracted CV details.
+- `POST /api/profile/cv` accepts a multipart `file` PDF up to 5 MB, extracts text and evidence with `pypdf`, and uses deterministic field extraction. The original PDF is discarded after processing; only extracted fields and short evidence snippets are stored.
+- CV-derived skills feed the same profile ranking used by `/api/jobs`. Extracted role and location suggestions are presented for confirmation rather than silently replacing preferences.
+- `DELETE /api/profile/cv` removes the latest extracted CV record. Skills already saved in the profile remain available until edited.
+
+Scanned/image-only PDFs are rejected with a clear message; OCR is not yet implemented.
 
 ## Live job ingestion
 
